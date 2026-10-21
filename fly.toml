@@ -1,0 +1,42 @@
+app = "pit-stop"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3000"
+  DATABASE_FILE = "/data/pit-stop.db"
+  # The operator's own deployment applies the quotas of Plans.ts (ADR-002 D3).
+  EDITION = "cloud"
+  # APP_URL is required in production: `fly secrets set APP_URL=https://...` before deploying.
+
+# One instance on purpose (ADR D2): it is what makes the in-memory RetroSession actor
+# correct without Redis or any shared state. The trade-off is a short gap on deploy.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[[mounts]]
+  source = "pit_stop_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 500
+    soft_limit = 400
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  path = "/health"
+  timeout = "5s"

@@ -1,0 +1,13 @@
+# Continuous replication to any S3-compatible bucket (ADR D3): Cloudflare R2, AWS S3, MinIO...
+# Point-in-time restore on top of whatever snapshots the host offers. Litestream reads the
+# credentials from LITESTREAM_ACCESS_KEY_ID and LITESTREAM_SECRET_ACCESS_KEY.
+dbs:
+  - path: ${DATABASE_FILE}
+    replicas:
+      - type: s3
+        bucket: ${LITESTREAM_S3_BUCKET}
+        path: ${LITESTREAM_S3_PATH}
+        endpoint: ${LITESTREAM_S3_ENDPOINT}
+        region: ${LITESTREAM_S3_REGION}
+        retention: 720h
+        snapshot-interval: 24h
