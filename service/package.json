@@ -1,0 +1,45 @@
+{
+  "name": "pit-stop-service",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "NODE_ENV=development tsx watch src/index.ts",
+    "build": "tsc && tsc-alias && node -e \"require('node:fs').cpSync('src/Db/migrations','dist/Db/migrations',{recursive:true})\"",
+    "start": "node dist/index.js",
+    "migrate": "tsx src/Db/migrate.ts",
+    "test": "jest",
+    "test:unit": "jest --selectProjects unit",
+    "test:integration": "jest --selectProjects integration"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.17",
+    "@node-rs/argon2": "^2.0.2",
+    "better-sqlite3": "^11.7.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "google-auth-library": "^10.9.1",
+    "hono": "^4.13.13",
+    "kysely": "^0.28.18",
+    "nodemailer": "^10.1.7",
+    "pino": "^9.5.0",
+    "reflect-metadata": "^0.2.2",
+    "uuid": "^11.0.3",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.0",
+    "@types/nodemailer": "^8.0.2",
+    "@types/ws": "^8.5.13",
+    "jest": "^29.7.0",
+    "pino-pretty": "^13.0.0",
+    "ts-jest": "^29.2.5",
+    "tsc-alias": "^1.9.8",
+    "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.19.2",
+    "typescript": "~5.6.3"
+  }
+}

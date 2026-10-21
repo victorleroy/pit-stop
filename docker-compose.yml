@@ -1,0 +1,36 @@
+# The whole of Pit Stop: one container, one volume. `docker compose up`, then follow the
+# setup link printed in the logs.
+services:
+  pit-stop:
+    image: ghcr.io/victorleroy/pit-stop:latest
+    # build: .   # uncomment to build from this checkout instead of pulling the release
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - pit-stop-data:/data
+    environment:
+      # The public address people open: every link in an email or a log is built on it.
+      APP_URL: http://localhost:3000
+
+      # Optional. Addresses allowed into /paddock, to manage several organisations.
+      # PLATFORM_ADMIN_EMAILS: you@example.com
+
+      # Optional. Without a transport, invitation and reset links are printed in the logs.
+      # SMTP_HOST: smtp.example.com
+      # SMTP_PORT: "587"
+      # SMTP_USER: pit-stop
+      # SMTP_PASSWORD: change-me
+      # MAIL_FROM: Pit Stop <noreply@example.com>
+
+      # Optional. Shows "Continue with Google" with your own OAuth client.
+      # GOOGLE_CLIENT_ID: 1234.apps.googleusercontent.com
+
+      # Optional. Continuous backup of the database to any S3-compatible bucket.
+      # LITESTREAM_S3_BUCKET: pit-stop-backups
+      # LITESTREAM_S3_ENDPOINT: https://<account>.r2.cloudflarestorage.com
+      # LITESTREAM_ACCESS_KEY_ID: ...
+      # LITESTREAM_SECRET_ACCESS_KEY: ...
+
+volumes:
+  pit-stop-data:

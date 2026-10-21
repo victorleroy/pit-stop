@@ -1,0 +1,16 @@
+{
+  "name": "pit-stop",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "Team retrospectives: one board, live, with the notes anonymous until their author says otherwise.",
+  "scripts": {
+    "setup": "npm install && npm --prefix service install && npm --prefix web install",
+    "start": "concurrently -k -n service,web -c blue,magenta \"npm --prefix service run dev\" \"npm --prefix web run dev\"",
+    "build": "npm --prefix service run build && npm --prefix web run build",
+    "test": "npm --prefix service test && npm --prefix web test",
+    "migrate": "npm --prefix service run migrate"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
