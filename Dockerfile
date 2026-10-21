@@ -1,7 +1,7 @@
 # One image for every deployment, the operator's cloud included (ADR-002 D4): the service
 # serves the API, the websockets and the built SPA from a single origin.
 
-FROM node:22-slim AS build
+FROM node:25-slim AS build
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ RUN npm --prefix service run build && npm --prefix service prune --omit=dev
 COPY web ./web
 RUN npm --prefix web run build
 
-FROM node:22-slim AS runtime
+FROM node:25-slim AS runtime
 
 WORKDIR /app
 
