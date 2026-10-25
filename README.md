@@ -43,21 +43,6 @@ Set `APP_URL` in `docker-compose.yml` to the address people will actually open, 
 whatever reverse proxy terminates TLS for you. Every link in an email or in the logs is built
 on it. The proxy must pass websockets through on `/ws`.
 
-### On Fly.io
-
-No server to maintain, TLS included, for a few dollars a month. Copy
-[`deploy/fly.toml`](deploy/fly.toml), set its `app` to a name of your own, then:
-
-```bash
-fly apps create <app>
-fly volumes create pit_stop_data --app <app> --region cdg --size 1
-fly secrets set --app <app> APP_URL=https://<app>.fly.dev
-fly deploy --config fly.toml
-fly logs --app <app> | grep setup
-```
-
-Fly snapshots the volume every day; Litestream adds continuous backups (see below).
-
 ### What the anonymity protects, and from whom
 
 Notes are withheld from the other participants, from organisation administrators and from the
@@ -84,7 +69,7 @@ Everything is optional except `APP_URL`.
 | `RESEND_API_KEY` | — | Alternative to SMTP |
 | `MAIL_FROM` | `Pit Stop <noreply@localhost>` | Sender address |
 | `GOOGLE_CLIENT_ID` | — | Adds "Continue with Google", with your own OAuth client |
-| `LITESTREAM_S3_BUCKET`, `LITESTREAM_S3_ENDPOINT`, `LITESTREAM_S3_REGION`, `LITESTREAM_S3_PATH`, `LITESTREAM_ACCESS_KEY_ID`, `LITESTREAM_SECRET_ACCESS_KEY` | —, —, `auto`, `pit-stop`, —, — | Continuous backup to any S3-compatible bucket |
+| `LITESTREAM_S3_BUCKET`, `LITESTREAM_S3_ENDPOINT`, `LITESTREAM_S3_REGION`, `LITESTREAM_S3_PATH`, `LITESTREAM_ACCESS_KEY_ID`, `LITESTREAM_SECRET_ACCESS_KEY` | —, —, —, `pit-stop`, —, — | Continuous backup to any S3-compatible bucket |
 | `SESSION_TTL_DAYS`, `INVITATION_TTL_DAYS`, `PASSWORD_RESET_TTL_MINUTES` | `30`, `7`, `30` | Lifetimes; the last one also bounds email confirmation links |
 | `APP_NAME`, `LOG_LEVEL` | `Pit Stop`, `info` | Name shown in emails; pino log level |
 | `WEB_DIST` | `/app/web/dist` in the image | Built web client served next to the API |

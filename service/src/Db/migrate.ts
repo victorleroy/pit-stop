@@ -7,7 +7,7 @@ import {logger} from '~/logger';
 const MIGRATIONS_DIR = join(__dirname, 'migrations');
 
 export const migrate = (file: string): void => {
-  // First boot on a fresh checkout, or on an empty Fly volume: the directory is ours to make.
+  // First boot on a fresh checkout, or on an empty volume: the directory is ours to make.
   mkdirSync(dirname(file), {recursive: true});
 
   const sqlite = new SQLite(file);

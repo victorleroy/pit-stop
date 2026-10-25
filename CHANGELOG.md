@@ -2,11 +2,10 @@
 
 All notable changes are recorded here. Versions follow [semantic versioning](https://semver.org).
 
-## Unreleased
+## 0.1.1 — 2026-10-25
 
 ### Added
 
-- `deploy/fly.toml` and a README section to run Pit Stop on Fly.io from the published image.
 - A screenshot in the README, a code of conduct and a pull request template.
 
 ### Changed
