@@ -29,7 +29,7 @@ export interface AcceptInput {
 }
 
 /**
- * One invitation mechanism, two levels of use (ADR D12): the platform admin invites the first
+ * One invitation mechanism, two levels of use (ADR-001 D12): the platform admin invites the first
  * administrator of a customer organisation, an org admin invites their colleagues.
  */
 export class InvitationManager {

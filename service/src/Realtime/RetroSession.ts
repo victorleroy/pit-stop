@@ -17,7 +17,7 @@ export interface Connection {
 export type Authorizer = (token: string, retroId: string) => Promise<boolean>;
 
 /**
- * The authoritative actor for one retro (ADR D1).
+ * The authoritative actor for one retro (ADR-001 D1).
  *
  * It owns the open connections and fans out; SessionHub serialises the work on the board. The
  * database stays the source of truth: this object holds no durable state, so losing it to a

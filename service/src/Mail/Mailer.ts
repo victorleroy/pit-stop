@@ -12,7 +12,7 @@ export interface Email {
 }
 
 /**
- * Three transactional emails only (ADR D12): invitation, password reset, email change.
+ * Three transactional emails only (ADR-001 D12): invitation, password reset, email change.
  * Email verification is subsumed by the invitation on the invited path.
  */
 export interface Mailer {
@@ -95,7 +95,7 @@ export class ResendMailer implements Mailer {
       const body = await response.text();
 
       // A failed invitation is a broken onboarding with no product-side signal: it is logged
-      // loudly on purpose (ADR D12, deliverability risk).
+      // loudly on purpose (ADR-001 D12, deliverability risk).
       logger.error({body, status: response.status, to: email.to}, 'Transactional email refused');
       throw new Error(`Email provider refused the message (${response.status})`);
     }

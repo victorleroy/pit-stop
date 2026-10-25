@@ -54,7 +54,7 @@ export class PasswordResetManager {
     await this.mailer.send({...passwordResetEmail(token), to: user.email});
   }
 
-  /** Choosing a new password cuts every existing session: that is the point (ADR D7). */
+  /** Choosing a new password cuts every existing session: that is the point (ADR-001 D7). */
   public async confirm(token: string, password: string): Promise<void> {
     const tokenHash = TokenService.hash(token);
     const now = new Date().toISOString();

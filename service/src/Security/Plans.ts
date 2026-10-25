@@ -7,7 +7,7 @@ import type {OrgRepository} from '~/Repository/OrgRepository';
 import type {RetroRepository} from '~/Repository/RetroRepository';
 
 /**
- * Quotas live in exactly one place (ADR D13). No `if (status === 'demo')` anywhere else.
+ * Quotas live in exactly one place (ADR-001 D13). No `if (status === 'demo')` anywhere else.
  *
  * `demo` is a quota tier, never a security tier: isolation, anonymity and durability are
  * identical on every tier, only ceilings change.

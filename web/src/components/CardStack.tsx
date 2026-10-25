@@ -102,10 +102,6 @@ export const CardStack = ({
         borderWidth: isOver ? 2 : 1,
         // The vote badge straddles the corner, and Paper clips its overflow by default.
         overflow: 'visible',
-        // The three most voted cards are the ones the team will actually talk about.
-        outline: rank ? '2px solid' : 'none',
-        outlineColor: 'primary.main',
-        outlineOffset: 3,
         p: isCluster ? 1.5 : 0,
         position: 'relative',
         transition: 'border-color 120ms ease',
@@ -120,9 +116,18 @@ export const CardStack = ({
           }
         >
           <Stack sx={{position: 'absolute', right: -10, top: -10, zIndex: 2}}>
-            <Tag color={rank ? 'primary' : 'muted'} size="medium">
-              {`${card.totalVotes ?? 0}`}
-            </Tag>
+            {rank ? (
+              // The three most voted cards are the ones the team will actually talk about.
+              <Chip
+                label={`${card.totalVotes ?? 0}`}
+                size="medium"
+                sx={{bgcolor: 'primary.main', color: 'primary.contrastText', fontWeight: 700}}
+              />
+            ) : (
+              <Tag color="muted" size="medium">
+                {`${card.totalVotes ?? 0}`}
+              </Tag>
+            )}
           </Stack>
         </Tooltip>
       ) : null}

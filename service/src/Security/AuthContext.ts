@@ -3,7 +3,7 @@ import type {ScopedDb} from '~/Security/ScopedDb';
 
 /**
  * Everything the request layer resolved from the session. Roles and org membership are read
- * from the store on every request (ADR D7), never carried in the token, so a demotion or a
+ * from the store on every request (ADR-001 D7), never carried in the token, so a demotion or a
  * suspension takes effect immediately.
  */
 export interface AuthContext {

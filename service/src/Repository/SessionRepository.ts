@@ -9,7 +9,7 @@ export interface SessionRow {
 }
 
 /**
- * Opaque sessions (ADR D7). Only the hash of the token is stored, like a password: a database
+ * Opaque sessions (ADR-001 D7). Only the hash of the token is stored, like a password: a database
  * leak does not hand out live sessions.
  */
 export class SessionRepository {

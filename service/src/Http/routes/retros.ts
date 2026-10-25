@@ -15,7 +15,7 @@ import type {TimerAction} from '~/Model/TimerModel';
 
 /**
  * Every board mutation goes through the hub: the command is handled in that retro's queue,
- * then the new board is fanned out from the same queue (ADR D1). The broadcast is triggered by
+ * then the new board is fanned out from the same queue (ADR-001 D1). The broadcast is triggered by
  * the command, never by a database write.
  */
 export const retroRoutes = (c: Container) => {

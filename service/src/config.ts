@@ -41,7 +41,7 @@ export const config = {
   webDist: optional('WEB_DIST', ''),
 
   /**
-   * Platform admin is configuration, never data (ADR D8, D12): nobody can grant it with a
+   * Platform admin is configuration, never data (ADR-001 D8, D12): nobody can grant it with a
    * database write, only with a deploy.
    */
   platformAdminEmails: optional('PLATFORM_ADMIN_EMAILS', '')

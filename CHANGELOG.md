@@ -2,6 +2,20 @@
 
 All notable changes are recorded here. Versions follow [semantic versioning](https://semver.org).
 
+## Unreleased
+
+### Added
+
+- `deploy/fly.toml` and a README section to run Pit Stop on Fly.io from the published image.
+- A screenshot in the README, a code of conduct and a pull request template.
+
+### Changed
+
+- CI builds the Docker image on every pull request, and a release runs the tests before
+  publishing the image.
+- Development dependencies upgraded past known advisories: Vite 6.4.5, Vitest 4.
+- The three most voted topics are marked by a solid vote badge instead of a square outline.
+
 ## 0.1.0 — 2026-10-25
 
 ### Added

@@ -11,7 +11,7 @@ import type {SessionRepository} from '~/Repository/SessionRepository';
 import type {AuthContext} from '~/Security/AuthContext';
 
 /**
- * The paddock (ADR D8).
+ * The paddock (ADR-001 D8).
  *
  * It sees organisations, counters and last activity. It does NOT see note text, votes or note
  * authorship, and there is deliberately no impersonation: an operator who can read a retro's
@@ -63,7 +63,7 @@ export class PlatformManager {
       await this.checkDomainFree(orgId, domain);
     }
 
-    // The cloud starts every organisation on the demo tier (ADR D13); the self-hosted edition
+    // The cloud starts every organisation on the demo tier (ADR-001 D13); the self-hosted edition
     // has no tiers to start on (ADR-002 D3).
     await this.orgRepository.create({
       id: orgId,
@@ -104,7 +104,7 @@ export class PlatformManager {
 
     await this.orgRepository.setStatus(orgId, status);
 
-    // A suspension has to cut live sessions too, not just new logins (ADR D7).
+    // A suspension has to cut live sessions too, not just new logins (ADR-001 D7).
     if (status === 'suspended') {
       const members = await this.orgRepository.listMembers(orgId);
 

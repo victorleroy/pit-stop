@@ -11,7 +11,7 @@ import type {Variables} from '~/Http/middleware/auth';
 import {validateBody} from '~/Http/middleware/validate';
 
 /**
- * The paddock (ADR D8). Metadata and counters only: there is no route here that can read
+ * The paddock (ADR-001 D8). Metadata and counters only: there is no route here that can read
  * a note, a vote or a note's author, and none that impersonates a user.
  */
 export const platformRoutes = (c: Container) => {

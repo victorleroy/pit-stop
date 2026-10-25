@@ -1,6 +1,6 @@
 import {planFor} from '~/Security/Plans';
 
-/** ADR D13 and ADR-002 D3: quotas belong to the cloud, suspension to every edition. */
+/** ADR-001 D13 and ADR-002 D3: quotas belong to the cloud, suspension to every edition. */
 describe('planFor', () => {
   it('lifts every ceiling in the self-hosted edition', () => {
     expect(planFor('demo', 'self-hosted')).toMatchObject({

@@ -1,7 +1,7 @@
 import {createHash, randomBytes, timingSafeEqual} from 'node:crypto';
 
 /**
- * Opaque tokens for sessions, invitations and password resets (ADR D7, D12).
+ * Opaque tokens for sessions, invitations and password resets (ADR-001 D7, D12).
  * The plain value only ever exists in the response or the email link; the database keeps a
  * hash, exactly like a password, so a dump does not hand out live tokens.
  */

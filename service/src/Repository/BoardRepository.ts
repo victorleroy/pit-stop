@@ -76,7 +76,7 @@ export class BoardRepository {
 
   /**
    * Caller must have validated access to `retro` first: child tables carry no org_id and
-   * rely on the retro having been resolved through the scoped accessor (ADR D6).
+   * rely on the retro having been resolved through the scoped accessor (ADR-001 D6).
    */
   public async loadBoard(retro: RetroRow): Promise<BoardData> {
     const [columns, notes, clusters, votes, actions] = await Promise.all([

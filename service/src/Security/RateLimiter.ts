@@ -5,7 +5,7 @@ interface Bucket {
 
 /**
  * In-process rate limiting, which is only correct because there is exactly one instance
- * (ADR D2). It is a direct benefit of that decision: no Redis, no shared counter.
+ * (ADR-001 D2). It is a direct benefit of that decision: no Redis, no shared counter.
  */
 export class RateLimiter {
   private readonly buckets = new Map<string, Bucket>();

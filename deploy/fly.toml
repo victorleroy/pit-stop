@@ -1,18 +1,15 @@
-app = "pit-stop"
+# Pit Stop on Fly.io, from the published image. Replace the app name with your own, then see
+# "On Fly.io" in the README.
+app = "your-pit-stop"
 primary_region = "cdg"
 
 [build]
-  dockerfile = "Dockerfile"
+  image = "ghcr.io/victorleroy/pit-stop:latest"
 
-[env]
-  NODE_ENV = "production"
-  PORT = "3000"
-  DATABASE_FILE = "/data/pit-stop.db"
-  # The operator's own deployment applies the quotas of Plans.ts (ADR-002 D3).
-  EDITION = "cloud"
-  # APP_URL is required in production: `fly secrets set APP_URL=https://...` before deploying.
+# APP_URL is required: `fly secrets set APP_URL=https://<app>.fly.dev` before deploying.
+# The image defaults to EDITION=self-hosted, with no quotas.
 
-# One instance on purpose (ADR D2): it is what makes the in-memory RetroSession actor
+# One instance on purpose (ADR-001 D2): it is what makes the in-memory RetroSession actor
 # correct without Redis or any shared state. The trade-off is a short gap on deploy.
 [[vm]]
   size = "shared-cpu-1x"

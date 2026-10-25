@@ -4,7 +4,7 @@ import type {AuthContext} from '~/Security/AuthContext';
 
 const PASSWORD = 'correct horse battery';
 
-/** ADR D13: the demo tier ceilings are checked where the thing they count is created. */
+/** ADR-001 D13: the demo tier ceilings are checked where the thing they count is created. */
 describe('cloud quotas', () => {
   let harness: Harness;
   let orgId: string;

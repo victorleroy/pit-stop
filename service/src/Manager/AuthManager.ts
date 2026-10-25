@@ -33,7 +33,7 @@ const INVITATION_ONLY =
   'This service is invitation only. Ask an administrator of your organisation for an invitation.';
 
 /**
- * No open sign-up in v1 (ADR D12): an account is created either by accepting an invitation,
+ * No open sign-up in v1 (ADR-001 D12): an account is created either by accepting an invitation,
  * or by registering with an email whose domain a customer organisation has verified.
  */
 export class AuthManager {
@@ -54,7 +54,7 @@ export class AuthManager {
   public async loginWithGoogle(idToken: string): Promise<AuthResponseModel> {
     const profile = await this.googleClient.verifyIdToken(idToken);
 
-    // Google asserts the address, so the account can be linked by verified email (ADR D4).
+    // Google asserts the address, so the account can be linked by verified email (ADR-001 D4).
     let user =
       (await this.userRepository.findOneByProvider('google', profile.sub)) ??
       (await this.userRepository.findOneByEmail(profile.email));
@@ -309,7 +309,7 @@ export class AuthManager {
 
   /**
    * Auto-join only ever grants `member`, and only on a verified domain. The `admin` role is
-   * reachable through an invitation alone (ADR D12).
+   * reachable through an invitation alone (ADR-001 D12).
    */
   private async registerByVerifiedDomain(input: {
     allowBootstrap?: boolean;

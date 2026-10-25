@@ -2,7 +2,7 @@ import {Harness} from '../helpers/harness';
 import type {AuthContext} from '~/Security/AuthContext';
 
 /**
- * ADR D6 and D12. Isolation between customer organisations is the property that must never
+ * ADR-001 D6 and D12. Isolation between customer organisations is the property that must never
  * regress once there is more than one of them, so it is tested from the outside: what can a
  * member of Acme reach of Globex, by id, when they already know the id.
  */
@@ -117,7 +117,7 @@ describe('multi-tenant isolation', () => {
     expect(summary.retroCount).toBe(1);
     expect(summary.memberCount).toBe(1);
     expect(summary.teamCount).toBe(1);
-    // The paddock payload must never carry board content (ADR D8).
+    // The paddock payload must never carry board content (ADR-001 D8).
     expect(JSON.stringify(orgs)).not.toContain('acme secret');
   });
 });

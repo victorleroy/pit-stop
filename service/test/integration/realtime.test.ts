@@ -21,7 +21,7 @@ const fakeSocket = () => {
   };
 };
 
-/** ADR D1: the hub serialises commands and fans boards out to those still allowed to see them. */
+/** ADR-001 D1: the hub serialises commands and fans boards out to those still allowed to see them. */
 describe('live retros', () => {
   let harness: Harness;
   let owner: AuthContext;

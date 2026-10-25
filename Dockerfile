@@ -33,7 +33,7 @@ ENV NODE_ENV=production \
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates wget \
   && rm -rf /var/lib/apt/lists/*
 
-# Optional continuous replication of the SQLite file (ADR D3), enabled by configuration.
+# Optional continuous replication of the SQLite file (ADR-001 D3), enabled by configuration.
 COPY --from=litestream/litestream:0.3.13 /usr/local/bin/litestream /usr/local/bin/litestream
 
 # Native modules were compiled in the build stage against this same base image.

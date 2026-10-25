@@ -81,7 +81,7 @@ export class InvitationRepository {
       .execute();
   }
 
-  /** Feeds the per-organisation daily quota that protects the email allowance (ADR D12, D13). */
+  /** Feeds the per-organisation daily quota that protects the email allowance (ADR-001 D12, D13). */
   public async countSince(orgId: string, since: string): Promise<number> {
     const row = await this.db
       .selectFrom('invitations')

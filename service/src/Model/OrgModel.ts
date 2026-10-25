@@ -1,6 +1,6 @@
 import type {OrgStatus} from '~/Db/schema';
 
-/** What the paddock is allowed to see: metadata and counters, never content (ADR D8). */
+/** What the paddock is allowed to see: metadata and counters, never content (ADR-001 D8). */
 export interface OrgSummaryModel {
   createdAt: string;
   domains: {domain: string; verified: boolean}[];

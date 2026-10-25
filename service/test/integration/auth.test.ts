@@ -3,7 +3,7 @@ import {config} from '~/config';
 import type {AuthContext} from '~/Security/AuthContext';
 import {TokenService} from '~/Security/TokenService';
 
-/** ADR D4, D7 and D12: identity, revocable sessions, and the way into the product. */
+/** ADR-001 D4, D7 and D12: identity, revocable sessions, and the way into the product. */
 describe('authentication and invitations', () => {
   let harness: Harness;
   let orgId: string;
@@ -45,7 +45,7 @@ describe('authentication and invitations', () => {
       });
 
       expect(response.user.orgId).toBe(orgId);
-      // Auto-join never grants admin: that role goes through an invitation (ADR D12).
+      // Auto-join never grants admin: that role goes through an invitation (ADR-001 D12).
       expect(response.user.isOrgAdmin).toBe(false);
     });
 
@@ -260,7 +260,7 @@ describe('authentication and invitations', () => {
     });
 
     it('enforces the daily ceiling that protects the email allowance in the cloud', async () => {
-      // The demo tier allows 10 a day (ADR D13).
+      // The demo tier allows 10 a day (ADR-001 D13).
       config.edition = 'cloud';
       await harness.container.platformManager.setStatus(
         {...admin, isPlatformAdmin: true},
@@ -393,7 +393,7 @@ describe('authentication and invitations', () => {
       expect(initech.memberCount).toBe(0);
     });
 
-    it('starts a cloud organisation on the demo tier (ADR D13)', async () => {
+    it('starts a cloud organisation on the demo tier (ADR-001 D13)', async () => {
       config.edition = 'cloud';
 
       const platform: AuthContext = {...admin, isPlatformAdmin: true};

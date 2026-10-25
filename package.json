@@ -2,7 +2,7 @@
   "name": "pit-stop",
   "private": true,
   "license": "AGPL-3.0-only",
-  "description": "Team retrospectives: one board, live, with the notes anonymous until their author says otherwise.",
+  "description": "Self-hosted team retrospectives: live anonymous sticky-note boards, grouping, votes and actions carried over to the next retro.",
   "scripts": {
     "setup": "npm install && npm --prefix service install && npm --prefix web install",
     "start": "concurrently -k -n service,web -c blue,magenta \"npm --prefix service run dev\" \"npm --prefix web run dev\"",

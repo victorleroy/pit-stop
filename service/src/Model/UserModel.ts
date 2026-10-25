@@ -4,7 +4,7 @@ export interface UserModel {
   email: string;
   id: string;
   isOrgAdmin?: boolean;
-  /** Platform admin is derived from configuration, never stored (ADR D8). */
+  /** Platform admin is derived from configuration, never stored (ADR-001 D8). */
   isPlatformAdmin?: boolean;
   name: string;
   orgId: string;

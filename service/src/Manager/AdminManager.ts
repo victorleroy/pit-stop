@@ -148,7 +148,7 @@ export class AdminManager {
     await this.retroRepository.update(retroId, {facilitatorId: userId});
   }
 
-  /** Removing somebody from the organisation must also cut their live sessions (ADR D7). */
+  /** Removing somebody from the organisation must also cut their live sessions (ADR-001 D7). */
   public async revokeUserSessions(userId: string): Promise<void> {
     await this.sessionRepository.revokeAllForUser(userId);
   }

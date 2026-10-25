@@ -65,7 +65,7 @@ export class OrgRepository {
       .execute();
   }
 
-  /** Auto-join only ever applies to a verified domain (ADR D5, D12). */
+  /** Auto-join only ever applies to a verified domain (ADR-001 D5, D12). */
   public async findOrgByVerifiedDomain(domain: string): Promise<string | undefined> {
     const row = await this.db
       .selectFrom('orgDomains')

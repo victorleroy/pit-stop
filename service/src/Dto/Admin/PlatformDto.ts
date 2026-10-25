@@ -8,7 +8,7 @@ export class CreateOrgDto {
   @MaxLength(80)
   public name!: string;
 
-  /** The first administrator is invited, never created silently (ADR D12). */
+  /** The first administrator is invited, never created silently (ADR-001 D12). */
   @IsPlainEmail()
   public adminEmail!: string;
 

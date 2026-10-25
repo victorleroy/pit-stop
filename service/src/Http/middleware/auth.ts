@@ -19,7 +19,7 @@ export const bearerOf = (context: Context): string | undefined => {
 };
 
 /**
- * Resolves the opaque session on every request (ADR D7). Roles, organisation membership and
+ * Resolves the opaque session on every request (ADR-001 D7). Roles, organisation membership and
  * organisation status are read from the store here, never from a token claim, so a demotion
  * or a suspension takes effect on the very next request.
  */

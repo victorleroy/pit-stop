@@ -21,7 +21,7 @@ const RETRO_COLUMNS = [
 ] as const;
 
 /**
- * The registry of live retro actors (ADR D1).
+ * The registry of live retro actors (ADR-001 D1).
  *
  * A session is created when the first participant subscribes and destroyed when the last one
  * leaves, which is scale-to-zero at the granularity that actually matters here: the session.

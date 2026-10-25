@@ -24,7 +24,7 @@ const isFraction = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
 
 /**
- * A connection lives inside exactly one RetroSession (ADR D1). Subscribing is what creates
+ * A connection lives inside exactly one RetroSession (ADR-001 D1). Subscribing is what creates
  * the actor; the last participant leaving is what destroys it.
  */
 export const createSocketAttacher =

@@ -47,7 +47,7 @@ export const authRoutes = (c: Container) => {
   });
 
   /**
-   * Accepting binds the email (ADR D12): the invitation cannot be redeemed from another
+   * Accepting binds the email (ADR-001 D12): the invitation cannot be redeemed from another
    * address, so forwarding the mail does not let somebody into the organisation.
    */
   app.post('/auth/invitations/accept', async (context) => {

@@ -1,7 +1,7 @@
 import type {Db} from '~/Db/connection';
 
 /**
- * Tenant isolation as a property of the type, not a discipline (ADR D6).
+ * Tenant isolation as a property of the type, not a discipline (ADR-001 D6).
  *
  * Application code never receives the raw Kysely instance. It receives this wrapper, whose
  * accessors have already applied `org_id = <caller's org>`. There is deliberately no method

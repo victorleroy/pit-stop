@@ -11,6 +11,8 @@ A team retrospective tool. One retro is a board of stickies, live, with several 
 once: everyone writes in their corner, the notes then show up anonymous, you group them, vote,
 and decide on actions. Actions left open come back automatically on the next retro.
 
+![A retro in the Discuss phase: notes grouped and sorted by votes](docs/assets/board.png)
+
 The service guarantees anonymity: during the brainstorm, other people's text never leaves the
 server, and nobody is tied to a note until they click "reveal". Every rule behind that promise
 lives in one pure function, `RetroManager.projectBoard`, and you can read it.
@@ -40,6 +42,21 @@ administrator. Then invite your colleagues from **Admin → Invitations**.
 Set `APP_URL` in `docker-compose.yml` to the address people will actually open, behind
 whatever reverse proxy terminates TLS for you. Every link in an email or in the logs is built
 on it. The proxy must pass websockets through on `/ws`.
+
+### On Fly.io
+
+No server to maintain, TLS included, for a few dollars a month. Copy
+[`deploy/fly.toml`](deploy/fly.toml), set its `app` to a name of your own, then:
+
+```bash
+fly apps create <app>
+fly volumes create pit_stop_data --app <app> --region cdg --size 1
+fly secrets set --app <app> APP_URL=https://<app>.fly.dev
+fly deploy --config fly.toml
+fly logs --app <app> | grep setup
+```
+
+Fly snapshots the volume every day; Litestream adds continuous backups (see below).
 
 ### What the anonymity protects, and from whom
 
@@ -240,5 +257,5 @@ can grow a behaviour of its own without every page having to change.
 
 ## Contributing and security
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately, as described in
-[SECURITY.md](SECURITY.md), never in a public issue.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md). Report
+vulnerabilities privately, as described in [SECURITY.md](SECURITY.md), never in a public issue.
