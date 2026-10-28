@@ -13,6 +13,16 @@ export class ColumnRepository {
       .executeTakeFirst();
   }
 
+  public async countByRetroId(retroId: string): Promise<number> {
+    const row = await this.db
+      .selectFrom('columns')
+      .select((eb) => eb.fn.countAll<number>().as('total'))
+      .where('retroId', '=', retroId)
+      .executeTakeFirst();
+
+    return Number(row?.total ?? 0);
+  }
+
   /** After the last column, not after the count: a deleted column leaves a gap behind. */
   public async nextPosition(retroId: string): Promise<number> {
     const row = await this.db

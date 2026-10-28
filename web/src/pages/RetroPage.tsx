@@ -5,8 +5,8 @@ import {
   Typography,
 } from '@/ui';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import type {PointerEvent as ReactPointerEvent} from 'react';
-import {useState} from 'react';
+import type {PointerEvent as ReactPointerEvent, ReactNode} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
 import {
   addColumn,
@@ -39,15 +39,88 @@ import {useToast} from '@/contexts/ToastContext';
 import {BoardToolbar} from '@/components/BoardToolbar';
 import {PresenceBar} from '@/components/PresenceBar';
 import {useBoardSocket} from '@/hooks/useBoardSocket';
+import {SLIPSTREAM} from '@/ui/theme';
 
 // Only used while the websocket is down.
 const FALLBACK_POLL_INTERVAL_MS = 5_000;
+
+const FADE_WIDTH = 56;
+
+const fade = (side: 'left' | 'right', isShown: boolean) => ({
+  backgroundImage: `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, ${SLIPSTREAM.ground}, ${SLIPSTREAM.ground}00)`,
+  // Clear of the scrollbar, which stays as plain to grab as ever.
+  bottom: 16,
+  opacity: isShown ? 1 : 0,
+  pointerEvents: 'none',
+  position: 'absolute',
+  [side]: 0,
+  top: 0,
+  transition: 'opacity 160ms ease',
+  width: FADE_WIDTH,
+  zIndex: 3,
+}) as const;
+
+/**
+ * The scrollbar of a wide board sits under its tallest column, often below the fold, so a
+ * column out of sight would go unnoticed. The paper fades out on whichever side still has
+ * more, the way a page does at the edge of a desk. The fades take no pointer: dragging,
+ * cursors and the native wheel all go straight through to the board.
+ */
+const SideScroll = ({children}: {children: ReactNode}) => {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({left: false, right: false});
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+
+    if (!scroller) return undefined;
+
+    const update = () => {
+      const {clientWidth, scrollLeft, scrollWidth} = scroller;
+      const left = scrollLeft > 1;
+      const right = scrollLeft + clientWidth < scrollWidth - 1;
+
+      setEdges((current) =>
+        current.left === left && current.right === right ? current : {left, right},
+      );
+    };
+
+    update();
+    scroller.addEventListener('scroll', update, {passive: true});
+    window.addEventListener('resize', update);
+
+    // A column added or removed changes the content's width without resizing the window.
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(update);
+    observer?.observe(scroller);
+    if (scroller.firstElementChild) observer?.observe(scroller.firstElementChild);
+
+    return () => {
+      scroller.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+      observer?.disconnect();
+    };
+  }, []);
+
+  return (
+    <Box sx={{position: 'relative'}}>
+      <Box ref={scrollerRef} sx={{overflowX: 'auto', pb: 2}}>
+        {children}
+      </Box>
+      <Box aria-hidden sx={fade('left', edges.left)} />
+      <Box aria-hidden sx={fade('right', edges.right)} />
+    </Box>
+  );
+};
 
 export const RetroPage = () => {
   const {retroId} = useParams<{retroId: string}>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | undefined>(undefined);
+  const [isAddingColumn, setIsAddingColumn] = useState(false);
+  const [actionDraft, setActionDraft] = useState<{nonce: number; text: string} | undefined>(
+    undefined,
+  );
 
   const queryKey = ['retros', retroId, 'board'];
 
@@ -69,7 +142,7 @@ export const RetroPage = () => {
     },
   };
 
-  const {data: board, error, isLoading} = useQuery({
+  const {data: board, dataUpdatedAt, error, isLoading} = useQuery({
     enabled: Boolean(retroId),
     queryFn: () => fetchBoard(retroId as string),
     queryKey,
@@ -84,6 +157,10 @@ export const RetroPage = () => {
 
   const phaseMutation = useMutation({
     mutationFn: (phase: RetroPhase) => updateRetro(retroId as string, {phase}),
+    ...boardMutationOptions,
+  });
+  const maxVotesMutation = useMutation({
+    mutationFn: (maxVotes: number) => updateRetro(retroId as string, {maxVotes}),
     ...boardMutationOptions,
   });
   const takeFacilitationMutation = useMutation({
@@ -183,6 +260,7 @@ export const RetroPage = () => {
 
   const mutations = [
     phaseMutation,
+    maxVotesMutation,
     timerMutation,
     takeFacilitationMutation,
     revealMutation,
@@ -265,11 +343,18 @@ export const RetroPage = () => {
       <ConfirmDialog onClose={() => setConfirmRequest(undefined)} request={confirmRequest} />
 
       <Stack spacing={1}>
-        <Stack direction="row" spacing={2} sx={{alignItems: 'center', flexWrap: 'wrap'}}>
-          <Typography sx={{flexGrow: 1}} variant="displayS">
+        {/* A long title wraps beside the presence, which keeps its corner instead of dropping
+            between the title and the way back. */}
+        <Stack direction="row" spacing={2} sx={{alignItems: 'flex-start'}}>
+          <Typography
+            sx={{flexGrow: 1, fontSize: {xs: '1.75rem', sm: undefined}, minWidth: 0, overflowWrap: 'anywhere'}}
+            variant="displayS"
+          >
             {board.title}
           </Typography>
-          <PresenceBar isConnected={isConnected} participants={participants} />
+          <Stack sx={{flexShrink: 0, pt: {xs: 0.5, sm: 1.5}}}>
+            <PresenceBar isConnected={isConnected} participants={participants} />
+          </Stack>
         </Stack>
         <Link
           style={{color: 'inherit', textDecoration: 'none', width: 'fit-content'}}
@@ -283,13 +368,18 @@ export const RetroPage = () => {
 
       <BoardToolbar
         board={board}
-        onAddColumn={(title) => addColumnMutation.mutate(title)}
+        isAddingColumn={isAddingColumn}
         isBusy={isBusy}
+        isTimerBusy={timerMutation.isPending}
+        onAddColumn={(title) => addColumnMutation.mutate(title)}
+        onAddingColumnChange={setIsAddingColumn}
         onHide={() => hideMutation.mutate()}
+        onMaxVotesChange={(maxVotes) => maxVotesMutation.mutate(maxVotes)}
         onPhaseChange={(phase) => phaseMutation.mutate(phase)}
         onReveal={() => revealMutation.mutate()}
         onTakeFacilitation={() => takeFacilitationMutation.mutate()}
         onTimer={(action, seconds) => timerMutation.mutate({action, seconds})}
+        receivedAt={dataUpdatedAt}
       />
 
       {board.carriedOverActions.length > 0 ? (
@@ -305,73 +395,101 @@ export const RetroPage = () => {
         />
       ) : null}
 
-      <Box
-        onPointerLeave={hideCursor}
-        onPointerMove={onPointerMove}
-        sx={{position: 'relative'}}
-      >
-        <CursorLayer cursors={cursors} />
-
-        <Stack
-          direction="row"
-          spacing={2}
-          sx={{alignItems: 'flex-start', flexWrap: 'wrap', pb: 2}}
-        >
-          {board.columns.map((column, index) => (
-            <BoardColumn
-              canEditColumn={board.isFacilitator && board.phase === 'BRAINSTORM'}
-              canGroup={canGroup}
-              canRemove={board.columns.length > 1}
-              canModerate={canModerate}
-              canVote={canVote}
-              canWrite={canWrite}
-              column={column}
-              index={index}
-              isBusy={isBusy}
-              isFacilitator={board.isFacilitator}
-              key={column.id}
-              onAddNote={(text) => createNoteMutation.mutate({columnId: column.id, text})}
-              onGroupNote={(noteId, targetId) => groupMutation.mutate({noteId, targetId})}
-              onMoveNote={(noteId) => moveNoteMutation.mutate({columnId: column.id, noteId})}
-              onRemoveColumn={() =>
-                setConfirmRequest({
-                  message: `The ${column.title} column will be removed from the board.`,
-                  onConfirm: () => removeColumnMutation.mutate(column.id),
-                  title: 'Delete the column?',
-                })
+      {board.columns.length === 0 ? (
+        // A blank board: nobody can write until there is somewhere to write.
+        <Box sx={{border: '1px dashed', borderColor: 'divider', borderRadius: 2}}>
+          {board.isFacilitator ? (
+            <EmptyState
+              action={
+                board.phase === 'BRAINSTORM'
+                  ? {label: 'Add a column', onClick: () => setIsAddingColumn(true)}
+                  : undefined
               }
-              onRemoveNote={(noteId) =>
-                setConfirmRequest({
-                  message: 'This note will be permanently removed from the board.',
-                  onConfirm: () => removeNoteMutation.mutate(noteId),
-                  title: 'Delete the note?',
-                })
-              }
-              onRenameCluster={(clusterId, title) =>
-                renameClusterMutation.mutate({clusterId, title})
-              }
-              onRenameColumn={(title) => renameColumnMutation.mutate({columnId: column.id, title})}
-              onUngroupNote={(noteId) => ungroupMutation.mutate(noteId)}
-              onUpdateNote={(noteId, text) => updateNoteMutation.mutate({noteId, text})}
-              onVote={(targetId, delta) => voteMutation.mutate({delta, targetId})}
-              ranks={ranks}
-              showTotals={board.votesRevealed}
-              votesLeft={board.myVotesLeft}
+              message="Name the first column, and people can start writing in it."
+              title="Add at least one column to start"
             />
-          ))}
+          ) : (
+            <EmptyState
+              message="Notes can be written as soon as there is a column to put them in."
+              title="The facilitator is setting up the columns."
+            />
+          )}
+        </Box>
+      ) : (
+        /*
+         * The columns share the width and the board scrolls sideways when there are more
+         * than the screen holds. The inner box spans the whole scrolled content, so cursor
+         * positions stay fractions of the full board rather than of the visible slice.
+         */
+        <SideScroll>
+          <Box
+            onPointerLeave={hideCursor}
+            onPointerMove={onPointerMove}
+            sx={{minWidth: '100%', position: 'relative', width: 'max-content'}}
+          >
+            <CursorLayer cursors={cursors} />
 
-          </Stack>
-      </Box>
+            <Stack direction="row" sx={{alignItems: 'flex-start', flexWrap: 'nowrap', gap: 2}}>
+              {board.columns.map((column, index) => (
+                <BoardColumn
+                  canDecide={canDecide}
+                  canEditColumn={board.isFacilitator && board.phase === 'BRAINSTORM'}
+                  canGroup={canGroup}
+                  canRemove={board.columns.length > 1}
+                  canModerate={canModerate}
+                  canVote={canVote}
+                  canWrite={canWrite}
+                  column={column}
+                  index={index}
+                  isBusy={isBusy}
+                  isFacilitator={board.isFacilitator}
+                  key={column.id}
+                  onAddNote={(text) => createNoteMutation.mutate({columnId: column.id, text})}
+                  onGroupNote={(noteId, targetId) => groupMutation.mutate({noteId, targetId})}
+                  onMoveNote={(noteId) => moveNoteMutation.mutate({columnId: column.id, noteId})}
+                  onRemoveColumn={() =>
+                    setConfirmRequest({
+                      message: `The ${column.title} column will be removed from the board.`,
+                      onConfirm: () => removeColumnMutation.mutate(column.id),
+                      title: 'Delete the column?',
+                    })
+                  }
+                  onRemoveNote={(noteId) =>
+                    setConfirmRequest({
+                      message: 'This note will be permanently removed from the board.',
+                      onConfirm: () => removeNoteMutation.mutate(noteId),
+                      title: 'Delete the note?',
+                    })
+                  }
+                  onRenameCluster={(clusterId, title) =>
+                    renameClusterMutation.mutate({clusterId, title})
+                  }
+                  onRenameColumn={(title) => renameColumnMutation.mutate({columnId: column.id, title})}
+                  onTurnIntoAction={(text) => setActionDraft({nonce: Date.now(), text})}
+                  onUngroupNote={(noteId) => ungroupMutation.mutate(noteId)}
+                  onUpdateNote={(noteId, text) => updateNoteMutation.mutate({noteId, text})}
+                  onVote={(targetId, delta) => voteMutation.mutate({delta, targetId})}
+                  ranks={ranks}
+                  showTotals={board.votesRevealed}
+                  votesLeft={board.myVotesLeft}
+                />
+              ))}
+            </Stack>
+          </Box>
+        </SideScroll>
+      )}
 
       {canDecide || board.actions.length > 0 ? (
         <ActionList
           actions={board.actions}
           canComplete={false}
           canCreate={canDecide}
+          draft={actionDraft}
           emptyLabel="No action decided yet."
           isBusy={isBusy}
           members={members ?? []}
           onCreate={(text, assigneeId) => createActionMutation.mutate({assigneeId, text})}
+          onDraftApplied={() => setActionDraft(undefined)}
           onStatusChange={onStatusChange}
           title="Actions from this retro"
         />

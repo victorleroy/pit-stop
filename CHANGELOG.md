@@ -2,6 +2,38 @@
 
 All notable changes are recorded here. Versions follow [semantic versioning](https://semver.org).
 
+## Unreleased
+
+### Added
+
+- Votes per person chosen when starting a retro (3 by default) and adjustable by the
+  facilitator until voting starts.
+- Blank template: a retro can start with no column; it cannot leave the brainstorm until one
+  is added.
+- Turn a card into an action from the discussion: the action form is pre-filled, never
+  submitted on its own.
+- Team rename, by the team's administrators and organisation administrators.
+- Team deletion, by organisation administrators only, after typing the team's name.
+- Administration: activity counters over the last 30 days, the last quarter or all time,
+  and a searchable, scrollable people list.
+- Search when adding members to a team, several at once.
+
+### Changed
+
+- The board scrolls sideways instead of wrapping columns, and takes the full window width.
+- The timer counts from the time left sent by the service, so a skewed clock or a pause and
+  resume no longer makes it jump.
+- "Take mine back" is now "Hide my notes"; sharing and hiding carry eye icons, and the
+  toolbar is grouped into timer, my notes and facilitation.
+- `/` opens My retros. Destructive actions are red. Member and people rows use a single
+  actions menu.
+- The source code link is gone from the interface: the source is referenced from the README.
+
+### Fixed
+
+- Second row of team cards misaligned, black separators in the members list, oval vote
+  counter.
+
 ## 0.1.1 — 2026-10-25
 
 ### Added

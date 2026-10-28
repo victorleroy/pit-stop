@@ -16,10 +16,22 @@ import {useState} from 'react';
 import {useNavigate} from 'react-router-dom';
 import {createTeam, fetchTeams, leaveTeam} from '@/api/teams';
 import type {Team} from '@/api/types';
+import type {ConfirmRequest} from '@/components/ConfirmDialog';
+import {ConfirmDialog} from '@/components/ConfirmDialog';
 import {EmptyState} from '@/components/EmptyState';
 import {useToast} from '@/contexts/ToastContext';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
 import {SURFACE, teamColour} from '@/theme/texture';
+
+/**
+ * A grid rather than a wrapping row: the cards of the second row line up under the first and
+ * keep the same width, however many teams there are.
+ */
+const CARD_GRID = {
+  display: 'grid',
+  gap: 2,
+  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+};
 
 const TeamCard = ({
   isBusy,
@@ -34,16 +46,20 @@ const TeamCard = ({
 }) => {
 
   return (
-    <Stack
-      spacing={2}
-      sx={{...SURFACE, flex: '1 1 320px', maxWidth: 420, minWidth: 280, overflow: 'hidden'}}
-    >
+    <Stack spacing={2} sx={{...SURFACE, minWidth: 0, overflow: 'hidden'}}>
       <Box sx={{backgroundImage: teamColour(team.name).tint, height: 52}} />
 
       <Stack spacing={2} sx={{flexGrow: 1, justifyContent: 'space-between', px: 2.5, pb: 2.5}}>
         <Stack spacing={1}>
-          <Stack direction="row" spacing={1} sx={{alignItems: 'center', flexWrap: 'wrap'}}>
-            <Typography variant="headingS">{team.name}</Typography>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{alignItems: 'center', flexWrap: 'wrap'}}
+            useFlexGap
+          >
+            <Typography sx={{overflowWrap: 'anywhere'}} variant="headingS">
+              {team.name}
+            </Typography>
             {team.isAdmin ? (
               <Tag color="primary" size="small">
                 Admin
@@ -60,7 +76,7 @@ const TeamCard = ({
             <Button onClick={onOpen} variant="contained">
               Open
             </Button>
-            <Button disabled={isBusy} onClick={onLeave} variant="text">
+            <Button color="error" disabled={isBusy} onClick={onLeave} variant="text">
               Leave
             </Button>
           </Stack>
@@ -84,6 +100,7 @@ export const TeamsPage = () => {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | undefined>(undefined);
   const nameInputRef = useAutoFocus(isCreating);
   const toast = useToast();
 
@@ -121,18 +138,21 @@ export const TeamsPage = () => {
 
   const cardProps = (team: Team) => ({
     isBusy,
-    onLeave: () => leaveMutation.mutate(team.id),
+    // Same words as on the team's own page: leaving closes its boards until somebody adds you back.
+    onLeave: () =>
+      setConfirmRequest({
+        confirmLabel: 'Leave',
+        message: `You will not see the retrospectives of ${team.name} any more until you join the team again.`,
+        onConfirm: () => leaveMutation.mutate(team.id),
+        title: 'Leave the team?',
+      }),
     onOpen: () => navigate(`/teams/${team.id}`),
     team,
   });
 
   return (
     <Stack spacing={4}>
-      <Stack direction="row" sx={{justifyContent: 'flex-end'}}>
-        <Button onClick={() => setIsCreating(true)} variant="contained">
-          Create a team
-        </Button>
-      </Stack>
+      <ConfirmDialog onClose={() => setConfirmRequest(undefined)} request={confirmRequest} />
 
       <Dialog onClose={closeDialog} open={isCreating} size="small">
         <DialogTitle>Create a team</DialogTitle>
@@ -149,7 +169,7 @@ export const TeamsPage = () => {
                 event.preventDefault();
                 createMutation.mutate(name.trim());
               }}
-              placeholder="Mozza"
+              placeholder="Pesto"
               size="small"
               value={name}
             />
@@ -180,11 +200,22 @@ export const TeamsPage = () => {
       ) : null}
 
       <Stack spacing={2}>
-        <Typography variant="headingS">
-          Your teams <Typography component="span" color="textSecondary" variant="textS">
-            {mine.length}
+        {/* The button heads the list it adds to, rather than floating alone above the page. */}
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between'}}
+          useFlexGap
+        >
+          <Typography variant="headingS">
+            Your teams <Typography component="span" color="textSecondary" variant="textS">
+              {mine.length}
+            </Typography>
           </Typography>
-        </Typography>
+          <Button onClick={() => setIsCreating(true)} variant="contained">
+            Create a team
+          </Button>
+        </Stack>
 
         {mine.length === 0 && !isLoading ? (
           <Typography color="textSecondary" variant="textS">
@@ -192,11 +223,11 @@ export const TeamsPage = () => {
           </Typography>
         ) : null}
 
-        <Stack direction="row" spacing={2} sx={{alignItems: 'stretch', flexWrap: 'wrap'}}>
+        <Box sx={CARD_GRID}>
           {mine.map((team) => (
             <TeamCard key={team.id} {...cardProps(team)} />
           ))}
-        </Stack>
+        </Box>
       </Stack>
 
       {others.length > 0 ? (
@@ -213,11 +244,11 @@ export const TeamsPage = () => {
             </Typography>
           </Stack>
 
-          <Stack direction="row" spacing={2} sx={{alignItems: 'stretch', flexWrap: 'wrap'}}>
+          <Box sx={CARD_GRID}>
             {others.map((team) => (
               <TeamCard key={team.id} {...cardProps(team)} />
             ))}
-          </Stack>
+          </Box>
         </Stack>
       ) : null}
 

@@ -25,6 +25,12 @@ export class TimerCommandDto {
 
 export class UpdateRetroDto {
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  public maxVotes?: number;
+
+  @IsOptional()
   @IsIn(RETRO_PHASES as unknown as string[])
   public phase?: string;
 

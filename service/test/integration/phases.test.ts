@@ -203,6 +203,113 @@ describe('phases', () => {
     expect(board.columns).toHaveLength(2);
   });
 
+  describe('votes per person', () => {
+    const setMaxVotes = (maxVotes: number) =>
+      harness.container.retroManager.updateRetro(facilitator, retroId, {maxVotes});
+
+    it('takes the budget given at creation', async () => {
+      const teamId = (await harness.container.retroManager.getBoard(facilitator, retroId)).teamId;
+      const board = await harness.container.retroManager.create(
+        facilitator,
+        teamId,
+        'Sprint 43',
+        undefined,
+        3,
+      );
+
+      expect(board).toMatchObject({maxVotes: 3, myVotesLeft: 3});
+    });
+
+    it('can change during the brainstorm and while sharing', async () => {
+      await expect(setMaxVotes(8)).resolves.toMatchObject({maxVotes: 8, myVotesLeft: 8});
+
+      await setPhase('SHARE');
+
+      await expect(setMaxVotes(2)).resolves.toMatchObject({maxVotes: 2});
+    });
+
+    it('is frozen once voting has started', async () => {
+      await setPhase('SHARE');
+      await setPhase('VOTE');
+
+      await expect(setMaxVotes(8)).rejects.toMatchObject({status: 409});
+    });
+
+    it('cannot change on the way into the vote', async () => {
+      await setPhase('SHARE');
+
+      await expect(
+        harness.container.retroManager.updateRetro(facilitator, retroId, {
+          maxVotes: 10,
+          phase: 'VOTE',
+        }),
+      ).rejects.toMatchObject({status: 409});
+    });
+
+    it('can change on the way back to the brainstorm', async () => {
+      await setPhase('SHARE');
+      await setPhase('VOTE');
+
+      await expect(
+        harness.container.retroManager.updateRetro(facilitator, retroId, {
+          maxVotes: 2,
+          phase: 'BRAINSTORM',
+        }),
+      ).resolves.toMatchObject({maxVotes: 2, phase: 'BRAINSTORM'});
+    });
+
+    it('is refused on an archived retro', async () => {
+      await setPhase('ARCHIVED');
+
+      await expect(setMaxVotes(8)).rejects.toThrow('Reopen the retro');
+    });
+
+    it('caps the votes each person can cast', async () => {
+      await setMaxVotes(1);
+      await addNote('a');
+      await setPhase('SHARE');
+      await setPhase('VOTE');
+
+      const voting = await harness.container.retroManager.getBoard(facilitator, retroId);
+      const cardId = voting.columns[0]!.cards[0]!.id;
+
+      await harness.container.voteManager.cast(facilitator, retroId, cardId, 1);
+
+      await expect(
+        harness.container.voteManager.cast(facilitator, retroId, cardId, 1),
+      ).rejects.toMatchObject({status: 409});
+    });
+  });
+
+  describe('blank retro', () => {
+    let blankId: string;
+
+    beforeEach(async () => {
+      const {teamId} = await harness.container.retroManager.getBoard(facilitator, retroId);
+      const board = await harness.container.retroManager.create(facilitator, teamId, 'Blank', []);
+
+      blankId = board.id;
+    });
+
+    it('starts with no column', async () => {
+      const board = await harness.container.retroManager.getBoard(facilitator, blankId);
+
+      expect(board.columns).toEqual([]);
+    });
+
+    it('stays in the brainstorm until a column exists', async () => {
+      await expect(
+        harness.container.retroManager.updateRetro(facilitator, blankId, {phase: 'SHARE'}),
+      ).rejects.toThrow('Add at least one column first');
+
+      await harness.container.retroManager.addColumn(facilitator, blankId, 'Wins');
+
+      await expect(
+        harness.container.retroManager.updateRetro(facilitator, blankId, {phase: 'SHARE'}),
+      ).resolves.toMatchObject({phase: 'SHARE'});
+    });
+  });
+
   it('allows creating an action only while discussing', async () => {
     await expect(
       harness.container.actionManager.create(facilitator, retroId, 'do the thing'),

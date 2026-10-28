@@ -14,14 +14,27 @@ export const fetchRetros = (teamId: string) =>
 
 export const fetchMyRetros = () => request<TeamRetroSummary[]>('/me/retros');
 
-export const createRetro = (teamId: string, title: string, columns?: string[]) =>
-  request<Board>(`/teams/${teamId}/retros`, {body: {columns, title}, method: 'POST'});
+// The service accepts a vote budget of 1 to 10. Three is what the dialog offers first: few
+// enough to force a choice, and the dialog always sends it.
+export const DEFAULT_MAX_VOTES = 3;
+
+export const VOTE_OPTIONS = Array.from({length: 10}, (_, index) => index + 1);
+
+// An empty `columns` asks for a blank board; leaving it out keeps the default template.
+export const createRetro = (
+  teamId: string,
+  title: string,
+  columns?: string[],
+  maxVotes?: number,
+) =>
+  request<Board>(`/teams/${teamId}/retros`, {body: {columns, maxVotes, title}, method: 'POST'});
 
 export const fetchBoard = (retroId: string) => request<Board>(`/retros/${retroId}`);
 
 export const updateRetro = (
   retroId: string,
   changes: {
+    maxVotes?: number;
     phase?: RetroPhase;
     timer?: {action: TimerAction; seconds?: number};
     title?: string;

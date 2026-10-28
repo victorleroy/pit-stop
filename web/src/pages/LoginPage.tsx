@@ -13,7 +13,6 @@ import {
   requestPasswordReset,
 } from '@/api/auth';
 import {Logo} from '@/components/Logo';
-import {SourceLink} from '@/components/SourceLink';
 import {useAuth} from '@/contexts/AuthContext';
 import {useGoogleSignIn} from '@/hooks/useGoogleSignIn';
 import {BOARD_BACKGROUND, PAPER_SHADOW, noteColours} from '@/theme/texture';
@@ -86,7 +85,7 @@ export const LoginPage = () => {
   };
 
   if (user) {
-    return <Navigate replace to="/teams" />;
+    return <Navigate replace to="/" />;
   }
 
   const canSubmit =
@@ -279,10 +278,6 @@ export const LoginPage = () => {
           ) : null}
         </Stack>
       </Card>
-
-      <Stack sx={{mt: 2, position: 'relative', zIndex: 1}}>
-        <SourceLink />
-      </Stack>
     </Stack>
   );
 };

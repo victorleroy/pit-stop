@@ -1,10 +1,11 @@
 import {v4 as uuid} from 'uuid';
 import {ConflictHttpError, ForbiddenHttpError, NotFoundHttpError} from '~/Error/HttpError';
-import type {TeamMemberModel, TeamModel} from '~/Model/TeamModel';
+import type {TeamMemberModel, TeamModel, TeamSummaryModel} from '~/Model/TeamModel';
 import type {MembershipRepository} from '~/Repository/MembershipRepository';
 import type {TeamRepository, TeamRow} from '~/Repository/TeamRepository';
 import type {AuthContext} from '~/Security/AuthContext';
 import type {RoleChecker} from '~/Security/RoleChecker';
+import {ScopedDb} from '~/Security/ScopedDb';
 
 export class TeamManager {
   public constructor(
@@ -62,6 +63,59 @@ export class TeamManager {
       memberCount: 1,
       name: team.name,
     };
+  }
+
+  public async renameTeam(auth: AuthContext, teamId: string, name: string): Promise<TeamModel> {
+    // Existence check first: a team of another organisation is a 404, never a 403.
+    await this.getOrgTeam(auth, teamId);
+    await this.roleChecker.checkTeamAdmin(auth, teamId);
+
+    await this.teamRepository.rename(auth.db, teamId, name);
+
+    const [team, membership, isOrgAdmin] = await Promise.all([
+      this.getOrgTeam(auth, teamId),
+      this.membershipRepository.findOne(teamId, auth.userId),
+      this.roleChecker.isOrgAdmin(auth),
+    ]);
+
+    return {
+      createdAt: team.createdAt,
+      createdBy: team.createdBy,
+      id: team.id,
+      isAdmin: isOrgAdmin || Boolean(membership?.isAdmin),
+      isMember: Boolean(membership),
+      memberCount: Number(team.memberCount),
+      name: team.name,
+    };
+  }
+
+  /**
+   * Deleting a team takes every retro, board and action with it, so it is an org admin's call
+   * only, never a team admin's. Returns the ids of the retros that went with it, so the
+   * realtime layer can tell whoever is still watching one of them.
+   */
+  public async deleteTeam(auth: AuthContext, teamId: string): Promise<string[]> {
+    // Existence check first: a team of another organisation is a 404, never a 403.
+    await this.getOrgTeam(auth, teamId);
+    await this.roleChecker.checkOrgAdmin(auth);
+
+    // One transaction: the retros reported are exactly the ones the deletion took with it.
+    return auth.db.unscoped.transaction().execute(async (trx) => {
+      const scoped = new ScopedDb(trx, auth.orgId);
+      const retroIds = await this.teamRepository.findRetroIds(scoped, teamId);
+
+      await this.teamRepository.remove(scoped, teamId);
+
+      return retroIds;
+    });
+  }
+
+  /** Counters for the delete confirmation: no title, no text, nothing from inside a board. */
+  public async getTeamSummary(auth: AuthContext, teamId: string): Promise<TeamSummaryModel> {
+    await this.getOrgTeam(auth, teamId);
+    await this.roleChecker.checkOrgAdmin(auth);
+
+    return this.teamRepository.countContent(auth.db, teamId);
   }
 
   /**

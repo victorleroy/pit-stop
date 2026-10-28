@@ -42,13 +42,15 @@ export const router = createBrowserRouter([
     children: [
       {
         children: [
+          // Your own retros are the home page: the first thing anybody wants back to.
+          {element: <Navigate replace to="/retros" />, index: true},
           {element: <TeamsPage />, path: 'teams'},
           {element: <MyRetrosPage />, path: 'retros'},
           {element: <AdminPage />, path: 'admin'},
           {element: <PaddockPage />, path: 'paddock'},
           {element: <TeamPage />, path: 'teams/:teamId'},
           {element: <RetroPage />, path: 'teams/:teamId/retros/:retroId'},
-          {element: <Navigate replace to="/teams" />, path: '*'},
+          {element: <Navigate replace to="/retros" />, path: '*'},
         ],
         element: <AppLayout />,
         path: '/',

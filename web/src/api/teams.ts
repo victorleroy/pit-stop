@@ -1,10 +1,21 @@
 import {request} from '@/api/client';
-import type {OrgMember, Team, TeamMember, User} from '@/api/types';
+import type {OrgMember, Team, TeamMember, TeamSummary, User} from '@/api/types';
 
 export const fetchTeams = () => request<Team[]>('/teams');
 
 export const createTeam = (name: string) =>
   request<Team>('/teams', {body: {name}, method: 'POST'});
+
+export const renameTeam = (teamId: string, name: string) =>
+  request<Team>(`/teams/${teamId}`, {body: {name}, method: 'PATCH'});
+
+// Org administrators only: everything the team held goes with it.
+export const deleteTeam = (teamId: string) =>
+  request<void>(`/teams/${teamId}`, {method: 'DELETE'});
+
+// Counters only, for the delete confirmation: what would be lost, never what it says.
+export const fetchTeamSummary = (teamId: string) =>
+  request<TeamSummary>(`/teams/${teamId}/summary`);
 
 export const leaveTeam = (teamId: string) =>
   request<void>(`/teams/${teamId}/members/me`, {method: 'DELETE'});

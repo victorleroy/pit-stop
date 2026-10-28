@@ -25,6 +25,7 @@ import {InvitationRepository} from '~/Repository/InvitationRepository';
 import {MembershipRepository} from '~/Repository/MembershipRepository';
 import {NoteRepository} from '~/Repository/NoteRepository';
 import {OrgRepository} from '~/Repository/OrgRepository';
+import {OrgStatsRepository} from '~/Repository/OrgStatsRepository';
 import {RetroRepository} from '~/Repository/RetroRepository';
 import {SessionRepository} from '~/Repository/SessionRepository';
 import {TeamRepository} from '~/Repository/TeamRepository';
@@ -132,6 +133,7 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
       accessChecker,
       roleChecker,
       hub,
+      new OrgStatsRepository(),
     ),
     authManager,
     clusterManager: new ClusterManager(

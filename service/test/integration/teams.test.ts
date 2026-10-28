@@ -1,4 +1,9 @@
+import {Hono} from 'hono';
 import {Harness} from '../helpers/harness';
+import {errorHandler} from '~/Http/errorHandler';
+import type {Variables} from '~/Http/middleware/auth';
+import {retroRoutes} from '~/Http/routes/retros';
+import {teamRoutes} from '~/Http/routes/teams';
 import type {AuthContext} from '~/Security/AuthContext';
 
 /** BEHAVIOUR.md section 5 and 6: roles, the three lock-out guards, and facilitation. */
@@ -269,6 +274,102 @@ describe('teams and roles', () => {
       await expect(
         harness.container.adminManager.handOverFacilitation(owner, retroId, outsider.userId),
       ).rejects.toThrow('member of the team');
+    });
+  });
+
+  describe('renaming a team', () => {
+    let teamId: string;
+
+    beforeEach(async () => {
+      teamId = (await harness.container.teamManager.createTeam(member, 'Platform')).id;
+    });
+
+    it('is allowed to the team administrator', async () => {
+      const team = await harness.container.teamManager.renameTeam(member, teamId, 'Core');
+
+      expect(team).toMatchObject({id: teamId, isAdmin: true, isMember: true, name: 'Core'});
+    });
+
+    it('is allowed to an organisation administrator outside the team', async () => {
+      const team = await harness.container.teamManager.renameTeam(owner, teamId, 'Core');
+
+      expect(team).toMatchObject({isAdmin: true, isMember: false, name: 'Core'});
+    });
+
+    it('is refused to an ordinary member', async () => {
+      const bob = await harness.createUser(orgId, 'Bob');
+
+      await harness.container.teamManager.addMember(member, teamId, bob.userId);
+
+      await expect(
+        harness.container.teamManager.renameTeam(bob, teamId, 'Core'),
+      ).rejects.toMatchObject({status: 403});
+    });
+
+    it('does not reveal a team of another organisation', async () => {
+      const otherOrg = await harness.createOrg('Globex');
+      const stranger = await harness.createUser(otherOrg, 'Eve', 'admin');
+
+      await expect(
+        harness.container.teamManager.renameTeam(stranger, teamId, 'Core'),
+      ).rejects.toMatchObject({status: 404});
+
+      const [team] = await harness.container.teamManager.listTeams(member);
+
+      expect(team!.name).toBe('Platform');
+    });
+
+    /** The DTOs only run over HTTP: the managers above never see a raw body. */
+    describe('over HTTP', () => {
+      const send = (path: string, method: string, body: object) => {
+        const app = new Hono<{Variables: Variables}>();
+
+        app.onError(errorHandler);
+        app.use('*', async (context, next) => {
+          context.set('auth', member);
+          await next();
+        });
+        app.route('/', teamRoutes(harness.container));
+        app.route('/', retroRoutes(harness.container));
+
+        return app.request(path, {
+          body: JSON.stringify(body),
+          headers: {'content-type': 'application/json'},
+          method,
+        });
+      };
+
+      it('trims the new name', async () => {
+        const response = await send(`/teams/${teamId}`, 'PATCH', {name: '  Core  '});
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({name: 'Core'});
+      });
+
+      it('refuses a name of blanks or longer than 60 characters', async () => {
+        expect((await send(`/teams/${teamId}`, 'PATCH', {name: '   '})).status).toBe(400);
+        expect((await send(`/teams/${teamId}`, 'PATCH', {name: 'x'.repeat(61)})).status).toBe(
+          400,
+        );
+      });
+
+      it('refuses a vote budget outside 1 to 10', async () => {
+        const created = await send(`/teams/${teamId}/retros`, 'POST', {
+          maxVotes: 11,
+          title: 'Sprint 42',
+        });
+
+        expect(created.status).toBe(400);
+
+        const {id: retroId} = await harness.container.retroManager.create(
+          member,
+          teamId,
+          'Sprint 42',
+        );
+
+        expect((await send(`/retros/${retroId}`, 'PATCH', {maxVotes: 0})).status).toBe(400);
+        expect((await send(`/retros/${retroId}`, 'PATCH', {maxVotes: 11})).status).toBe(400);
+      });
     });
   });
 });

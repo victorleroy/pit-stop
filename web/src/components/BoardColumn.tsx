@@ -7,6 +7,7 @@ import {
   Paper,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@/ui';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
@@ -16,6 +17,7 @@ import type {Column} from '@/api/types';
 import {CardStack} from '@/components/CardStack';
 
 export const BoardColumn = ({
+  canDecide,
   canGroup,
   canEditColumn,
   canModerate,
@@ -33,6 +35,7 @@ export const BoardColumn = ({
   onRemoveNote,
   onRenameCluster,
   onRenameColumn,
+  onTurnIntoAction,
   onUngroupNote,
   onUpdateNote,
   onVote,
@@ -40,6 +43,7 @@ export const BoardColumn = ({
   showTotals,
   votesLeft,
 }: {
+  canDecide: boolean;
   canGroup: boolean;
   canEditColumn: boolean;
   canModerate: boolean;
@@ -57,6 +61,7 @@ export const BoardColumn = ({
   onRemoveNote: (noteId: string) => void;
   onRenameCluster: (clusterId: string, title: string) => void;
   onRenameColumn: (title: string) => void;
+  onTurnIntoAction: (text: string) => void;
   onUngroupNote: (noteId: string) => void;
   onUpdateNote: (noteId: string, text: string) => void;
   onVote: (targetId: string, delta: 1 | -1) => void;
@@ -110,12 +115,17 @@ export const BoardColumn = ({
         borderColor: isOver ? 'primary.main' : 'divider',
         borderRadius: 2,
         display: 'flex',
-        flex: '1 1 320px',
+        // The columns share the width there is, up to a comfortable reading measure, and
+        // never shrink below 320px: past that the board scrolls sideways rather than squeezing
+        // notes into slivers or wrapping onto a second row. The width is the basis the board
+        // measures its content by. On a phone one column still fits the screen, its buttons
+        // included.
+        flex: {sm: '1 0 320px', xs: '0 0 min(340px, calc(100vw - 48px))'},
         flexDirection: 'column',
-        maxWidth: 480,
-        minWidth: 300,
+        maxWidth: {sm: 460},
         p: 2.5,
         transition: 'background-color 120ms ease, border-color 120ms ease',
+        width: {sm: 320, xs: 'min(340px, calc(100vw - 48px))'},
       }}
     >
       <Stack spacing={2.5}>
@@ -130,17 +140,21 @@ export const BoardColumn = ({
               value={titleDraft}
             />
           ) : (
-            <Stack direction="row" spacing={1} sx={{alignItems: 'center', flexGrow: 1}}>
+            <Stack direction="row" spacing={1} sx={{alignItems: 'center', flexGrow: 1, minWidth: 0}}>
               <Box
                 sx={{
                   bgcolor: noteColours(index).paper,
                   borderRadius: 999,
+                  flexShrink: 0,
                   height: 10,
                   width: 10,
                 }}
               />
-              <Typography variant="headingS">{column.title}</Typography>
-              <Typography color="textSecondary" variant="textXs">
+              {/* One line, so every column's first card starts at the same height. */}
+              <Typography noWrap sx={{minWidth: 0}} title={column.title} variant="headingS">
+                {column.title}
+              </Typography>
+              <Typography color="textSecondary" sx={{flexShrink: 0}} variant="textXs">
                 {column.cards.length}
               </Typography>
             </Stack>
@@ -148,23 +162,32 @@ export const BoardColumn = ({
 
           {canEditColumn && !isRenaming ? (
             <Stack direction="row" spacing={0.5}>
-              <IconButton
-                aria-label="Rename column"
-                disabled={isBusy}
-                onClick={() => setIsRenaming(true)}
-                size="small"
-              >
-                <EditOutlinedIcon fontSize="inherit" />
-              </IconButton>
+              <Tooltip title="Rename the column">
+                {/* A disabled button fires no events: the span keeps the tooltip working. */}
+                <span>
+                  <IconButton
+                    aria-label="Rename column"
+                    disabled={isBusy}
+                    onClick={() => setIsRenaming(true)}
+                    size="small"
+                  >
+                    <EditOutlinedIcon fontSize="inherit" />
+                  </IconButton>
+                </span>
+              </Tooltip>
               {canRemove ? (
-                <IconButton
-                  aria-label="Delete column"
-                  disabled={isBusy}
-                  onClick={onRemoveColumn}
-                  size="small"
-                >
-                  <CloseRoundedIcon fontSize="inherit" />
-                </IconButton>
+                <Tooltip title="Delete the column">
+                  <span>
+                    <IconButton
+                      aria-label="Delete column"
+                      disabled={isBusy}
+                      onClick={onRemoveColumn}
+                      size="small"
+                    >
+                      <CloseRoundedIcon fontSize="inherit" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
               ) : null}
             </Stack>
           ) : null}
@@ -172,6 +195,7 @@ export const BoardColumn = ({
 
         {column.cards.map((card) => (
           <CardStack
+            canDecide={canDecide}
             canGroup={canGroup}
             canModerate={canModerate}
             columnIndex={index}
@@ -184,6 +208,7 @@ export const BoardColumn = ({
             onDropNote={(noteId) => onGroupNote(noteId, card.id)}
             onRemoveNote={onRemoveNote}
             onRenameCluster={(title) => onRenameCluster(card.id, title)}
+            onTurnIntoAction={onTurnIntoAction}
             onUngroupNote={onUngroupNote}
             onUpdateNote={onUpdateNote}
             onVote={(delta) => onVote(card.id, delta)}

@@ -14,7 +14,7 @@ and decide on actions. Actions left open come back automatically on the next ret
 ![A retro in the Discuss phase: notes grouped and sorted by votes](docs/assets/board.png)
 
 The service guarantees anonymity: during the brainstorm, other people's text never leaves the
-server, and nobody is tied to a note until they click "reveal". Every rule behind that promise
+server, and nobody reads a note until its author shares it. Every rule behind that promise
 lives in one pure function, `RetroManager.projectBoard`, and you can read it.
 
 - `service/` — Node API, Hono, WebSockets, SQLite
@@ -22,9 +22,33 @@ lives in one pure function, `RetroManager.projectBoard`, and you can read it.
 - `docs/BEHAVIOUR.md` — what the product does, stated once so it can be checked
 - `docs/adr/` — the architecture decisions and the reasoning behind them
 
-Pit Stop is free software under the [GNU AGPL v3](LICENSE).
-Every page links to its source code, as the licence asks of anyone running a modified
-version: a fork points `web/src/components/SourceLink.tsx` at its own repository.
+Pit Stop is free software under the [GNU AGPL v3](LICENSE). Its source code lives at
+https://github.com/victorleroy/pit-stop. If you run a modified version for other people, the
+licence asks you to offer them its source (section 13): the interface carries no link, so
+publish your fork and point your users to it, from your intranet page or your own help
+for instance.
+
+## How a retro runs
+
+- **Set up.** A team administrator starts a retro from a template (Start / Stop / Continue,
+  Mad / Sad / Glad, 4L, Wrap-up + kudos) or from a blank board, and picks how many votes each
+  person gets: 3 by default, fewer votes keep the discussion focused. The facilitator can
+  rename, add or remove columns and change the vote count until voting starts.
+- **Brainstorm.** Everyone writes. Others see that you are writing, not what.
+- **Share.** Each person shares their notes, or hides them again, with one click. Notes are
+  grouped by dragging one onto another.
+- **Vote.** Everyone spends their votes on the cards.
+- **Discuss.** Cards come with their vote totals, the three most voted ones stand out, and
+  any readable card turns into a pre-filled action in one click. Actions left open come
+  back on the next retro.
+
+The facilitator drives the phases and an optional timer, and can go back to any step;
+going back before the vote wipes the votes.
+
+Around the board, organisation administrators get an **Administration** page: who is in
+the organisation, the invitations, and counters over the last 30 days, the last quarter or
+all time (retros, post-its, actions decided). Counters only: never a note, a vote or an
+author. They can rename or delete any team without being able to read its boards.
 
 ## Run it yourself
 
@@ -37,7 +61,7 @@ docker compose logs pit-stop | grep setup
 ```
 
 The logs print a one-time setup link. Open it, name your organisation and create its first
-administrator. Then invite your colleagues from **Admin → Invitations**.
+administrator. Then invite your colleagues from **Administration → Invitations**.
 
 Set `APP_URL` in `docker-compose.yml` to the address people will actually open, behind
 whatever reverse proxy terminates TLS for you. Every link in an email or in the logs is built
@@ -211,7 +235,8 @@ that hands back an unscoped query for a tenant-owned table.
 
 Inside an organisation, the team is the next boundary. A team is private to its members: you
 are in one because an administrator of that team added you, and an organisation administrator
-who administers every team still cannot read the boards of one they have not joined.
+who administers every team, and can rename or delete it, still cannot read the boards of one
+they have not joined.
 
 The full reasoning is in [ADR-001](docs/adr/0001-architecture.md); the open source and
 self-hosted choices are in [ADR-002](docs/adr/0002-open-source-and-self-hosting.md).
