@@ -3,7 +3,10 @@ export type TimerState = 'IDLE' | 'RUNNING' | 'PAUSED';
 export interface TimerModel {
   /** Absolute deadline while running: every client counts down on its own from it. */
   endsAt?: string;
-  /** What is left on the clock while paused. */
+  /**
+   * What is left on the clock: frozen while paused, computed by the service at send time while
+   * running, so a client with a skewed clock still counts down the right duration.
+   */
   remainingMs?: number;
   /** How long the round was set to run, so the board can draw how much is left of it. */
   totalMs?: number;

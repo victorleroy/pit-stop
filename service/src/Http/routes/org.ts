@@ -1,10 +1,12 @@
 import {Hono} from 'hono';
 import type {Container} from '~/container';
 import {SetAdminDto} from '~/Dto/Admin/AdminDto';
+import {OrgStatsQueryDto} from '~/Dto/Admin/OrgStatsQueryDto';
 import {InviteDto} from '~/Dto/Auth/PasswordDto';
 import type {Variables} from '~/Http/middleware/auth';
-import {validateBody} from '~/Http/middleware/validate';
+import {validateBody, validateQuery} from '~/Http/middleware/validate';
 import type {OrgRole} from '~/Db/schema';
+import type {StatsPeriod} from '~/Model/OrgModel';
 
 export const orgRoutes = (c: Container) => {
   const app = new Hono<{Variables: Variables}>();
@@ -29,6 +31,14 @@ export const orgRoutes = (c: Container) => {
     );
 
     return context.body(null, 204);
+  });
+
+  app.get('/org/stats', async (context) => {
+    const query = await validateQuery(context, OrgStatsQueryDto);
+
+    return context.json(
+      await c.adminManager.getOrgStats(context.get('auth'), query.period as StatsPeriod),
+    );
   });
 
   app.get('/org/invitations', async (context) =>

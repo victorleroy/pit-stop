@@ -1,4 +1,14 @@
-import {ArrayMaxSize, IsArray, IsNotEmpty, IsOptional, IsString, MaxLength} from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class CreateRetroDto {
   @IsString()
@@ -12,4 +22,10 @@ export class CreateRetroDto {
   @IsString({each: true})
   @MaxLength(40, {each: true})
   public columns?: string[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  public maxVotes?: number;
 }

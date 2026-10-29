@@ -2,7 +2,7 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import NorthEastRoundedIcon from '@mui/icons-material/NorthEastRounded';
-import {Box, IconButton, Stack, TextField, Typography} from '@/ui';
+import {Box, IconButton, Stack, TextField, Tooltip, Typography} from '@/ui';
 import {useState} from 'react';
 import type {Note} from '@/api/types';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
@@ -124,12 +124,22 @@ export const NoteCard = ({
         )}
 
         <Stack direction="row" spacing={1} sx={{alignItems: 'center', minHeight: 24}}>
-          <Typography sx={{color: 'inherit', flexGrow: 1, opacity: 0.65}} variant="textXs">
+          {/* In a narrow column the name gives way, never the state beside it. */}
+          <Typography
+            noWrap
+            sx={{color: 'inherit', flexGrow: 1, minWidth: 0, opacity: 0.65}}
+            title={note.author.name}
+            variant="textXs"
+          >
             {note.isMine ? `${note.author.name} (you)` : `${note.author.name} wrote this`}
           </Typography>
 
           {isWithheld ? (
-            <Stack direction="row" spacing={0.5} sx={{alignItems: 'center', opacity: 0.75}}>
+            <Stack
+              direction="row"
+              spacing={0.5}
+              sx={{alignItems: 'center', flexShrink: 0, opacity: 0.75, whiteSpace: 'nowrap'}}
+            >
               <LockOutlinedIcon sx={{fontSize: 13}} />
               <Typography sx={{color: 'inherit'}} variant="textXs">
                 not shared yet
@@ -138,28 +148,36 @@ export const NoteCard = ({
           ) : null}
 
           {isPending ? (
-            <Typography sx={{color: SLIPSTREAM.indigo, fontWeight: 700}} variant="textXs">
+            <Typography
+              sx={{color: SLIPSTREAM.indigo, flexShrink: 0, fontWeight: 700, whiteSpace: 'nowrap'}}
+              variant="textXs"
+            >
               only you
             </Typography>
           ) : null}
 
-          <Stack direction="row" spacing={0.5}>
+          <Stack direction="row" spacing={0.5} sx={{flexShrink: 0}}>
             {isClustered && canGroup ? (
-              <IconButton
-                aria-label="Take out of the group"
-                disabled={isBusy}
-                onClick={onUngroup}
-                size="small"
-                sx={{color: 'inherit', opacity: 0.6}}
-              >
-                <NorthEastRoundedIcon fontSize="inherit" />
-              </IconButton>
+              // The arrow says little on its own: the tooltip names the move.
+              <Tooltip title="Take out of the group">
+                <span>
+                  <IconButton
+                    aria-label="Take out of the group"
+                    disabled={isBusy}
+                    onClick={onUngroup}
+                    size="small"
+                    sx={{color: 'inherit', opacity: 0.6}}
+                  >
+                    <NorthEastRoundedIcon fontSize="inherit" />
+                  </IconButton>
+                </span>
+              </Tooltip>
             ) : null}
 
             {/* Editing a text nobody sent us would overwrite it with nothing. */}
             {canEdit && mine && !isEditing && !isWithheld ? (
               <IconButton
-                aria-label="Edit"
+                aria-label="Edit the note"
                 disabled={isBusy}
                 onClick={() => setIsEditing(true)}
                 size="small"
@@ -171,7 +189,7 @@ export const NoteCard = ({
 
             {canRemove && mine && !isEditing ? (
               <IconButton
-                aria-label="Delete"
+                aria-label="Delete the note"
                 disabled={isBusy}
                 onClick={onRemove}
                 size="small"

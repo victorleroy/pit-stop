@@ -38,6 +38,7 @@ export const retroRoutes = (c: Container) => {
       context.req.param('teamId'),
       body.title,
       body.columns,
+      body.maxVotes,
     );
 
     return context.json(board, 201);
@@ -53,6 +54,7 @@ export const retroRoutes = (c: Container) => {
 
     const board = await c.hub.run(retroId, () =>
       c.retroManager.updateRetro(context.get('auth'), retroId, {
+        ...(body.maxVotes === undefined ? {} : {maxVotes: body.maxVotes}),
         ...(body.phase ? {phase: body.phase as RetroPhase} : {}),
         ...(body.title ? {title: body.title} : {}),
         ...(body.timer

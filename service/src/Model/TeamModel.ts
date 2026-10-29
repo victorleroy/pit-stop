@@ -16,3 +16,9 @@ export interface TeamMemberModel {
   pictureUrl?: string;
   userId: string;
 }
+
+/** What deleting a team would take with it. Counters only. */
+export interface TeamSummaryModel {
+  actionCount: number;
+  retroCount: number;
+}

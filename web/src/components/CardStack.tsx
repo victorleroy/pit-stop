@@ -1,12 +1,12 @@
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import AddTaskOutlinedIcon from '@mui/icons-material/AddTaskOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
 import {
+  Box,
   Card as CardSurface,
-  Chip,
   IconButton,
   Stack,
-  Tag,
   TextField,
   Tooltip,
   Typography,
@@ -15,12 +15,63 @@ import {useState} from 'react';
 import type {Card} from '@/api/types';
 import {NoteCard} from '@/components/NoteCard';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
+import {SLIPSTREAM} from '@/ui/theme';
+
+const COUNT_TONES = {
+  muted: {
+    bgcolor: `${SLIPSTREAM.inkMuted}22`,
+    border: `1px solid ${SLIPSTREAM.inkMuted}55`,
+    color: 'text.primary',
+  },
+  neutral: {bgcolor: 'action.selected', color: 'text.primary'},
+  rank: {bgcolor: 'primary.main', color: 'primary.contrastText', fontWeight: 700},
+} as const;
+
+/**
+ * A vote count is a number in a coin: perfectly round while it holds one digit, stretching
+ * into a pill only when it needs the room. A chip pads its label and turns one digit into
+ * an egg.
+ */
+const VoteCount = ({
+  count,
+  size,
+  tone,
+}: {
+  count: number;
+  size: 'medium' | 'small';
+  tone: keyof typeof COUNT_TONES;
+}) => {
+  const box = size === 'small' ? 24 : 28;
+
+  return (
+    <Box
+      sx={{
+        alignItems: 'center',
+        borderRadius: 999,
+        boxSizing: 'border-box',
+        display: 'inline-flex',
+        fontVariantNumeric: 'tabular-nums',
+        fontWeight: 600,
+        height: box,
+        justifyContent: 'center',
+        lineHeight: 1,
+        minWidth: box,
+        px: count >= 10 ? 0.75 : 0,
+        typography: size === 'small' ? 'textXs' : 'textS',
+        ...COUNT_TONES[tone],
+      }}
+    >
+      {count}
+    </Box>
+  );
+};
 
 /**
  * A card is either a single note or a stack of grouped notes. It is also the unit people
  * vote on, and the drop target when grouping.
  */
 export const CardStack = ({
+  canDecide = false,
   canGroup,
   canModerate,
   canVote,
@@ -32,6 +83,7 @@ export const CardStack = ({
   onDropNote,
   onRemoveNote,
   onRenameCluster,
+  onTurnIntoAction,
   onUngroupNote,
   onUpdateNote,
   onVote,
@@ -39,6 +91,7 @@ export const CardStack = ({
   showTotals,
   votesLeft,
 }: {
+  canDecide?: boolean;
   canGroup: boolean;
   canModerate: boolean;
   canVote: boolean;
@@ -50,6 +103,7 @@ export const CardStack = ({
   onDropNote: (noteId: string) => void;
   onRemoveNote: (noteId: string) => void;
   onRenameCluster: (title: string) => void;
+  onTurnIntoAction?: (text: string) => void;
   onUngroupNote: (noteId: string) => void;
   onUpdateNote: (noteId: string, text: string) => void;
   onVote: (delta: 1 | -1) => void;
@@ -64,6 +118,13 @@ export const CardStack = ({
   const titleRef = useAutoFocus(isRenaming);
 
   const isCluster = card.type === 'cluster';
+  // A note still face down has no text to hand over: only a card everyone can read becomes
+  // an action. Its author does see their own withheld text, which must not leak into one.
+  const isReadable =
+    card.notes.length > 0 && card.notes.every(({revealed, text}) => revealed && text.trim());
+  const actionText = isCluster
+    ? card.title?.trim() || card.notes.map(({text}) => text.trim()).join(' / ')
+    : (card.notes[0]?.text.trim() ?? '');
 
   const saveTitle = () => {
     const title = titleDraft.trim();
@@ -116,18 +177,8 @@ export const CardStack = ({
           }
         >
           <Stack sx={{position: 'absolute', right: -10, top: -10, zIndex: 2}}>
-            {rank ? (
-              // The three most voted cards are the ones the team will actually talk about.
-              <Chip
-                label={`${card.totalVotes ?? 0}`}
-                size="medium"
-                sx={{bgcolor: 'primary.main', color: 'primary.contrastText', fontWeight: 700}}
-              />
-            ) : (
-              <Tag color="muted" size="medium">
-                {`${card.totalVotes ?? 0}`}
-              </Tag>
-            )}
+            {/* The three most voted cards are the ones the team will actually talk about. */}
+            <VoteCount count={card.totalVotes ?? 0} size="medium" tone={rank ? 'rank' : 'muted'} />
           </Stack>
         </Tooltip>
       ) : null}
@@ -191,7 +242,7 @@ export const CardStack = ({
             >
               <RemoveRoundedIcon fontSize="inherit" />
             </IconButton>
-            <Chip label={`${card.myVotes}`} size="small" />
+            <VoteCount count={card.myVotes} size="small" tone="neutral" />
             <IconButton
               aria-label="Add a vote"
               disabled={isBusy || votesLeft === 0}
@@ -200,6 +251,23 @@ export const CardStack = ({
             >
               <AddRoundedIcon fontSize="inherit" />
             </IconButton>
+          </Stack>
+        ) : null}
+
+        {canDecide && onTurnIntoAction && isReadable ? (
+          // Tucked in the corner, where the note's own edit and delete buttons sit while people
+          // write: those are gone by the discussion, so the card keeps its height.
+          <Stack sx={{bottom: 8, position: 'absolute', right: 8, zIndex: 2}}>
+            {/* It only fills the action form: the team still words it and picks an owner. */}
+            <Tooltip title="Turn into an action">
+              <IconButton
+                aria-label="Turn into an action"
+                onClick={() => onTurnIntoAction(actionText)}
+                size="small"
+              >
+                <AddTaskOutlinedIcon fontSize="inherit" />
+              </IconButton>
+            </Tooltip>
           </Stack>
         ) : null}
       </Stack>

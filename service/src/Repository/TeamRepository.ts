@@ -64,6 +64,51 @@ export class TeamRepository {
       .execute();
   }
 
+  public async rename(scoped: ScopedDb, teamId: string, name: string): Promise<void> {
+    await scoped.unscoped
+      .updateTable('teams')
+      .set({name})
+      .where('id', '=', teamId)
+      .where('orgId', '=', scoped.orgId)
+      .execute();
+  }
+
+  /** Retros, their boards, actions and memberships go with it: ON DELETE CASCADE. */
+  public async remove(scoped: ScopedDb, teamId: string): Promise<void> {
+    await scoped.unscoped
+      .deleteFrom('teams')
+      .where('id', '=', teamId)
+      .where('orgId', '=', scoped.orgId)
+      .execute();
+  }
+
+  public async findRetroIds(scoped: ScopedDb, teamId: string): Promise<string[]> {
+    const rows = await scoped.retros().select('id').where('teamId', '=', teamId).execute();
+
+    return rows.map((row) => row.id);
+  }
+
+  /** Counters only: what an org admin sees before deleting a team they may not have joined. */
+  public async countContent(
+    scoped: ScopedDb,
+    teamId: string,
+  ): Promise<{actionCount: number; retroCount: number}> {
+    const [retros, actions] = await Promise.all([
+      scoped
+        .retros()
+        .select((eb) => eb.fn.countAll<number>().as('total'))
+        .where('teamId', '=', teamId)
+        .executeTakeFirst(),
+      scoped
+        .actions()
+        .select((eb) => eb.fn.countAll<number>().as('total'))
+        .where('teamId', '=', teamId)
+        .executeTakeFirst(),
+    ]);
+
+    return {actionCount: Number(actions?.total ?? 0), retroCount: Number(retros?.total ?? 0)};
+  }
+
   public async countByOrg(orgId: string): Promise<number> {
     const row = await this.db
       .selectFrom('teams')

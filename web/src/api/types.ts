@@ -37,6 +37,11 @@ export interface TeamMember {
   userId: string;
 }
 
+export interface TeamSummary {
+  actionCount: number;
+  retroCount: number;
+}
+
 export type RetroPhase = 'BRAINSTORM' | 'SHARE' | 'VOTE' | 'DISCUSS' | 'ARCHIVED';
 
 export interface NoteAuthor {
@@ -98,6 +103,7 @@ export type TimerState = 'IDLE' | 'RUNNING' | 'PAUSED';
 
 export interface Timer {
   endsAt?: string;
+  /** What is left: frozen while paused, measured by the service at send time while running. */
   remainingMs?: number;
   /** How long the round was set to run, so the bar knows how much of it is left. */
   totalMs?: number;
@@ -163,6 +169,22 @@ export interface Invitation {
   id: string;
   role: OrgRole;
   status: 'pending' | 'accepted' | 'revoked' | 'expired';
+}
+
+export type StatsPeriod = '30d' | '90d' | 'all';
+
+/** Counters only: an org administrator never reads what a team wrote, nor who wrote it. */
+export interface OrgStats {
+  /** Created within the period; `status` is where they stand today. */
+  actions: {done: number; dropped: number; open: number};
+  /** `perRetro` divides by the retros of the period, 0 when there was none. */
+  notes: {count: number; perRetro: number};
+  people: {admins: number; total: number};
+  period: StatsPeriod;
+  /** `count` within the period, `total` since the start. */
+  retros: {count: number; total: number};
+  /** `idle`: no retro started in the last 30 days, whatever the period. */
+  teams: {idle: number; total: number};
 }
 
 export interface OrgSummary {

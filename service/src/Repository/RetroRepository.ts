@@ -21,6 +21,8 @@ const RETRO_COLUMNS = [
 export interface CreateRetroInput {
   createdBy: string;
   id: string;
+  /** Left out, the column default (5) applies. */
+  maxVotes?: number;
   orgId: string;
   teamId: string;
   title: string;
@@ -28,6 +30,7 @@ export interface CreateRetroInput {
 
 export interface UpdateRetroInput {
   facilitatorId?: string;
+  maxVotes?: number;
   phase?: RetroPhase;
   timerEndsAt?: string | null;
   timerRemainingMs?: number | null;
@@ -73,6 +76,7 @@ export class RetroRepository {
         createdBy: input.createdBy,
         facilitatorId: input.createdBy,
         id: input.id,
+        ...(input.maxVotes === undefined ? {} : {maxVotes: input.maxVotes}),
         orgId: input.orgId,
         phase: 'BRAINSTORM',
         teamId: input.teamId,

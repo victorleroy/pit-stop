@@ -1,7 +1,9 @@
 import {ConflictHttpError, ForbiddenHttpError, NotFoundHttpError} from '~/Error/HttpError';
+import type {OrgStatsModel, StatsPeriod} from '~/Model/OrgModel';
 import type {OrgMemberModel, UserModel} from '~/Model/UserModel';
 import type {MembershipRepository} from '~/Repository/MembershipRepository';
 import type {OrgRepository} from '~/Repository/OrgRepository';
+import type {OrgStatsRepository} from '~/Repository/OrgStatsRepository';
 import type {RetroRepository} from '~/Repository/RetroRepository';
 import type {SessionRepository} from '~/Repository/SessionRepository';
 import type {AuthContext} from '~/Security/AuthContext';
@@ -17,6 +19,11 @@ export interface PresenceReader {
   isWatching(retroId: string, userId: string): boolean;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** A team with no retro created for this long is idle, whatever period the stats cover. */
+const IDLE_TEAM_DAYS = 30;
+
 export class AdminManager {
   public constructor(
     private readonly orgRepository: OrgRepository,
@@ -26,6 +33,7 @@ export class AdminManager {
     private readonly accessChecker: RetroAccessChecker,
     private readonly roleChecker: RoleChecker,
     private readonly presence: PresenceReader,
+    private readonly orgStatsRepository: OrgStatsRepository,
   ) {}
 
   public async listOrgAdmins(auth: AuthContext): Promise<UserModel[]> {
@@ -106,6 +114,39 @@ export class AdminManager {
     }
 
     await this.orgRepository.addMember(auth.orgId, userId, 'member');
+  }
+
+  /**
+   * Activity across the organisation, for its administrators. Counters only (BEHAVIOUR.md
+   * section 5): an org admin administers every team without being able to read inside one.
+   */
+  public async getOrgStats(auth: AuthContext, period: StatsPeriod): Promise<OrgStatsModel> {
+    await this.roleChecker.checkOrgAdmin(auth);
+
+    const now = Date.now();
+    const daysAgo = (days: number) => new Date(now - days * DAY_MS).toISOString();
+    const since = period === 'all' ? null : daysAgo(period === '30d' ? 30 : 90);
+
+    const [people, teams, retroCount, retroTotal, notes, actions] = await Promise.all([
+      this.orgStatsRepository.countPeople(auth.db),
+      this.orgStatsRepository.countTeams(auth.db, daysAgo(IDLE_TEAM_DAYS)),
+      this.orgStatsRepository.countRetros(auth.db, since),
+      this.orgStatsRepository.countRetros(auth.db, null),
+      this.orgStatsRepository.countNotes(auth.db, since),
+      this.orgStatsRepository.countActionsByStatus(auth.db, since),
+    ]);
+
+    return {
+      actions: {done: actions.DONE, dropped: actions.DROPPED, open: actions.OPEN},
+      notes: {
+        count: notes.total,
+        perRetro: notes.retros ? Math.round((notes.total / notes.retros) * 10) / 10 : 0,
+      },
+      people,
+      period,
+      retros: {count: retroCount, total: retroTotal},
+      teams,
+    };
   }
 
   /**

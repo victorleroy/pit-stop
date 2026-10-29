@@ -122,7 +122,9 @@ export const theme = createTheme({
             boxShadow: '0 1px 2px rgba(10, 37, 64, 0.1), 0 10px 22px -8px rgba(99, 91, 255, 0.6)',
           },
         },
-        outlined: {borderColor: SLIPSTREAM.line, color: SLIPSTREAM.ink},
+        // The quiet ink outline is for ordinary actions: a destructive one keeps its red.
+        outlined: ({ownerState}) =>
+          ownerState.color === 'error' ? {} : {borderColor: SLIPSTREAM.line, color: SLIPSTREAM.ink},
         sizeSmall: {minHeight: 34, paddingInline: 14},
       },
     },
@@ -136,7 +138,14 @@ export const theme = createTheme({
         },
       },
     },
-    MuiChip: {styleOverrides: {root: {borderRadius: 999, fontWeight: 600}}},
+    // MUI's label padding is sized for regular weight: in semibold the text grazes the edge.
+    MuiChip: {
+      styleOverrides: {
+        label: {paddingInline: 14},
+        labelSmall: {paddingInline: 10},
+        root: {borderRadius: 999, fontWeight: 600},
+      },
+    },
     MuiDialog: {styleOverrides: {paper: {borderRadius: 22}}},
     MuiOutlinedInput: {
       styleOverrides: {

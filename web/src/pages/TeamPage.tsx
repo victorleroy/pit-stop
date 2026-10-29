@@ -1,39 +1,50 @@
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
+import Autocomplete, {createFilterOptions} from '@mui/material/Autocomplete';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
+import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import {
   Avatar,
   Button,
   Chip,
   Dialog,
+  IconButton,
   Loader,
   Select,
   Stack,
   Tag,
   TextField,
+  Tooltip,
   Typography,
 } from '@/ui';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
 import {
   createRetro,
+  DEFAULT_MAX_VOTES,
   fetchActions,
   fetchRetros,
   removeRetro,
   updateAction,
+  VOTE_OPTIONS,
 } from '@/api/retros';
 import {
   addTeamMember,
+  deleteTeam,
   fetchOrgMembers,
   fetchTeamMembers,
   fetchTeams,
+  fetchTeamSummary,
   leaveTeam,
   removeTeamMember,
+  renameTeam,
   setTeamAdmin,
 } from '@/api/teams';
-import type {ActionStatus, RetroPhase} from '@/api/types';
+import type {ActionStatus, OrgMember, RetroPhase, Team, TeamMember} from '@/api/types';
 import {ActionList} from '@/components/ActionList';
 import {useAuth} from '@/contexts/AuthContext';
 import {useToast} from '@/contexts/ToastContext';
@@ -57,7 +68,14 @@ const TEMPLATES = [
   {columns: ['Mad', 'Sad', 'Glad'], label: 'Mad / Sad / Glad'},
   {columns: ['Liked', 'Learned', 'Lacked', 'Longed for'], label: '4L'},
   {columns: ['What worked', 'What got stuck', 'Ideas', 'Kudos'], label: 'Wrap-up + kudos'},
+  // For a format of its own: the facilitator lays the columns out on the board first.
+  {columns: [], label: 'Blank'},
 ];
+
+// The search matches the e-mail too: two people can share a name, never an address.
+const filterCandidates = createFilterOptions<OrgMember>({
+  stringify: ({email, name}) => `${name} ${email}`,
+});
 
 const PHASE_LABELS: Record<RetroPhase, string> = {
   ARCHIVED: 'Archived',
@@ -76,6 +94,80 @@ const SectionTitle = ({count, title}: {count: number; title: string}) => (
   </Typography>
 );
 
+/**
+ * Deleting a team takes its retrospectives and actions with it, so the dialog says how many
+ * and asks for the name typed out: a click alone is too easy to make on the wrong team.
+ */
+const DeleteTeamDialog = ({onClose, open, team}: {onClose: () => void; open: boolean; team: Team}) => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [confirmation, setConfirmation] = useState('');
+
+  const {data: summary} = useQuery({
+    enabled: open,
+    queryFn: () => fetchTeamSummary(team.id),
+    queryKey: ['teams', team.id, 'summary'],
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteTeam(team.id),
+    onError: (cause: Error) => toast.error(cause.message),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({queryKey: ['teams']});
+      // Its retros leave the personal list, and the org counters and member teams move too.
+      void queryClient.invalidateQueries({queryKey: ['me', 'retros']});
+      void queryClient.invalidateQueries({queryKey: ['org', 'stats']});
+      void queryClient.invalidateQueries({queryKey: ['org', 'members']});
+      toast.success(`${team.name} has been deleted.`);
+      navigate('/teams');
+    },
+  });
+
+  const close = () => {
+    setConfirmation('');
+    onClose();
+  };
+
+  const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+
+  return (
+    <Dialog onClose={close} open={open} size="small">
+      <DialogTitle>Delete {team.name}?</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{pt: 1}}>
+          <Typography variant="textM">
+            {summary
+              ? `${plural(summary.retroCount, 'retrospective')} and ${plural(summary.actionCount, 'action')} will be permanently deleted, along with the memberships of the team.`
+              : 'Its retrospectives, actions and memberships will be permanently deleted.'}{' '}
+            This cannot be undone.
+          </Typography>
+          <TextField
+            fullWidth
+            label={`Type ${team.name} to confirm`}
+            onChange={(event) => setConfirmation(event.target.value)}
+            size="small"
+            value={confirmation}
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={close} variant="text">
+          Cancel
+        </Button>
+        <Button
+          color="error"
+          disabled={confirmation !== team.name || deleteMutation.isPending}
+          onClick={() => deleteMutation.mutate()}
+          variant="contained"
+        >
+          Delete
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 export const TeamPage = () => {
   const {teamId} = useParams<{teamId: string}>();
   const navigate = useNavigate();
@@ -85,15 +177,30 @@ export const TeamPage = () => {
   const [title, setTitle] = useState('');
   const [template, setTemplate] = useState(TEMPLATES[0].label);
   const [isStarting, setIsStarting] = useState(false);
+  const [maxVotes, setMaxVotes] = useState(DEFAULT_MAX_VOTES);
   const [isAddingMember, setIsAddingMember] = useState(false);
-  const [candidateId, setCandidateId] = useState('');
+  const [selectedCandidates, setSelectedCandidates] = useState<OrgMember[]>([]);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
   const titleInputRef = useAutoFocus(isStarting);
+  const nameInputRef = useAutoFocus(isRenaming);
+  const cancelledRenameRef = useRef(false);
   const {user} = useAuth();
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | undefined>(undefined);
+  const [memberMenu, setMemberMenu] = useState<
+    {anchor: HTMLElement; member: TeamMember} | undefined
+  >(undefined);
+  const [isMemberMenuOpen, setIsMemberMenuOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const closeDialog = () => {
     setIsStarting(false);
     setTitle('');
+  };
+
+  const closeMemberDialog = () => {
+    setIsAddingMember(false);
+    setSelectedCandidates([]);
   };
 
   const {data: teams} = useQuery({queryFn: fetchTeams, queryKey: ['teams']});
@@ -148,13 +255,33 @@ export const TeamPage = () => {
     void queryClient.invalidateQueries({queryKey: ['teams']});
   };
 
-  const addMemberMutation = useMutation({
-    mutationFn: (userId: string) => addTeamMember(teamId as string, userId),
-    onError: onFailure,
-    onSuccess: () => {
-      setIsAddingMember(false);
-      setCandidateId('');
+  // One request per person, one after the other: if one fails, the ones before it are
+  // already in and the refresh shows exactly who made it.
+  const addMembersMutation = useMutation({
+    mutationFn: async (userIds: string[]) => {
+      for (const userId of userIds) {
+        await addTeamMember(teamId as string, userId);
+      }
+
+      return userIds.length;
+    },
+    onError: (cause: Error) => {
       refreshMembers();
+      onFailure(cause);
+    },
+    onSuccess: (count) => {
+      closeMemberDialog();
+      refreshMembers();
+      toast.success(count > 1 ? `${count} members added.` : '1 member added.');
+    },
+  });
+
+  const renameMutation = useMutation({
+    mutationFn: (name: string) => renameTeam(teamId as string, name),
+    onError: onFailure,
+    onSuccess: (renamed) => {
+      void queryClient.invalidateQueries({queryKey: ['teams']});
+      toast.success(`The team is now called ${renamed.name}.`);
     },
   });
 
@@ -182,8 +309,15 @@ export const TeamPage = () => {
   });
 
   const createMutation = useMutation({
-    mutationFn: ({columns, retroTitle}: {columns: string[]; retroTitle: string}) =>
-      createRetro(teamId as string, retroTitle, columns),
+    mutationFn: ({
+      columns,
+      retroMaxVotes,
+      retroTitle,
+    }: {
+      columns: string[];
+      retroMaxVotes: number;
+      retroTitle: string;
+    }) => createRetro(teamId as string, retroTitle, columns, retroMaxVotes),
     onError: onFailure,
     onSuccess: (board) => {
       closeDialog();
@@ -200,13 +334,37 @@ export const TeamPage = () => {
   const memberIds = new Set((members ?? []).map(({userId}) => userId));
   const candidates = (orgMembers ?? []).filter(({id}) => !memberIds.has(id));
 
+  // Only an unknown label falls back to the default set: the empty columns of Blank are a
+  // choice, sent as such.
   const columnsOf = (label: string) =>
     TEMPLATES.find((item) => item.label === label)?.columns ?? TEMPLATES[0].columns;
 
   const start = () => {
     if (!title.trim()) return;
 
-    createMutation.mutate({columns: columnsOf(template), retroTitle: title.trim()});
+    createMutation.mutate({
+      columns: columnsOf(template),
+      retroMaxVotes: maxVotes,
+      retroTitle: title.trim(),
+    });
+  };
+
+  const startRenaming = () => {
+    cancelledRenameRef.current = false;
+    setNameDraft(team?.name ?? '');
+    setIsRenaming(true);
+  };
+
+  const saveName = () => {
+    const name = nameDraft.trim();
+    setIsRenaming(false);
+
+    // An Escape already closed the field: the blur that follows has nothing to save.
+    if (cancelledRenameRef.current) return;
+
+    if (name && name !== team?.name) {
+      renameMutation.mutate(name);
+    }
   };
 
   return (
@@ -214,14 +372,70 @@ export const TeamPage = () => {
       <ConfirmDialog onClose={() => setConfirmRequest(undefined)} request={confirmRequest} />
 
       <Stack spacing={1}>
-        <Stack direction="row" spacing={2} sx={{alignItems: 'center', flexWrap: 'wrap'}}>
-          <Stack direction="row" spacing={1.5} sx={{alignItems: 'center', flexGrow: 1}}>
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{alignItems: 'center', flexWrap: 'wrap'}}
+          useFlexGap
+        >
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{alignItems: 'center', flexGrow: 1, minWidth: 0}}
+          >
             <TeamDot name={team?.name ?? 'team'} size={14} />
-            <Typography variant="displayS">{team?.name ?? 'Team'}</Typography>
+            {isRenaming ? (
+              <TextField
+                inputRef={nameInputRef}
+                onBlur={saveName}
+                onChange={(event) => setNameDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  // Enter saves through the blur, so the name is never sent twice.
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    (event.target as HTMLInputElement).blur();
+                  }
+
+                  if (event.key === 'Escape') {
+                    // Flagged before anything else: the blur that follows closes over the
+                    // draft as typed, so resetting it alone would not stop the save.
+                    cancelledRenameRef.current = true;
+                    setNameDraft(team?.name ?? '');
+                    setIsRenaming(false);
+                  }
+                }}
+                size="small"
+                slotProps={{htmlInput: {'aria-label': 'Team name', maxLength: 60}}}
+                sx={{flexGrow: 1, maxWidth: 420}}
+                value={nameDraft}
+              />
+            ) : (
+              <>
+                <Typography sx={{overflowWrap: 'anywhere'}} variant="displayS">
+                  {team?.name ?? 'Team'}
+                </Typography>
+                {isAdmin ? (
+                  <Tooltip title="Rename the team">
+                    {/* A disabled button fires no events: the span keeps the tooltip working. */}
+                    <span>
+                      <IconButton
+                        aria-label="Rename the team"
+                        disabled={renameMutation.isPending}
+                        onClick={startRenaming}
+                        size="small"
+                      >
+                        <EditOutlinedIcon fontSize="inherit" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                ) : null}
+              </>
+            )}
           </Stack>
 
           {team?.isMember ? (
             <Button
+              color="error"
               disabled={leaveMutation.isPending}
               onClick={() =>
                 setConfirmRequest({
@@ -273,22 +487,45 @@ export const TeamPage = () => {
               size="small"
               value={title}
             />
-            <Select
-              fullWidth
-              onChange={(event) => setTemplate(event.target.value as string)}
-              size="small"
-              value={template}
-            >
-              {TEMPLATES.map(({label}) => (
-                <MenuItem key={label} value={label}>
-                  {label}
-                </MenuItem>
-              ))}
-            </Select>
-            <Typography color="textSecondary" variant="textXs">
-              Columns: {columnsOf(template).join(' · ')}. You can rename them or add more while
-              people write.
-            </Typography>
+            <Stack spacing={0.75}>
+              <Select
+                fullWidth
+                inputProps={{'aria-label': 'Template'}}
+                onChange={(event) => setTemplate(event.target.value as string)}
+                size="small"
+                value={template}
+              >
+                {TEMPLATES.map(({label}) => (
+                  <MenuItem key={label} value={label}>
+                    {label}
+                  </MenuItem>
+                ))}
+              </Select>
+              <Typography color="textSecondary" variant="textXs">
+                {columnsOf(template).length === 0
+                  ? 'No column yet: you add them on the board before people write.'
+                  : `Columns: ${columnsOf(template).join(' · ')}. You can rename them or add more while people write.`}
+              </Typography>
+            </Stack>
+            <Stack spacing={0.75}>
+              <Typography variant="textS">Votes per person</Typography>
+              <Select
+                fullWidth
+                inputProps={{'aria-label': 'Votes per person'}}
+                onChange={(event) => setMaxVotes(Number(event.target.value))}
+                size="small"
+                value={maxVotes}
+              >
+                {VOTE_OPTIONS.map((count) => (
+                  <MenuItem key={count} value={count}>
+                    {count} vote{count > 1 ? 's' : ''}
+                  </MenuItem>
+                ))}
+              </Select>
+              <Typography color="textSecondary" variant="textXs">
+                Fewer votes force a choice and keep the discussion on what matters most.
+              </Typography>
+            </Stack>
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -305,45 +542,68 @@ export const TeamPage = () => {
         </DialogActions>
       </Dialog>
 
-      <Dialog
-        onClose={() => setIsAddingMember(false)}
-        open={isAddingMember}
-        size="small"
-      >
-        <DialogTitle>Add a member</DialogTitle>
+      <Dialog onClose={closeMemberDialog} open={isAddingMember} size="small">
+        <DialogTitle>Add members</DialogTitle>
         <DialogContent>
           <Stack spacing={1.5} sx={{pt: 1}}>
-            <Select
-              displayEmpty
-              fullWidth
-              onChange={(event) => setCandidateId(event.target.value as string)}
+            <Autocomplete
+              disableCloseOnSelect
+              filterOptions={filterCandidates}
+              filterSelectedOptions
+              getOptionLabel={(candidate) => candidate.name}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              loading={!orgMembers}
+              multiple
+              noOptionsText="Nobody matches"
+              onChange={(_event, value) => setSelectedCandidates(value)}
+              options={candidates}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="People"
+                  placeholder={selectedCandidates.length === 0 ? 'Search a name or an e-mail' : ''}
+                />
+              )}
+              renderOption={({key, ...props}, candidate) => (
+                <Stack
+                  component="li"
+                  direction="row"
+                  key={key}
+                  spacing={1.5}
+                  {...props}
+                  sx={{alignItems: 'center'}}
+                >
+                  <Avatar size="small" src={candidate.pictureUrl}>
+                    {initials(candidate.name)}
+                  </Avatar>
+                  <Stack sx={{minWidth: 0}}>
+                    <Typography variant="textM">{candidate.name}</Typography>
+                    <Typography color="textSecondary" noWrap variant="textXs">
+                      {candidate.email}
+                    </Typography>
+                  </Stack>
+                </Stack>
+              )}
               size="small"
-              value={candidateId}
-            >
-              <MenuItem disabled value="">
-                Choose somebody
-              </MenuItem>
-              {candidates.map((candidate) => (
-                <MenuItem key={candidate.id} value={candidate.id}>
-                  {candidate.name} — {candidate.email}
-                </MenuItem>
-              ))}
-            </Select>
+              value={selectedCandidates}
+            />
             <Typography color="textSecondary" variant="textXs">
-              They will see this team's retrospectives, including the ones already held.
+              {orgMembers && candidates.length === 0
+                ? 'Everybody in the organisation is already in this team.'
+                : "They will see this team's retrospectives, including the ones already held."}
             </Typography>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setIsAddingMember(false)} variant="text">
+          <Button onClick={closeMemberDialog} variant="text">
             Cancel
           </Button>
           <Button
-            disabled={!candidateId || addMemberMutation.isPending}
-            onClick={() => addMemberMutation.mutate(candidateId)}
+            disabled={selectedCandidates.length === 0 || addMembersMutation.isPending}
+            onClick={() => addMembersMutation.mutate(selectedCandidates.map(({id}) => id))}
             variant="contained"
           >
-            Add
+            {selectedCandidates.length > 1 ? `Add ${selectedCandidates.length}` : 'Add'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -365,7 +625,12 @@ export const TeamPage = () => {
       )}
 
       <Stack spacing={2} sx={{display: isMember ? undefined : 'none'}}>
-        <Stack direction="row" spacing={2} sx={{alignItems: 'baseline', flexWrap: 'wrap'}}>
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{alignItems: 'baseline', flexWrap: 'wrap'}}
+          useFlexGap
+        >
           <SectionTitle count={retros?.length ?? 0} title="Retrospectives" />
           {isAdmin ? null : (
             <Typography color="textSecondary" variant="textXs">
@@ -389,11 +654,13 @@ export const TeamPage = () => {
                 py: 2,
                 transition: 'border-color 120ms ease',
               }}
+              useFlexGap
             >
               <Stack
-                onClick={() => navigate(`/teams/${teamId}/retros/${retro.id}`)}
+                component={Link}
                 spacing={0.25}
-                sx={{cursor: 'pointer', flexGrow: 1, minWidth: 200}}
+                sx={{color: 'inherit', flex: '1 1 200px', minWidth: 0, textDecoration: 'none'}}
+                to={`/teams/${teamId}/retros/${retro.id}`}
               >
                 <Typography variant="textL">{retro.title}</Typography>
                 <Typography color="textSecondary" variant="textXs">
@@ -401,33 +668,37 @@ export const TeamPage = () => {
                 </Typography>
               </Stack>
 
-              {retro.isFacilitator ? (
-                <Chip label="You facilitate" size="small" variant="outlined" />
-              ) : null}
+              {/* The badges and the delete travel together: a long title wraps, they do not split. */}
+              <Stack direction="row" spacing={1} sx={{alignItems: 'center', flexShrink: 0}} useFlexGap>
+                {retro.isFacilitator ? (
+                  <Chip label="You facilitate" size="small" variant="outlined" />
+                ) : null}
 
-              <Chip
-                color={retro.phase === 'ARCHIVED' ? 'default' : 'primary'}
-                label={PHASE_LABELS[retro.phase]}
-                size="small"
-                variant={retro.phase === 'ARCHIVED' ? 'outlined' : 'filled'}
-              />
-
-              {isAdmin ? (
-                <Button
-                  disabled={removeRetroMutation.isPending}
-                  onClick={() =>
-                    setConfirmRequest({
-                      message: `The notes, groups and votes of ${retro.title} will be lost. The actions already decided are kept.`,
-                      onConfirm: () => removeRetroMutation.mutate(retro.id),
-                      title: 'Delete the retrospective?',
-                    })
-                  }
+                <Chip
+                  color={retro.phase === 'ARCHIVED' ? 'default' : 'primary'}
+                  label={PHASE_LABELS[retro.phase]}
                   size="small"
-                  variant="text"
-                >
-                  Delete
-                </Button>
-              ) : null}
+                  variant={retro.phase === 'ARCHIVED' ? 'outlined' : 'filled'}
+                />
+
+                {isAdmin ? (
+                  <Button
+                    color="error"
+                    disabled={removeRetroMutation.isPending}
+                    onClick={() =>
+                      setConfirmRequest({
+                        message: `The notes, groups and votes of ${retro.title} will be lost. The actions already decided are kept.`,
+                        onConfirm: () => removeRetroMutation.mutate(retro.id),
+                        title: 'Delete the retrospective?',
+                      })
+                    }
+                    size="small"
+                    variant="text"
+                  >
+                    Delete
+                  </Button>
+                ) : null}
+              </Stack>
             </Stack>
           ))}
         </Stack>
@@ -451,7 +722,12 @@ export const TeamPage = () => {
       />
 
       <Stack spacing={1} sx={{...SURFACE, px: 3, py: 2.5}}>
-        <Stack direction="row" spacing={2} sx={{alignItems: 'center', flexWrap: 'wrap'}}>
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{alignItems: 'center', flexWrap: 'wrap'}}
+          useFlexGap
+        >
           <Stack sx={{flexGrow: 1}}>
             <SectionTitle count={members?.length ?? 0} title="Members" />
           </Stack>
@@ -468,72 +744,129 @@ export const TeamPage = () => {
           administrator of the team adds somebody to it.
         </Typography>
 
-        {members?.map((member) => (
-          <Stack
-            direction="row"
-            key={member.userId}
-            spacing={2}
-            sx={{
-              alignItems: 'center',
-              borderColor: 'divider',
-              borderTop: '1px solid',
-              flexWrap: 'wrap',
-              py: 1.5,
+        <Stack spacing={0.25}>
+          {members?.map((member) => (
+            <Stack
+              direction="row"
+              key={member.userId}
+              spacing={1.5}
+              sx={{
+                '&:hover': {bgcolor: 'action.hover'},
+                alignItems: 'center',
+                borderRadius: '10px',
+                mx: -1.25,
+                px: 1.25,
+                py: 1.25,
+                transition: 'background-color 120ms ease',
+              }}
+            >
+              <Avatar size="small" src={member.pictureUrl}>
+                {initials(member.name)}
+              </Avatar>
+
+              <Stack sx={{flexGrow: 1, minWidth: 0}}>
+                <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
+                  <Typography noWrap variant="textM">
+                    {member.name}
+                  </Typography>
+                  {member.isAdmin ? (
+                    <Tag color="primary" size="small">
+                      Admin
+                    </Tag>
+                  ) : null}
+                </Stack>
+                <Typography color="textSecondary" noWrap variant="textXs">
+                  {member.email}
+                </Typography>
+              </Stack>
+
+              {isAdmin ? (
+                <IconButton
+                  aria-label={`Actions for ${member.name}`}
+                  onClick={(event) => {
+                    setMemberMenu({anchor: event.currentTarget, member});
+                    setIsMemberMenuOpen(true);
+                  }}
+                  size="small"
+                >
+                  <MoreHorizIcon fontSize="small" />
+                </IconButton>
+              ) : null}
+            </Stack>
+          ))}
+        </Stack>
+
+        <Menu
+          anchorEl={memberMenu?.anchor}
+          anchorOrigin={{horizontal: 'right', vertical: 'bottom'}}
+          onClose={() => setIsMemberMenuOpen(false)}
+          open={isMemberMenuOpen}
+          transformOrigin={{horizontal: 'right', vertical: 'top'}}
+        >
+          <MenuItem
+            disabled={setAdminMutation.isPending}
+            onClick={() => {
+              if (memberMenu) {
+                const {member} = memberMenu;
+                setAdminMutation.mutate({isAdmin: !member.isAdmin, userId: member.userId});
+              }
+              setIsMemberMenuOpen(false);
             }}
           >
-            <Avatar size="small" src={member.pictureUrl}>
-              {initials(member.name)}
-            </Avatar>
+            {memberMenu?.member.isAdmin ? 'Remove team admin' : 'Make team admin'}
+          </MenuItem>
 
-            <Stack spacing={0.25} sx={{flexGrow: 1, minWidth: 180}}>
-              <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
-                <Typography variant="textM">{member.name}</Typography>
-                {member.isAdmin ? (
-                  <Tag color="primary" size="small">
-                    Admin
-                  </Tag>
-                ) : null}
-              </Stack>
-              <Typography color="textSecondary" variant="textXs">
-                {member.email}
-              </Typography>
-            </Stack>
-
-            {isAdmin ? (
-              <Stack direction="row" spacing={0.5}>
-                <Button
-                  disabled={setAdminMutation.isPending}
-                  onClick={() =>
-                    setAdminMutation.mutate({isAdmin: !member.isAdmin, userId: member.userId})
-                  }
-                  size="small"
-                  variant="text"
-                >
-                  {member.isAdmin ? 'Remove admin' : 'Make admin'}
-                </Button>
-
-                {member.userId === user?.id ? null : (
-                  <Button
-                    disabled={removeMemberMutation.isPending}
-                    onClick={() =>
-                      setConfirmRequest({
-                        confirmLabel: 'Remove',
-                        message: `${member.name} will not see the retrospectives of ${team?.name} any more.`,
-                        onConfirm: () => removeMemberMutation.mutate(member.userId),
-                        title: 'Remove from the team?',
-                      })
-                    }
-                    size="small"
-                    variant="text"
-                  >
-                    Remove
-                  </Button>
-                )}
-              </Stack>
-            ) : null}
-          </Stack>
-        ))}
+          {/* Nobody removes themselves: leaving the team is its own button, with its own words. */}
+          {memberMenu && memberMenu.member.userId !== user?.id ? (
+            <MenuItem
+              disabled={removeMemberMutation.isPending}
+              onClick={() => {
+                const {member} = memberMenu;
+                setIsMemberMenuOpen(false);
+                setConfirmRequest({
+                  confirmLabel: 'Remove',
+                  message: `${member.name} will not see the retrospectives of ${team?.name} any more.`,
+                  onConfirm: () => removeMemberMutation.mutate(member.userId),
+                  title: 'Remove from the team?',
+                });
+              }}
+              sx={{color: 'error.main'}}
+            >
+              Remove from the team
+            </MenuItem>
+          ) : null}
+        </Menu>
       </Stack>
+
+      {/* An org admin manages every team of the organisation, joined or not, so the way to
+          delete one is theirs alone and does not depend on membership. */}
+      {user?.isOrgAdmin && team ? (
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{
+            ...SURFACE,
+            alignItems: 'center',
+            borderColor: 'rgba(223, 27, 65, 0.35)',
+            flexWrap: 'wrap',
+            px: 3,
+            py: 2.5,
+          }}
+          useFlexGap
+        >
+          <Stack spacing={0.5} sx={{flexGrow: 1, minWidth: 220}}>
+            <Typography variant="headingS">Delete this team</Typography>
+            <Typography color="textSecondary" variant="textS">
+              Its retrospectives, actions and memberships are deleted with it, for good. There is
+              no way to bring them back.
+            </Typography>
+          </Stack>
+          <Button color="error" onClick={() => setIsDeleting(true)} variant="outlined">
+            Delete the team
+          </Button>
+          <DeleteTeamDialog onClose={() => setIsDeleting(false)} open={isDeleting} team={team} />
+        </Stack>
+      ) : null}
     </Stack>
   );
 };

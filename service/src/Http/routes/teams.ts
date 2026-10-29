@@ -2,7 +2,7 @@ import {Hono} from 'hono';
 import type {Container} from '~/container';
 import {UpdateActionDto} from '~/Dto/Action/ActionDto';
 import {SetAdminDto} from '~/Dto/Admin/AdminDto';
-import {AddTeamMemberDto, CreateTeamDto} from '~/Dto/Team/CreateTeamDto';
+import {AddTeamMemberDto, CreateTeamDto, RenameTeamDto} from '~/Dto/Team/CreateTeamDto';
 import type {Variables} from '~/Http/middleware/auth';
 import {validateBody} from '~/Http/middleware/validate';
 import type {ActionStatus} from '~/Db/schema';
@@ -19,6 +19,33 @@ export const teamRoutes = (c: Container) => {
 
     return context.json(await c.teamManager.createTeam(context.get('auth'), body.name), 201);
   });
+
+  app.patch('/teams/:teamId', async (context) => {
+    const body = await validateBody(context, RenameTeamDto);
+
+    return context.json(
+      await c.teamManager.renameTeam(context.get('auth'), context.req.param('teamId'), body.name),
+    );
+  });
+
+  app.delete('/teams/:teamId', async (context) => {
+    const retroIds = await c.teamManager.deleteTeam(
+      context.get('auth'),
+      context.req.param('teamId'),
+    );
+
+    // Whoever is still on one of its boards learns that the retro is gone. Through each retro's
+    // queue, so the commands already in flight on it settle before the notice goes out.
+    await Promise.all(retroIds.map((retroId) => c.hub.run(retroId, async () => undefined)));
+
+    return context.body(null, 204);
+  });
+
+  app.get('/teams/:teamId/summary', async (context) =>
+    context.json(
+      await c.teamManager.getTeamSummary(context.get('auth'), context.req.param('teamId')),
+    ),
+  );
 
   app.delete('/teams/:teamId/members/me', async (context) => {
     await c.teamManager.leaveTeam(context.get('auth'), context.req.param('teamId'));

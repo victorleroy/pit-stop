@@ -8,7 +8,7 @@ import {
   Typography,
 } from '@/ui';
 import MenuItem from '@mui/material/MenuItem';
-import {useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import type {Action, ActionStatus, TeamMember} from '@/api/types';
 
 const STATUS_LABELS: Record<ActionStatus, string> = {
@@ -71,25 +71,45 @@ export const ActionList = ({
   actions,
   canComplete = true,
   canCreate,
+  draft,
   emptyLabel,
   isBusy,
   members,
   onCreate,
+  onDraftApplied,
   onStatusChange,
   title,
 }: {
   actions: Action[];
   canComplete?: boolean;
   canCreate: boolean;
+  /**
+   * A text handed over from the board to start an action from. The nonce changes on every
+   * hand-over, so picking the same card twice still refills the field.
+   */
+  draft?: {nonce: number; text: string};
   emptyLabel: string;
   isBusy: boolean;
   members: TeamMember[];
   onCreate?: (text: string, assigneeId?: string) => void;
+  /** The draft is in the field: the page lets go of it, so a remount never applies it again. */
+  onDraftApplied?: () => void;
   onStatusChange: (actionId: string, status: ActionStatus) => void;
   title: string;
 }) => {
   const [text, setText] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Prefill only: the team still rewords it, picks somebody and adds it themselves.
+  useEffect(() => {
+    if (!draft) return;
+
+    setText(draft.text);
+    inputRef.current?.focus({preventScroll: true});
+    inputRef.current?.scrollIntoView({behavior: 'smooth', block: 'center'});
+    onDraftApplied?.();
+  }, [draft?.nonce]);
 
   const open = actions.filter(({status}) => status === 'OPEN');
   // Dropped actions are settled too: they are not waiting on anybody any more.
@@ -141,6 +161,7 @@ export const ActionList = ({
         {canCreate && onCreate ? (
           <Stack direction="row" spacing={2} sx={{alignItems: 'flex-end', flexWrap: 'wrap'}}>
             <TextField
+              inputRef={inputRef}
               label="New action"
               onChange={(event) => setText(event.target.value)}
               placeholder="Split the CI into two jobs"

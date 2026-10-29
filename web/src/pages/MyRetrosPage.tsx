@@ -5,7 +5,7 @@ import {
   Typography,
 } from '@/ui';
 import {useQuery} from '@tanstack/react-query';
-import {useNavigate} from 'react-router-dom';
+import {Link, useNavigate} from 'react-router-dom';
 import {fetchMyRetros} from '@/api/retros';
 import type {RetroPhase} from '@/api/types';
 import {EmptyState} from '@/components/EmptyState';
@@ -45,25 +45,29 @@ export const MyRetrosPage = () => {
 
         <Stack spacing={1.5}>
           {items.map((retro) => (
+            // A link rather than a clickable box: it takes the keyboard focus and opens in a
+            // new tab like any other.
             <Stack
+              component={Link}
               direction="row"
               key={retro.id}
-              onClick={() => navigate(`/teams/${retro.teamId}/retros/${retro.id}`)}
               spacing={2}
               sx={{
                 ...SURFACE,
-                '&:hover': {borderColor: 'primary.main'},
+                '&:focus-visible, &:hover': {borderColor: 'primary.main'},
                 alignItems: 'center',
-                cursor: 'pointer',
+                color: 'inherit',
                 flexWrap: 'wrap',
                 px: 2.5,
                 py: 2,
+                textDecoration: 'none',
                 transition: 'border-color 120ms ease',
               }}
+              to={`/teams/${retro.teamId}/retros/${retro.id}`}
             >
               <TeamDot name={retro.teamName} />
 
-              <Stack spacing={0.25} sx={{flexGrow: 1, minWidth: 200}}>
+              <Stack spacing={0.25} sx={{flex: '1 1 200px', minWidth: 0}}>
                 <Typography variant="textL">{retro.title}</Typography>
                 <Typography color="textSecondary" variant="textXs">
                   {retro.teamName}
@@ -73,16 +77,19 @@ export const MyRetrosPage = () => {
                 </Typography>
               </Stack>
 
-              {retro.isFacilitator ? (
-                <Chip label="You facilitate" size="small" variant="outlined" />
-              ) : null}
+              {/* The badges travel together: a long title wraps, they do not split. */}
+              <Stack direction="row" spacing={1} sx={{alignItems: 'center', flexShrink: 0}} useFlexGap>
+                {retro.isFacilitator ? (
+                  <Chip label="You facilitate" size="small" variant="outlined" />
+                ) : null}
 
-              <Chip
-                color={retro.phase === 'ARCHIVED' ? 'default' : 'primary'}
-                label={PHASE_LABELS[retro.phase]}
-                size="small"
-                variant={retro.phase === 'ARCHIVED' ? 'outlined' : 'filled'}
-              />
+                <Chip
+                  color={retro.phase === 'ARCHIVED' ? 'default' : 'primary'}
+                  label={PHASE_LABELS[retro.phase]}
+                  size="small"
+                  variant={retro.phase === 'ARCHIVED' ? 'outlined' : 'filled'}
+                />
+              </Stack>
             </Stack>
           ))}
         </Stack>

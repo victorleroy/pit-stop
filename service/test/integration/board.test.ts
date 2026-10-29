@@ -337,6 +337,13 @@ describe('board', () => {
       expect(resumed.timer.state).toBe('RUNNING');
     });
 
+    it('sends what is left on a running clock, for clients whose clock is off', async () => {
+      const board = await timer('start', 300);
+
+      expect(board.timer.remainingMs).toBeGreaterThan(295_000);
+      expect(board.timer.remainingMs).toBeLessThanOrEqual(300_000);
+    });
+
     it('refuses to pause a timer that is not running', async () => {
       await expect(timer('pause')).rejects.toThrow('not running');
     });

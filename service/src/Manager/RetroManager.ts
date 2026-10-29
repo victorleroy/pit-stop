@@ -35,6 +35,9 @@ const DEFAULT_COLUMNS = ['Start', 'Stop', 'Continue'];
  */
 const COLUMN_PHASES: RetroPhase[] = ['BRAINSTORM'];
 
+/** The vote budget can move until the first vote is cast. */
+const MAX_VOTES_PHASES: RetroPhase[] = ['BRAINSTORM', 'SHARE'];
+
 const VOTING_PHASES: RetroPhase[] = ['VOTE', 'DISCUSS', 'ARCHIVED'];
 
 /** Totals stay hidden while people are still voting, so nobody follows the crowd. */
@@ -82,6 +85,7 @@ export class RetroManager {
     teamId: string,
     title: string,
     columnTitles?: string[],
+    maxVotes?: number,
   ): Promise<BoardModel> {
     // Membership first, then the role: an org admin passes the role check on every team, and
     // without this the retro would be written before the board read refused to return it.
@@ -90,9 +94,17 @@ export class RetroManager {
     await checkRetroAllowance(this.retroRepository, auth.orgId, auth.orgStatus);
 
     const id = uuid();
-    const titles = columnTitles?.length ? columnTitles : DEFAULT_COLUMNS;
+    // An explicit empty list is the blank template: the facilitator builds the columns.
+    const titles = columnTitles ?? DEFAULT_COLUMNS;
 
-    await this.retroRepository.create({createdBy: auth.userId, id, orgId: auth.orgId, teamId, title});
+    await this.retroRepository.create({
+      createdBy: auth.userId,
+      id,
+      ...(maxVotes === undefined ? {} : {maxVotes}),
+      orgId: auth.orgId,
+      teamId,
+      title,
+    });
 
     await Promise.all(
       titles.map((columnTitle, position) =>
@@ -152,6 +164,7 @@ export class RetroManager {
     auth: AuthContext,
     retroId: string,
     changes: {
+      maxVotes?: number;
       phase?: RetroPhase;
       timer?: {action: TimerAction; seconds?: number};
       title?: string;
@@ -160,8 +173,31 @@ export class RetroManager {
     const {retro} = await this.accessChecker.checkFacilitatorAccess(auth, retroId);
 
     // An archived retro is frozen, but never a dead end: reopening it is always possible.
-    if (retro.phase === 'ARCHIVED' && (!changes.phase || changes.title || changes.timer)) {
+    if (
+      retro.phase === 'ARCHIVED' &&
+      (!changes.phase || changes.title || changes.timer || changes.maxVotes !== undefined)
+    ) {
       throw new ConflictHttpError('Reopen the retro before changing it');
+    }
+
+    // The budget is set before anyone spends it: changing it mid-vote would rewrite the rules
+    // for the people who already voted. Judged on the phase the retro lands in, so going back
+    // to the brainstorm (which wipes the votes) can set it, and entering the vote cannot.
+    if (
+      changes.maxVotes !== undefined &&
+      !MAX_VOTES_PHASES.includes(changes.phase ?? retro.phase)
+    ) {
+      throw new ConflictHttpError('Votes per person can only change before voting starts');
+    }
+
+    // A board without columns has nowhere to put a note: it stays in the brainstorm until the
+    // facilitator has built at least one.
+    if (changes.phase && changes.phase !== 'BRAINSTORM') {
+      const columns = await this.columnRepository.countByRetroId(retroId);
+
+      if (!columns) {
+        throw new ConflictHttpError('Add at least one column first');
+      }
     }
 
     // Computed first: a refused timer action must not leave the votes already wiped.
@@ -178,6 +214,7 @@ export class RetroManager {
     }
 
     await this.retroRepository.update(retroId, {
+      ...(changes.maxVotes === undefined ? {} : {maxVotes: changes.maxVotes}),
       ...(changes.phase ? {phase: changes.phase} : {}),
       ...(changes.title ? {title: changes.title} : {}),
       ...timerChanges,
@@ -433,7 +470,11 @@ export class RetroManager {
     }
 
     if (retro.timerEndsAt) {
-      return {...total, endsAt: retro.timerEndsAt, state: 'RUNNING'};
+      // remainingMs travels with the deadline so a client whose clock is off still counts the
+      // right duration: it anchors on its own clock at reception rather than on endsAt.
+      const remainingMs = Math.max(0, new Date(retro.timerEndsAt).getTime() - Date.now());
+
+      return {...total, endsAt: retro.timerEndsAt, remainingMs, state: 'RUNNING'};
     }
 
     return {state: 'IDLE'};

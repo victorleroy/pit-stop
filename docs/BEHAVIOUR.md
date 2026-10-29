@@ -141,9 +141,9 @@ Four levels, on three different scopes.
 | Role | Source | Powers |
 |---|---|---|
 | **Team member** | `memberships` | See and take part in the team's retros |
-| **Team admin** | `memberships.is_admin`, or being an org admin | Create and delete retros, promote team admins; **add and remove members, by their own `is_admin` only** |
-| **Org admin** | `org_members.role = 'admin'` | Everything a team admin can do, on **every** team; manage org admins; list every team and its roster. **Cannot read a board of a team they have not joined, and cannot add themselves to one** |
-| **Facilitator** | Retro creator, then transferable | Change phase, title, timer, columns; moderate notes |
+| **Team admin** | `memberships.is_admin`, or being an org admin | Create and delete retros, rename the team, promote team admins; **add and remove members, by their own `is_admin` only** |
+| **Org admin** | `org_members.role = 'admin'` | Everything a team admin can do, on **every** team; manage org admins; list every team and its roster; **delete a team**; read organisation stats. **Cannot read a board of a team they have not joined, and cannot add themselves to one**: what they see of a team's content is counters and dates only, never a note's text, a title, an author or anybody's votes |
+| **Facilitator** | Retro creator, then transferable | Change phase, title, timer, votes per person, columns; moderate notes |
 
 **Roles are read from the store on every call, never carried in the token.** A demotion takes
 effect immediately, not in twelve hours. Sessions are opaque rows, so revocation is immediate.
@@ -162,6 +162,9 @@ effect immediately, not in twelve hours. Sessions are opaque rows, so revocation
   hold. Administering a team and seeing inside it are separate powers.
 - Creating a retro checks membership **before** the role, so an org admin who is not in the
   team is refused before anything is written.
+- Deleting a team, its delete summary and the organisation stats use `checkOrgAdmin`, not
+  `isTeamAdmin`: a team admin cannot delete their own team. The team's existence is checked
+  first, so a team of another organization is `404`.
 
 ### Lock-out guards
 
@@ -193,8 +196,11 @@ member.
 ### Retro
 
 - Creation is restricted to **team admins**. The creator becomes the facilitator.
-- Default columns when none are given: `Start`, `Stop`, `Continue`.
-- `maxVotes` defaults to 5.
+- Default columns when none are given: `Start`, `Stop`, `Continue`. An explicit empty list
+  creates a **blank** retro with no column; it cannot leave `BRAINSTORM` (nor be archived)
+  until at least one column exists (`409`).
+- `maxVotes` defaults to 5, can be set at creation (1 to 10), and changed by the facilitator
+  **only in `BRAINSTORM` or `SHARE`** (`409` once voting has started).
 - Deletion: team admins only. Removes columns, notes, clusters and votes.
   **Actions survive**: they belong to the team.
 
@@ -248,6 +254,8 @@ member.
 Two stored states, so the network never eats the clock:
 
 - Running: store `timer_ends_at`, an **absolute deadline**. Each client counts down locally.
+  The board also carries `remainingMs`, computed when it is sent, so a client whose clock is
+  off still counts the right duration.
 - Paused: store `timer_remaining_ms`.
 
 | Action | Precondition | Effect |
@@ -278,6 +286,25 @@ A team is the confidentiality boundary around a board. It is private to its memb
 - `GET /org/members` lists everybody in the organization, which is what makes adding somebody
   possible, but **the `teams` array is only filled for an org admin**: who is in which team is
   not public inside the organization.
+- **Only an org admin deletes a team** (`DELETE /teams/{id}`). Its retros, boards, actions and
+  memberships go with it, through `ON DELETE CASCADE`. Anybody still on one of its boards
+  receives the `error` event "This retro was deleted". `GET /teams/{id}/summary` gives the
+  confirmation its counters, `{retroCount, actionCount}`, and nothing else.
+
+### Organisation stats
+
+`GET /org/stats?period=30d|90d|all`, org admin only, `400` for any other period (or none).
+Counters only: no text, title, author or per-person vote ever appears.
+
+| Field | Meaning |
+|---|---|
+| `people.total`, `people.admins` | Members of the organization, and how many are org admins |
+| `teams.total`, `teams.idle` | Teams, and those created more than 30 days ago with no retro created in the last 30 days, **whatever the period** |
+| `retros.count`, `retros.total` | Retros created within the period, and all time |
+| `notes.count`, `notes.perRetro` | Notes created within the period; `count` divided by the number of retros that received at least one of them, rounded to 1 decimal, `0` when there is no note |
+| `actions.open`, `.done`, `.dropped` | Actions created within the period, by their current status |
+
+Periods are rolling: `30d` and `90d` start 30 and 90 days before the request.
 
 ---
 
@@ -306,6 +333,9 @@ Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `429`.
 | GET | `/me` | `200` `User` |
 | GET | `/teams` | `200` `Team[]` sorted by name |
 | POST | `/teams` | `201` `Team` |
+| PATCH | `/teams/{teamId}` | `200` `Team` — team admin or org admin renames `{name}` |
+| DELETE | `/teams/{teamId}` | `204` — org admin only, cascades to retros and actions |
+| GET | `/teams/{teamId}/summary` | `200` `{retroCount, actionCount}` — org admin only |
 | DELETE | `/teams/{teamId}/members/me` | `204` — leave |
 | POST | `/teams/{teamId}/members` | `204` — team admin adds `{userId}` |
 | DELETE | `/teams/{teamId}/members/{userId}` | `204` — team admin removes |
@@ -337,6 +367,7 @@ Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `429`.
 | GET | `/org/admins` | `200` `User[]` |
 | GET | `/org/members` | `200` `OrgMember[]` sorted by name |
 | PUT | `/org/admins/{userId}` | `204` |
+| GET | `/org/stats?period=30d\|90d\|all` | `200` `OrgStats` — org admin only, `400` on another period |
 | GET | `/org/invitations` | `200` `Invitation[]` — org admin |
 | POST | `/org/invitations` | `201` `Invitation` — org admin, `{email, role?}` |
 | DELETE | `/org/invitations/{invitationId}` | `204` — org admin |
@@ -354,6 +385,9 @@ User            { id, email, name, orgId, orgName?, orgStatus?, pictureUrl?,
                   isOrgAdmin?, isPlatformAdmin? }
 Team            { id, name, createdBy, createdAt?, isAdmin, isMember, memberCount }
 TeamMember      { userId, email, name, pictureUrl?, isAdmin, joinedAt? }
+OrgStats        { period, people: {total, admins}, teams: {total, idle},
+                  retros: {count, total}, notes: {count, perRetro},
+                  actions: {open, done, dropped} }
 Action          { id, retroId, retroTitle, text, status, assignee?: {id,name}, createdAt? }
 Timer           { state: 'IDLE'|'RUNNING'|'PAUSED', endsAt?, remainingMs? }
 Note            { id, columnId, author: {id,name}, isMine, revealed, text, createdAt? }
@@ -452,10 +486,11 @@ to the login screen.
 | Column title | required, <= 40 |
 | Note text | required, <= 500 |
 | Cluster title | required, <= 60 |
-| Team name | required, <= 60 |
+| Team name | required, <= 60, trimmed on rename |
 | Action text | required, <= 300 |
 | `vote.delta` | integer, exactly `1` or `-1` |
 | `timer.seconds` | integer, 5 to 3600 |
+| `maxVotes` | integer, 1 to 10 |
 | `phase` | within the enumeration |
 | `action.status` | within `{OPEN, DONE, DROPPED}` |
 
