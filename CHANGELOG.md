@@ -2,7 +2,7 @@
 
 All notable changes are recorded here. Versions follow [semantic versioning](https://semver.org).
 
-## Unreleased
+## 0.2.0 — 2026-10-29
 
 ### Added
 
@@ -33,6 +33,8 @@ All notable changes are recorded here. Versions follow [semantic versioning](htt
 
 - Second row of team cards misaligned, black separators in the members list, oval vote
   counter.
+- Long retro and column titles, note footers wrapping in narrow columns, tight chip padding,
+  toolbar controls floating right when they wrap, and overflow at phone widths.
 
 ## 0.1.1 — 2026-10-25
 
