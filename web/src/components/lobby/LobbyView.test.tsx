@@ -47,7 +47,8 @@ describe('LobbyView', () => {
 
     fireEvent.keyDown(dialog, {key: 'Escape'});
     const backdrop = document.querySelector('.MuiBackdrop-root');
-    if (backdrop) fireEvent.click(backdrop);
+    expect(backdrop).toBeTruthy();
+    fireEvent.click(backdrop as Element);
 
     expect(screen.getByRole('dialog')).toBeTruthy();
   });

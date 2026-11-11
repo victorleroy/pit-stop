@@ -7,10 +7,6 @@ import {LOBBY_TITLE} from '@/components/lobby/lobbyCopy';
 import {LobbyPresence} from '@/components/lobby/LobbyPresence';
 import {Box, Button, Stack, Typography} from '@/ui';
 
-/**
- * The waiting room, over the board. Nobody closes it: it goes away for everybody when the
- * retro starts. Only the facilitator can step out of it, to set the board up.
- */
 export const LobbyView = ({
   facilitatorId,
   game,
@@ -39,7 +35,6 @@ export const LobbyView = ({
   members: TeamMember[] | undefined;
   onSetUpBoard?: () => void;
   onStart: () => void;
-  /** The toolbar is under the dialog: taking over an absent facilitator happens here. */
   onTakeOver?: () => void;
   open?: boolean;
   participants: Participant[];

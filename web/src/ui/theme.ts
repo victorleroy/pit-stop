@@ -72,7 +72,6 @@ const SCALE = {
   textXs: {fontSize: '0.75rem', fontWeight: 400, lineHeight: 1.45},
 } as const;
 
-/** Wheel Gun's pit lane: a pale lane on the paper, single-seaters in the wash. */
 export interface TrackPalette {
   free: string;
   lane: string;
@@ -91,7 +90,7 @@ const TRACK: TrackPalette = {
   rim: SLIPSTREAM.inkMuted,
   stripe: SLIPSTREAM.surface,
   surface: SLIPSTREAM.ground,
-  text: SLIPSTREAM.inkMuted,
+  text: SLIPSTREAM.inkSecondary,
   tyre: SLIPSTREAM.ink,
 };
 

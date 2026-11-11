@@ -1,3 +1,4 @@
+import Portal from '@mui/material/Portal';
 import {Alert, Button, Stack} from '@/ui';
 import {createContext, useCallback, useContext, useEffect, useMemo, useState} from 'react';
 import type {ReactNode} from 'react';
@@ -71,51 +72,55 @@ export const ToastProvider = ({children}: {children: ReactNode}) => {
     <ToastContext.Provider value={value}>
       {children}
 
-      <Stack
-        spacing={1}
-        sx={{
-          alignItems: 'center',
-          bottom: 24,
-          left: 0,
-          pointerEvents: 'none',
-          position: 'fixed',
-          px: 2,
-          right: 0,
-          zIndex: 1400,
-        }}
-      >
-        {toasts.map((toast) => (
-          <Alert
-            action={
-              toast.action ? (
-                <Button
-                  color="inherit"
-                  onClick={() => {
-                    toast.action?.onClick();
-                    dismiss(toast.id);
-                  }}
-                  size="small"
-                >
-                  {toast.action.label}
-                </Button>
-              ) : undefined
-            }
-            key={toast.id}
-            onClick={() => dismiss(toast.id)}
-            onClose={() => dismiss(toast.id)}
-            severity={toast.severity}
+      {toasts.length ? (
+        <Portal>
+          <Stack
+            spacing={1}
             sx={{
-              boxShadow: '0 10px 30px -12px rgba(15, 23, 42, 0.55)',
-              maxWidth: 560,
-              cursor: 'pointer',
-              pointerEvents: 'auto',
-              width: '100%',
+              alignItems: 'center',
+              bottom: 24,
+              left: 0,
+              pointerEvents: 'none',
+              position: 'fixed',
+              px: 2,
+              right: 0,
+              zIndex: 1400,
             }}
           >
-            {toast.message}
-          </Alert>
-        ))}
-      </Stack>
+            {toasts.map((toast) => (
+              <Alert
+                action={
+                  toast.action ? (
+                    <Button
+                      color="inherit"
+                      onClick={() => {
+                        toast.action?.onClick();
+                        dismiss(toast.id);
+                      }}
+                      size="small"
+                    >
+                      {toast.action.label}
+                    </Button>
+                  ) : undefined
+                }
+                key={toast.id}
+                onClick={() => dismiss(toast.id)}
+                onClose={() => dismiss(toast.id)}
+                severity={toast.severity}
+                sx={{
+                  boxShadow: '0 10px 30px -12px rgba(15, 23, 42, 0.55)',
+                  maxWidth: 560,
+                  cursor: 'pointer',
+                  pointerEvents: 'auto',
+                  width: '100%',
+                }}
+              >
+                {toast.message}
+              </Alert>
+            ))}
+          </Stack>
+        </Portal>
+      ) : null}
     </ToastContext.Provider>
   );
 };

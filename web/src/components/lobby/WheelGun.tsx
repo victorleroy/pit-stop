@@ -31,11 +31,10 @@ export const SERVICED_MS = 400;
 const SPARK_PARTICLES = 6;
 const PLUS_ONE_MS = 1_200;
 
-const ARIA_LABEL = 'Wheel Gun game, press 1, 2 or 3 to fit the nearest wheel in that lane';
+const ARIA_LABEL = 'Wheel Gun game, press 1, 2 or 3 to fit the furthest free wheel of that lane';
 
 type Game = ReturnType<typeof useLobbyGame>;
 
-/** Everything the canvas paints with, read from the theme: no colour is decided here. */
 export interface Palette extends TrackPalette {
   font: string;
   success: string;

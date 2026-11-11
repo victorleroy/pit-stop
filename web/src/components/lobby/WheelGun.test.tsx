@@ -47,7 +47,7 @@ describe('WheelGun', () => {
     renderGun();
 
     const arena = screen.getByRole('img', {
-      name: 'Wheel Gun game, press 1, 2 or 3 to fit the nearest wheel in that lane',
+      name: 'Wheel Gun game, press 1, 2 or 3 to fit the furthest free wheel of that lane',
     });
 
     expect(arena.getAttribute('tabindex')).toBe('0');

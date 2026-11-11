@@ -14,7 +14,6 @@ export const lobbyPresence = (members: TeamMember[], participants: Participant[]
   return {absent, here, present};
 };
 
-// Somebody joining pops in where they land; with reduced motion they simply appear.
 const arrive = keyframes`
   from { opacity: 0; transform: translateY(6px) scale(0.85); }
   to { opacity: 1; transform: none; }

@@ -609,7 +609,6 @@ export const RetroPage = () => {
       ) : null}
 
       {isSettingUp ? (
-        // The facilitator stepped out of the waiting room to set the board up: one click back.
         <Stack direction="row" sx={{alignItems: 'center', flexWrap: 'wrap', gap: 1.5}}>
           <Typography color="textSecondary" variant="textS">
             The team is in the waiting room.
