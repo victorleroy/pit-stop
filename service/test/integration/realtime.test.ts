@@ -39,7 +39,7 @@ describe('live retros', () => {
     owner = await harness.createUser(orgId, 'Victor', 'admin');
     member = await harness.createUser(orgId, 'Alice');
     teamId = await harness.createTeam(owner, [member]);
-    retroId = (await harness.container.retroManager.create(owner, teamId, 'Sprint 42')).id;
+    retroId = (await harness.createStartedRetro(owner, teamId, 'Sprint 42')).id;
   });
 
   afterEach(async () => harness.destroy());
@@ -99,7 +99,7 @@ describe('live retros', () => {
 
   /** Regression: a slower access check let an older subscribe win over the latest one. */
   it('keeps a socket on the retro it asked for last when two subscribes overlap', async () => {
-    const otherRetroId = (await harness.container.retroManager.create(owner, teamId, 'Sprint 43'))
+    const otherRetroId = (await harness.createStartedRetro(owner, teamId, 'Sprint 43'))
       .id;
     const getBoard = harness.container.retroManager.getBoard.bind(harness.container.retroManager);
 
@@ -135,7 +135,9 @@ describe('live retros', () => {
     expect(boards.at(-1).board.id).toBe(otherRetroId);
   });
 
-  it('relays cursors in every phase except BRAINSTORM and VOTE', async () => {
+  it('relays cursors in every phase except LOBBY, BRAINSTORM and VOTE', async () => {
+    retroId = (await harness.container.retroManager.create(owner, teamId, 'Sprint 44')).id;
+
     const connect = async (auth: AuthContext) => {
       const socket = Object.assign(new EventEmitter(), {
         close: jest.fn(),
@@ -171,6 +173,7 @@ describe('live retros', () => {
     expect(received()).toBe(expected);
 
     for (const [phase, visible] of [
+      ['BRAINSTORM', false],
       ['SHARE', true],
       ['VOTE', false],
       ['DISCUSS', true],

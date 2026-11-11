@@ -19,7 +19,7 @@ describe('board', () => {
 
     teamId = await harness.createTeam(owner, [member]);
 
-    const board = await harness.container.retroManager.create(owner, teamId, 'Sprint 42');
+    const board = await harness.createStartedRetro(owner, teamId, 'Sprint 42');
 
     retroId = board.id;
     columnId = board.columns[0]!.id;
@@ -307,7 +307,7 @@ describe('board', () => {
 
       await harness.container.actionManager.update(owner, teamId, done.id, {status: 'DONE'});
 
-      const next = await harness.container.retroManager.create(owner, teamId, 'Sprint 43');
+      const next = await harness.createStartedRetro(owner, teamId, 'Sprint 43');
 
       expect(next.carriedOverActions.map((action) => action.id)).toEqual([open.id]);
       expect(next.actions).toHaveLength(0);

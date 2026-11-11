@@ -21,7 +21,7 @@ describe('phases', () => {
     member = await harness.createUser(orgId, 'Alice');
 
     const teamId = await harness.createTeam(facilitator, [member]);
-    const board = await harness.container.retroManager.create(facilitator, teamId, 'Sprint 42');
+    const board = await harness.createStartedRetro(facilitator, teamId, 'Sprint 42');
 
     retroId = board.id;
     columnId = board.columns[0]!.id;
@@ -393,7 +393,7 @@ describe('phases', () => {
 
     it('takes the budget given at creation', async () => {
       const teamId = (await harness.container.retroManager.getBoard(facilitator, retroId)).teamId;
-      const board = await harness.container.retroManager.create(
+      const board = await harness.createStartedRetro(
         facilitator,
         teamId,
         'Sprint 43',
@@ -469,9 +469,7 @@ describe('phases', () => {
 
     beforeEach(async () => {
       const {teamId} = await harness.container.retroManager.getBoard(facilitator, retroId);
-      const board = await harness.container.retroManager.create(facilitator, teamId, 'Blank', {
-        columns: [],
-      });
+      const board = await harness.createStartedRetro(facilitator, teamId, 'Blank', {columns: []});
 
       blankId = board.id;
     });
@@ -505,5 +503,127 @@ describe('phases', () => {
     await expect(
       harness.container.actionManager.create(facilitator, retroId, 'do the thing'),
     ).resolves.toMatchObject({status: 'OPEN', text: 'do the thing'});
+  });
+  /** BEHAVIOUR.md section 3: a retro opens in its waiting room and never comes back to it. */
+  describe('waiting room', () => {
+    let lobbyId: string;
+    let lobbyColumnId: string;
+    let teamId: string;
+
+    const lobbyPhase = (phase: 'LOBBY' | 'BRAINSTORM' | 'SHARE' | 'DISCUSS' | 'ARCHIVED') =>
+      harness.container.retroManager.updateRetro(facilitator, lobbyId, {phase});
+
+    beforeEach(async () => {
+      ({teamId} = await harness.container.retroManager.getBoard(facilitator, retroId));
+
+      const board = await harness.container.retroManager.create(facilitator, teamId, 'Sprint 43');
+
+      lobbyId = board.id;
+      lobbyColumnId = board.columns[0]!.id;
+    });
+
+    it('opens every new retro in LOBBY', async () => {
+      const board = await harness.container.retroManager.getBoard(member, lobbyId);
+
+      expect(board).toMatchObject({facilitatorId: facilitator.userId, phase: 'LOBBY'});
+    });
+
+    it('starts the brainstorm, even on a blank board', async () => {
+      await expect(lobbyPhase('BRAINSTORM')).resolves.toMatchObject({phase: 'BRAINSTORM'});
+
+      const blank = await harness.container.retroManager.create(facilitator, teamId, 'Blank', {columns: []});
+
+      await expect(
+        harness.container.retroManager.updateRetro(facilitator, blank.id, {phase: 'BRAINSTORM'}),
+      ).resolves.toMatchObject({phase: 'BRAINSTORM'});
+    });
+
+    it('jumps further only with a column', async () => {
+      const blank = await harness.container.retroManager.create(facilitator, teamId, 'Blank', {columns: []});
+
+      await expect(
+        harness.container.retroManager.updateRetro(facilitator, blank.id, {phase: 'SHARE'}),
+      ).rejects.toThrow('Add at least one column first');
+      await expect(lobbyPhase('SHARE')).resolves.toMatchObject({phase: 'SHARE'});
+    });
+
+    it('never goes back to LOBBY once left', async () => {
+      for (const phase of ['BRAINSTORM', 'DISCUSS', 'ARCHIVED'] as const) {
+        await lobbyPhase(phase);
+        await expect(lobbyPhase('LOBBY')).rejects.toMatchObject({
+          message: 'The retro has already started',
+          status: 409,
+        });
+      }
+    });
+
+    it('treats LOBBY to LOBBY as a no-op that still applies the rest', async () => {
+      await expect(lobbyPhase('LOBBY')).resolves.toMatchObject({phase: 'LOBBY'});
+      await expect(
+        harness.container.retroManager.updateRetro(facilitator, lobbyId, {
+          phase: 'LOBBY',
+          title: 'Renamed',
+        }),
+      ).resolves.toMatchObject({phase: 'LOBBY', title: 'Renamed'});
+
+      const blank = await harness.container.retroManager.create(facilitator, teamId, 'Blank', {columns: []});
+
+      await expect(
+        harness.container.retroManager.updateRetro(facilitator, blank.id, {phase: 'LOBBY'}),
+      ).resolves.toMatchObject({phase: 'LOBBY'});
+    });
+
+    it('refuses notes, votes and reveals with a 403', async () => {
+      await expect(
+        harness.container.noteManager.create(facilitator, lobbyId, lobbyColumnId, 'early'),
+      ).rejects.toMatchObject({status: 403});
+      await expect(
+        harness.container.voteManager.cast(facilitator, lobbyId, lobbyColumnId, 1),
+      ).rejects.toMatchObject({status: 403});
+      await expect(
+        harness.container.noteManager.setMineRevealed(facilitator, lobbyId, true),
+      ).rejects.toMatchObject({status: 403});
+    });
+
+    it('lets the facilitator alone prepare the columns', async () => {
+      const added = await harness.container.retroManager.addColumn(facilitator, lobbyId, 'Kudos');
+      const kudos = added.columns.at(-1)!.id;
+
+      await expect(
+        harness.container.retroManager.updateColumn(facilitator, lobbyId, kudos, {title: 'Thanks'}),
+      ).resolves.toBeDefined();
+      await expect(
+        harness.container.retroManager.removeColumn(facilitator, lobbyId, kudos),
+      ).resolves.toBeDefined();
+      await expect(
+        harness.container.retroManager.addColumn(member, lobbyId, 'Mine'),
+      ).rejects.toMatchObject({status: 403});
+    });
+
+    it('lets the facilitator change the votes per person', async () => {
+      await expect(
+        harness.container.retroManager.updateRetro(facilitator, lobbyId, {maxVotes: 7}),
+      ).resolves.toMatchObject({maxVotes: 7});
+    });
+
+    it('lets only the facilitator start the retro', async () => {
+      await expect(
+        harness.container.retroManager.updateRetro(member, lobbyId, {phase: 'BRAINSTORM'}),
+      ).rejects.toMatchObject({status: 403});
+    });
+  });
+
+  it('wipes the votes on arriving in the brainstorm or the share, whatever the source', async () => {
+    await addNote('a');
+    await setPhase('SHARE');
+    await setPhase('VOTE');
+
+    const voting = await harness.container.retroManager.getBoard(facilitator, retroId);
+
+    await harness.container.voteManager.cast(facilitator, retroId, voting.columns[0]!.cards[0]!.id, 1);
+    await setPhase('SHARE');
+    await setPhase('VOTE');
+
+    expect((await harness.container.retroManager.getBoard(facilitator, retroId)).myVotesLeft).toBe(5);
   });
 });

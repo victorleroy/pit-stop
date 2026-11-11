@@ -14,7 +14,8 @@ this page is the bug.
 |---|---|
 | **Organization** | A customer company, identified by an opaque `org_id`. An email domain is an optional auto-join rule, never an identity. |
 | **Team** | A group of people inside an organization. Owns retros and actions. |
-| **Retro** | A session. Moves through 5 phases. Holds columns, notes, clusters and votes. |
+| **Retro** | A session. Moves through 6 phases. Holds columns, notes, clusters and votes. |
+| **Waiting room** | The `LOBBY` phase: where a retro waits for its people before it starts. Every new retro opens there. |
 | **Note** | A sticky. Has an author, a text, a column and a `revealed` flag. |
 | **Cluster** | A grouping of at least 2 notes inside a single column. |
 | **Card** | The unit of display and the target of a vote: either a standalone note or a cluster. |
@@ -47,10 +48,11 @@ invitations    (id, org_id, email, role, token_hash, invited_by,
 
 teams          (id, org_id, name, created_by, created_at, default_template_id NULL)
 memberships    (team_id, user_id, is_admin, created_at)
-retros         (id, team_id, org_id, title, phase, created_by, facilitator_id,
+retros         (id, team_id, org_id, title, phase DEFAULT 'LOBBY', created_by, facilitator_id,
                 max_votes DEFAULT 5, timer_ends_at, timer_remaining_ms, timer_total_ms,
                 created_at, template_id NULL, template_name NULL,
-                default_timer_seconds NULL)
+                default_timer_seconds NULL, icebreaker_*, action_review,
+                review_focus_action_id NULL)
 columns        (id, retro_id, title, position, prompt NULL)
 notes          (id, retro_id, column_id, cluster_id NULL, author_id,
                 text, revealed DEFAULT false, created_at)
@@ -72,7 +74,10 @@ retro_template_columns (template_id, position, title, prompt NULL)
 There is no connections table: the `RetroSession` actor holds them in memory, so presence
 is never something that has to be cleaned up after a crash.
 
-Enumerations: `phase in {BRAINSTORM, SHARE, VOTE, DISCUSS, ARCHIVED}`,
+Enumerations: `phase in {LOBBY, BRAINSTORM, SHARE, VOTE, DISCUSS, ARCHIVED}`. The database
+already accepts `ICEBREAKER` and `REVIEW`, and their columns, ahead of the features that use
+them (ADR-005); the API refuses them until then.
+Other enumerations:
 `action.status in {OPEN, DONE, DROPPED}`, `action_review.outcome in {DONE, DROPPED, KEPT}`,
 `timer.state in {IDLE, RUNNING, PAUSED}`,
 `organization.status in {demo, active, suspended}`, `org_members.role in {member, admin}`,
@@ -108,38 +113,48 @@ The one thing a join must never change is section 4: the anonymity projection is
 
 ## 3. Phase state machine
 
-The facilitator alone changes the phase. No transition is constrained: any phase can move to
-any other, including backwards.
+The facilitator alone changes the phase. No transition is constrained, **except back to
+`LOBBY`**: any phase can move to any other, including backwards.
 
-| Operation | BRAINSTORM | SHARE | VOTE | DISCUSS | ARCHIVED |
-|---|:--:|:--:|:--:|:--:|:--:|
-| Create a note | yes | yes | | | |
-| Edit a note's **text** | yes | | | | |
-| Move or delete a note | yes | yes | | | |
-| Reveal or hide **own** notes, all or one | | yes | yes | yes | |
-| Group, ungroup, rename a cluster | | yes | | | |
-| Cast a vote | | | yes | | |
-| See **own** votes | | | yes | yes | yes |
-| See vote **totals** | | | | yes | yes |
-| Add, rename, reorder, delete a column | yes | | | | |
-| Create an action | | | | yes | |
-| Edit an action | yes | yes | yes | yes | yes |
-| Record or undo a review outcome | yes | yes | yes | yes | |
+| Operation | LOBBY | BRAINSTORM | SHARE | VOTE | DISCUSS | ARCHIVED |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|
+| Create a note | | yes | yes | | | |
+| Edit a note's **text** | | yes | | | | |
+| Move or delete a note | | yes | yes | | | |
+| Reveal or hide **own** notes, all or one | | | yes | yes | yes | |
+| Group, ungroup, rename a cluster | | | yes | | | |
+| Cast a vote | | | | yes | | |
+| See **own** votes | | | | yes | yes | yes |
+| See vote **totals** | | | | | yes | yes |
+| Add, rename, reorder, delete a column | yes | yes | | | | |
+| Create an action | | | | | yes | |
+| Edit an action | yes | yes | yes | yes | yes | yes |
+| Record or undo a review outcome | | yes | yes | yes | yes | |
+
+An operation refused because of the phase answers `403`, except in `ARCHIVED` (`409`).
 
 A note created during `SHARE` is created **already shared** (`revealed = true`): its author is
 reading it aloud. Its text stays frozen like every other note's once the brainstorm is over.
 
-**Two non-obvious rules that must not be lost:**
+**Three non-obvious rules that must not be lost:**
 
-1. **Going backwards wipes the votes.** If the current phase is in `{VOTE, DISCUSS, ARCHIVED}`
-   and the target phase is in `{BRAINSTORM, SHARE}`, **every vote in the retro is deleted**.
+1. **Entering `BRAINSTORM` or `SHARE` wipes every vote, whatever the source phase.**
    Rationale: regrouping notes recomposes the cards, and a vote cast on a card that no longer
-   exists is lost anyway. Better to restart the round than to strand votes.
+   exists is lost anyway. Better to restart the round than to strand votes. Judging the target
+   alone means a detour through an opening phase cannot bring votes back into the sharing.
 
 2. **ARCHIVED is frozen but reversible.** Any change to an archived retro is refused (`409`)
-   **except** a phase change. Reopening is always possible. A review outcome belongs to the
-   retro that recorded it, so it is refused in `ARCHIVED` (`409`) even though editing the
-   action itself is not.
+   **except** a phase change. Reopening is always possible, to any phase but `LOBBY`. A review
+   outcome belongs to the retro that recorded it, so it is refused in `ARCHIVED` (`409`) even
+   though editing the action itself is not.
+
+3. **A retro opens in `LOBBY` and never comes back to it.** `X → LOBBY` for any `X ≠ LOBBY`
+   answers `409 "The retro has already started"`; `LOBBY → LOBBY` is a no-op, and the rest of
+   the same `PATCH` (title, timer, votes per person) still applies. A board without columns may
+   enter `BRAINSTORM` (and later `ICEBREAKER`, `REVIEW`), nothing further (`409`).
+
+The guards of a `PATCH` run in this order, inside the retro's queue: archived, back to
+`LOBBY`, `LOBBY → LOBBY` no-op, votes per person, columns, timer, vote wipe, write.
 
 ---
 
@@ -242,24 +257,26 @@ member.
 
 ### Retro
 
-- Creation is restricted to **team admins**. The creator becomes the facilitator.
+- Creation is restricted to **team admins**. The creator becomes the facilitator. A new
+  retro opens in `LOBBY`; retros created before the waiting room keep their phase.
 - A retro starts from a `templateId` **or** from explicit `columns`, never both (`400`).
   - `templateId`: a `builtin:*`, or a template of **this** team. Any other (another team,
     another organization, deleted) is `404 "Template not found"`.
   - `columns`: the given titles without prompts, and no template reference. An empty list
-    creates a **blank** retro with no column; it cannot leave `BRAINSTORM` (nor be archived)
+    creates a **blank** retro with no column; it cannot go past `BRAINSTORM` (nor be archived)
     until at least one column exists (`409`).
   - Neither: the team's default template (see Templates).
 - The template is **copied** in one transaction with the retro: columns with their prompts,
   `template {id, name}`, `defaultTimerSeconds`. The board never reads the template again.
 - `maxVotes` is `body.maxVotes ?? template.maxVotes ?? 5` (1 to 10), and changed by the facilitator
-  **only in `BRAINSTORM` or `SHARE`** (`409` once voting has started).
+  **only in `LOBBY`, `BRAINSTORM` or `SHARE`** (`409` once voting has started).
 - Deletion: team admins only. Removes columns, notes, clusters and votes.
   **Actions survive**: they belong to the team.
 
 ### Columns
 
-- Editable only in `BRAINSTORM`, and only by the facilitator. Once notes are placed, renaming
+- Editable only in `LOBBY` and `BRAINSTORM`, and only by the facilitator: the waiting room is
+  where the board is set up. Once notes are placed, renaming
   or removing a column moves the ground under the participants.
 - A column may carry a **prompt** (<= 140, empty means none), shown under its title to everyone
   in every phase. It is set at creation or with `PATCH {title?, prompt?}` (at least one, `400`
@@ -566,7 +583,7 @@ Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `413`, `
 | GET | `/teams/{teamId}/retros` | `200` `RetroSummary[]` |
 | POST | `/teams/{teamId}/retros` | `201` `Board` |
 | GET | `/retros/{retroId}` | `200` `Board` |
-| PATCH | `/retros/{retroId}` | `200` `Board` |
+| PATCH | `/retros/{retroId}` | `200` `Board` — `409` on a `phase: 'LOBBY'` once started |
 | DELETE | `/retros/{retroId}` | `204` |
 | POST | `/retros/{retroId}/columns` | `201` `Board` |
 | PUT | `/retros/{retroId}/columns/order` | `200` `Board` |
@@ -638,7 +655,7 @@ Timer           { state: 'IDLE'|'RUNNING'|'PAUSED', endsAt?, remainingMs? }
 Note            { id, columnId, author: {id,name,pictureUrl?}, isMine, revealed, text, createdAt? }
 Card            { id, type: 'note'|'cluster', notes: Note[], myVotes, title?, totalVotes? }
 Column          { id, title, prompt: string | null, order, cards: Card[] }
-Board           { id, title, phase, teamId, createdBy, createdAt?, isFacilitator,
+Board           { id, title, phase, teamId, createdBy, createdAt?, facilitatorId, isFacilitator,
                   columns, maxVotes, myVotesLeft, myNotesRevealed, votesRevealed,
                   voteProgress: {[userId]: votesSpent},
                   timer, actions, carriedOverActions,
@@ -680,8 +697,9 @@ Inbound actions: `subscribe`, `cursor`.
   connection. The anonymity rules of section 4 are the only ones that ever reach a client.
 - Cursors **never touch storage**: they are relayed straight to the other connections. A mouse
   move costs no write and no read.
-- Cursors are **not relayed during BRAINSTORM and VOTE** (they would show where others write
-  or vote); the client does not draw them either. Every other phase relays them.
+- Cursors are **not relayed during LOBBY, BRAINSTORM and VOTE** (there is no board in the
+  waiting room, and elsewhere they would show where others write or vote); the client does not
+  draw them either. Every other phase relays them.
 - Each participant has one **stable colour** derived from their `userId` (hash into a fixed 12-colour palette, readable in light and dark theme). The cursor, its name label and the initials of every avatar (`UserAvatar`: presence, notes, member lists, header) share it; it is computed client-side, nothing is stored.
 - Cursor coordinates are **board-relative**, as a fraction of the box the columns take, zoom
   included: every screen and every zoom level differs, the same fraction lands on the same note.
@@ -721,6 +739,15 @@ Inbound actions: `subscribe`, `cursor`.
   cannot leave a pointer behind.
 - The board is pushed by the service on every change; the page only falls back to fetching
   while the socket is down.
+- **Waiting room** (`LOBBY`): instead of the board, a welcome (`Welcome to the pit stop`,
+  retro title and team), the Prime Directive with its attribution, and who is here among the
+  team's members (`x/y joined`, present first, then absent as "not here yet"; `Everyone is
+  here` once complete). Presence is shown only while the socket is connected, `Reconnecting…`
+  otherwise, so `0/y` never shows. When the facilitator is not connected, the others read
+  `Waiting for {name} to start. You can take over from the toolbar.`: the takeover stays the
+  toolbar's. The facilitator starts with `Start the retro` (never conditioned on presence),
+  whose target is `nextOpeningPhase(board)`, and has a second tab, `Board setup`, with the
+  column controls. `LOBBY` is not in the phase stepper, and no cursor is sent.
 - The retro's actions (this retro's and those carried over) live in a panel on the right,
   opened from the toolbar's `Actions · n` button, `n` being the open actions. On a wide screen
   the panel sits beside the board, which narrows; on a phone it slides over it. Turning a card
@@ -819,6 +846,7 @@ to the login screen.
   whoever registered the address does not survive.
 - Editing or deleting a template never changes an existing retro.
 - A template outside the team (another team, another organization, deleted) returns `404`.
+- A retro never returns to `LOBBY`, archived or not.
 
 ---
 

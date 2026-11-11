@@ -33,10 +33,19 @@ import type {RoleChecker} from '~/Security/RoleChecker';
  * The board's structure is settled while people write and never after: once notes are placed,
  * renaming or removing a column moves the ground under them. The facilitator alone decides.
  */
-const COLUMN_PHASES: RetroPhase[] = ['BRAINSTORM'];
+const COLUMN_PHASES: RetroPhase[] = ['LOBBY', 'BRAINSTORM'];
 
 /** The vote budget can move until the first vote is cast. */
-const MAX_VOTES_PHASES: RetroPhase[] = ['BRAINSTORM', 'SHARE'];
+const MAX_VOTES_PHASES: RetroPhase[] = ['LOBBY', 'BRAINSTORM', 'SHARE'];
+
+/**
+ * Arriving here wipes every vote, whatever the phase left: grouping reshapes the cards, and a
+ * detour through an opening phase must not bring old votes back into the sharing.
+ */
+const VOTE_WIPING_TARGETS: readonly string[] = ['BRAINSTORM', 'SHARE'];
+
+/** The phases a board without columns may enter: nothing in them needs a column yet. */
+const COLUMNLESS_TARGETS: readonly string[] = ['ICEBREAKER', 'REVIEW', 'BRAINSTORM'];
 
 const VOTING_PHASES: RetroPhase[] = ['VOTE', 'DISCUSS', 'ARCHIVED'];
 
@@ -196,6 +205,7 @@ export class RetroManager {
       createdBy: retro.createdBy,
       defaultTimerSeconds: retro.defaultTimerSeconds,
       id: retro.id,
+      facilitatorId: retro.facilitatorId,
       isFacilitator: retro.facilitatorId === userId,
       maxVotes: retro.maxVotes,
       myNotesRevealed: notes.some((note) => note.authorId === userId && Boolean(note.revealed)),
@@ -306,6 +316,17 @@ export class RetroManager {
       throw new ConflictHttpError('Reopen the retro before changing it');
     }
 
+    // LOBBY means "not started yet", which stops being true the moment it is left.
+    if (changes.phase === 'LOBBY' && retro.phase !== 'LOBBY') {
+      throw new ConflictHttpError('The retro has already started');
+    }
+
+    if (changes.phase === 'LOBBY') {
+      const {phase: _unchanged, ...rest} = changes;
+
+      changes = rest;
+    }
+
     // The budget is set before anyone spends it: changing it mid-vote would rewrite the rules
     // for the people who already voted. Judged on the phase the retro lands in, so going back
     // to the brainstorm (which wipes the votes) can set it, and entering the vote cannot.
@@ -316,9 +337,9 @@ export class RetroManager {
       throw new ConflictHttpError('Votes per person can only change before voting starts');
     }
 
-    // A board without columns has nowhere to put a note: it stays in the brainstorm until the
-    // facilitator has built at least one.
-    if (changes.phase && changes.phase !== 'BRAINSTORM') {
+    // A board without columns has nowhere to put a note: it stays in the brainstorm (or before)
+    // until the facilitator has built at least one.
+    if (changes.phase && !COLUMNLESS_TARGETS.includes(changes.phase)) {
       const columns = await this.columnRepository.countByRetroId(retroId);
 
       if (!columns) {
@@ -331,11 +352,7 @@ export class RetroManager {
 
     // Going back to grouping reshapes the cards, and a vote cast on a card that no longer
     // exists is lost anyway: the round starts over rather than leaving votes stranded.
-    if (
-      changes.phase &&
-      VOTING_PHASES.includes(retro.phase) &&
-      !VOTING_PHASES.includes(changes.phase)
-    ) {
+    if (changes.phase && VOTE_WIPING_TARGETS.includes(changes.phase)) {
       await this.voteRepository.removeAllByRetroId(retroId);
     }
 

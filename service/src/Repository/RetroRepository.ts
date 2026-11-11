@@ -102,7 +102,7 @@ export class RetroRepository {
         id: input.id,
         ...(input.maxVotes === undefined ? {} : {maxVotes: input.maxVotes}),
         orgId: input.orgId,
-        phase: 'BRAINSTORM',
+        phase: 'LOBBY',
         teamId: input.teamId,
         templateId: input.templateId ?? null,
         templateName: input.templateName ?? null,

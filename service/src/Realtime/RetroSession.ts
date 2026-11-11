@@ -5,7 +5,7 @@ import type {BoardRepository, RetroRow} from '~/Repository/BoardRepository';
 import {logger} from '~/logger';
 import type {RetroPhase} from '~/Db/schema';
 
-const CURSOR_HIDDEN_PHASES: RetroPhase[] = ['BRAINSTORM', 'VOTE'];
+const CURSOR_HIDDEN_PHASES: RetroPhase[] = ['LOBBY', 'BRAINSTORM', 'VOTE'];
 
 export type RollOutcome = 'absent' | 'already-rolled' | 'closed' | 'rolled';
 

@@ -23,7 +23,7 @@ describe('action stats', () => {
   const retro = async (title: string) => {
     await tick();
 
-    return (await harness.container.retroManager.create(owner, teamId, title)).id;
+    return (await harness.createStartedRetro(owner, teamId, title)).id;
   };
   const decide = async (retroId: string, ...texts: string[]) => {
     await harness.container.retroManager.updateRetro(owner, retroId, {phase: 'DISCUSS'});
@@ -130,7 +130,7 @@ describe('action stats', () => {
 
   it('refuses a retro of another team', async () => {
     const otherTeamId = await harness.createTeam(owner);
-    const elsewhere = (await harness.container.retroManager.create(owner, otherTeamId, 'X')).id;
+    const elsewhere = (await harness.createStartedRetro(owner, otherTeamId, 'X')).id;
 
     await expect(stats(elsewhere)).rejects.toMatchObject({status: 404});
   });

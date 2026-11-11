@@ -24,7 +24,7 @@ describe('multi-tenant isolation', () => {
 
     acmeTeamId = await harness.createTeam(acme);
 
-    const board = await harness.container.retroManager.create(acme, acmeTeamId, 'Acme internals');
+    const board = await harness.createStartedRetro(acme, acmeTeamId, 'Acme internals');
 
     acmeRetroId = board.id;
 

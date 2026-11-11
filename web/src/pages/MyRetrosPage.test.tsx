@@ -124,4 +124,24 @@ describe('MyRetrosPage new retro', () => {
 
     expect(screen.queryByRole('button', {name: 'New retro'})).toBeNull();
   });
+
+  it('labels a retro that has not started as the waiting room, among those in progress', async () => {
+    vi.mocked(fetchTeams).mockResolvedValue([]);
+    vi.mocked(fetchMyRetros).mockResolvedValue([
+      {id: 'r1', isFacilitator: true, phase: 'LOBBY', teamId: 't1', teamName: 'Core', title: 'Sprint 13'},
+    ] as Awaited<ReturnType<typeof fetchMyRetros>>);
+
+    render(
+      <QueryClientProvider client={new QueryClient({defaultOptions: {queries: {retry: false}}})}>
+        <ToastProvider>
+          <MemoryRouter>
+            <MyRetrosPage />
+          </MemoryRouter>
+        </ToastProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('Waiting room')).toBeTruthy();
+    expect(screen.queryByText('Archived')).toBeNull();
+  });
 });

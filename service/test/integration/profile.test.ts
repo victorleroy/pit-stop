@@ -97,7 +97,7 @@ describe('profile', () => {
   describe('name', () => {
     it('normalises the name, marks it as chosen, and shows it everywhere', async () => {
       const teamId = await harness.createTeam(admin, [alice]);
-      const board = await harness.container.retroManager.create(admin, teamId, 'Sprint 1');
+      const board = await harness.createStartedRetro(admin, teamId, 'Sprint 1');
 
       await harness.container.noteManager.create(alice, board.id, board.columns[0]!.id, 'hi');
 
@@ -410,8 +410,8 @@ describe('profile', () => {
     it('shows a new name and avatar on every live board of the organisation, and no other', async () => {
       const bob = await harness.createUser(orgId, 'Bob');
       const teamId = await harness.createTeam(admin, [alice, bob]);
-      const watched = await harness.container.retroManager.create(admin, teamId, 'Watched');
-      const other = await harness.container.retroManager.create(admin, teamId, 'Other');
+      const watched = await harness.createStartedRetro(admin, teamId, 'Watched');
+      const other = await harness.createStartedRetro(admin, teamId, 'Other');
 
       await harness.container.noteManager.create(alice, other.id, other.columns[0]!.id, 'hi');
 

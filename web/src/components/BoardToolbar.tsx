@@ -27,6 +27,7 @@ import type {Board, RetroPhase, TimerAction} from '@/api/types';
 import {SaveAsTemplateDialog} from '@/components/SaveAsTemplateDialog';
 import {TimerControls} from '@/components/TimerBar';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
+import {COLUMN_EDIT_PHASES, nextOpeningPhase} from '@/utils/phases';
 import {boardAuthors} from '@/utils/authorFilter';
 import {WASH_EDGE} from '@/theme/texture';
 
@@ -34,6 +35,7 @@ const PHASE_LABELS: Record<RetroPhase, string> = {
   ARCHIVED: 'Archived',
   BRAINSTORM: 'Brainstorm',
   DISCUSS: 'Discuss',
+  LOBBY: 'Waiting room',
   SHARE: 'Share',
   VOTE: 'Vote',
 };
@@ -42,6 +44,7 @@ const PHASE_HINTS: Record<RetroPhase, string> = {
   ARCHIVED: 'This retro is archived and read-only.',
   BRAINSTORM: 'Others see that you are writing, not what. Write freely.',
   DISCUSS: 'Going through the topics in vote order.',
+  LOBBY: 'The retro has not started yet. Say hello while everyone arrives.',
   SHARE: 'Share your notes to make them readable. You can hide them again. A note added now is shared at once.',
   VOTE: 'Everyone spends their votes on the topics to discuss.',
 };
@@ -49,7 +52,7 @@ const PHASE_HINTS: Record<RetroPhase, string> = {
 const WORKING_PHASES: RetroPhase[] = ['BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS'];
 
 // The budget is settled before anybody spends it: once voting starts it stays put.
-const VOTE_SETTING_PHASES: RetroPhase[] = ['BRAINSTORM', 'SHARE'];
+const VOTE_SETTING_PHASES: RetroPhase[] = ['LOBBY', 'BRAINSTORM', 'SHARE'];
 
 /**
  * One strip to drive the retro: where we are, how long is left, what happens next.
@@ -117,7 +120,9 @@ export const BoardToolbar = ({
   };
 
   const currentIndex = WORKING_PHASES.indexOf(board.phase);
-  const nextPhase = WORKING_PHASES[currentIndex + 1];
+  const isLobby = board.phase === 'LOBBY';
+  const nextPhase = isLobby ? undefined : WORKING_PHASES[currentIndex + 1];
+  const openingPhase = nextOpeningPhase(board);
   const isArchived = board.phase === 'ARCHIVED';
   const canReveal = ['SHARE', 'VOTE', 'DISCUSS'].includes(board.phase);
   const myNotes = board.columns.flatMap((column) =>
@@ -125,7 +130,7 @@ export const BoardToolbar = ({
   );
   const hasHiddenNotes = myNotes.some(({revealed}) => !revealed);
   // The board's structure is settled while people write, and by the facilitator alone.
-  const canAddColumn = board.isFacilitator && board.phase === 'BRAINSTORM';
+  const canAddColumn = board.isFacilitator && COLUMN_EDIT_PHASES.includes(board.phase);
   const hasColumns = board.columns.length > 0;
   const isSettingVotes = VOTE_SETTING_PHASES.includes(board.phase);
   const votesLeftLabel = `${board.myVotesLeft} vote${board.myVotesLeft === 1 ? '' : 's'} left`;
@@ -227,6 +232,16 @@ export const BoardToolbar = ({
     </Button>
   );
 
+  const startButton = (
+    <Button
+      disabled={isBusy}
+      onClick={() => onPhaseChange(openingPhase as RetroPhase)}
+      variant="contained"
+    >
+      {openingPhase === 'ICEBREAKER' ? 'Start with the icebreaker' : 'Start the retro'}
+    </Button>
+  );
+
   const facilitatorBlock = isArchived ? (
     board.isFacilitator ? (
       <Button disabled={isBusy} onClick={() => onPhaseChange('DISCUSS')} variant="contained">
@@ -267,6 +282,8 @@ export const BoardToolbar = ({
           </Select>
         </Stack>
       ) : null}
+
+      {isLobby ? startButton : null}
 
       {nextPhase ? (
         hasColumns ? (
@@ -498,7 +515,7 @@ export const BoardToolbar = ({
                 value={newColumn}
               />
               <Typography color="textSecondary" variant="textXs">
-                Columns can only be added or removed while people write.
+                Columns can only be added or removed before the retro starts or while people write.
               </Typography>
             </Stack>
           </DialogContent>

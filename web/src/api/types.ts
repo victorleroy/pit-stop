@@ -47,7 +47,7 @@ export interface TeamSummary {
   retroCount: number;
 }
 
-export type RetroPhase = 'BRAINSTORM' | 'SHARE' | 'VOTE' | 'DISCUSS' | 'ARCHIVED';
+export type RetroPhase = 'LOBBY' | 'BRAINSTORM' | 'SHARE' | 'VOTE' | 'DISCUSS' | 'ARCHIVED';
 
 export interface NoteAuthor {
   id: string;
@@ -169,6 +169,7 @@ export interface Board extends RetroSummary {
   columns: Column[];
   /** Suggested timer duration copied from the template, null when it set none. */
   defaultTimerSeconds: number | null;
+  facilitatorId: string;
   maxVotes: number;
   myNotesRevealed: boolean;
   myVotesLeft: number;

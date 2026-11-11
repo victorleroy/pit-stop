@@ -21,7 +21,7 @@ describe('anonymity', () => {
     other = await harness.createUser(orgId, 'Alice');
 
     const teamId = await harness.createTeam(author, [other]);
-    const board = await harness.container.retroManager.create(author, teamId, 'Sprint 42');
+    const board = await harness.createStartedRetro(author, teamId, 'Sprint 42');
 
     retroId = board.id;
     columnId = board.columns[0]!.id;
@@ -320,5 +320,21 @@ describe('anonymity', () => {
       await setPhase('ARCHIVED');
       expect((await harness.container.retroManager.getBoard(other, retroId)).voteProgress).toEqual({});
     });
+  });
+  it('shows nothing of a board still in its waiting room, and who facilitates to everyone', async () => {
+    const {teamId} = await harness.container.retroManager.getBoard(author, retroId);
+    const lobby = await harness.container.retroManager.create(author, teamId, 'Sprint 43');
+
+    for (const reader of [author, other]) {
+      const board = await harness.container.retroManager.getBoard(reader, lobby.id);
+
+      expect(board).toMatchObject({
+        facilitatorId: author.userId,
+        phase: 'LOBBY',
+        voteProgress: {},
+        votesRevealed: false,
+      });
+      expect(board.columns.flatMap((column) => column.cards)).toEqual([]);
+    }
   });
 });

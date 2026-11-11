@@ -1,6 +1,8 @@
 import CloseIcon from '@mui/icons-material/Close';
 import Divider from '@mui/material/Divider';
 import Drawer from '@mui/material/Drawer';
+import Tab from '@mui/material/Tab';
+import Tabs from '@mui/material/Tabs';
 import {useTheme} from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import {
@@ -39,7 +41,7 @@ import {
   updateNote,
   updateRetro,
 } from '@/api/retros';
-import {fetchTeamMembers} from '@/api/teams';
+import {fetchTeamMembers, fetchTeams} from '@/api/teams';
 import type {ActionStatus, Board, RetroPhase, TimerAction} from '@/api/types';
 import type {ConfirmRequest} from '@/components/ConfirmDialog';
 import {ConfirmDialog} from '@/components/ConfirmDialog';
@@ -47,6 +49,7 @@ import {ActionList} from '@/components/ActionList';
 import {BoardColumn} from '@/components/BoardColumn';
 import {CursorLayer} from '@/components/CursorLayer';
 import {EmptyState} from '@/components/EmptyState';
+import {LobbyView} from '@/components/lobby/LobbyView';
 import {useAuth} from '@/contexts/AuthContext';
 import {useToast} from '@/contexts/ToastContext';
 import {BoardToolbar} from '@/components/BoardToolbar';
@@ -60,6 +63,7 @@ import {readZoom, saveZoom, stepZoom} from '@/utils/boardZoom';
 import {boardAuthors} from '@/utils/authorFilter';
 import {moveColumn} from '@/utils/columnOrder';
 import {countOpenActions} from '@/utils/openActions';
+import {COLUMN_EDIT_PHASES, nextOpeningPhase} from '@/utils/phases';
 
 // Only used while the websocket is down.
 const FALLBACK_POLL_INTERVAL_MS = 5_000;
@@ -152,6 +156,7 @@ export const RetroPage = () => {
   // Per viewer: each screen picks its own, cursors stay fractions of the board whatever it is.
   const [zoom, setZoom] = useState(readZoom);
   const [authorFilter, setAuthorFilter] = useState<string[]>([]);
+  const [lobbyTab, setLobbyTab] = useState<'setup' | 'waiting'>('waiting');
   const [boardElement, setBoardElement] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => saveZoom(zoom), [zoom]);
@@ -213,6 +218,12 @@ export const RetroPage = () => {
     enabled: Boolean(board?.teamId),
     queryFn: () => fetchTeamMembers(board?.teamId as string),
     queryKey: ['teams', board?.teamId, 'members'],
+  });
+
+  const {data: teams} = useQuery({
+    enabled: board?.phase === 'LOBBY',
+    queryFn: fetchTeams,
+    queryKey: ['teams'],
   });
 
   const phaseMutation = useMutation({
@@ -409,7 +420,7 @@ export const RetroPage = () => {
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
 
-    if (!box.width || !box.height) return;
+    if (board.phase === 'LOBBY' || !box.width || !box.height) return;
 
     const x = (event.clientX - box.left) / box.width;
     const y = (event.clientY - box.top) / box.height;
@@ -419,6 +430,9 @@ export const RetroPage = () => {
     sendCursor(x, y);
   };
 
+  const isLobby = board.phase === 'LOBBY';
+  const isSettingUp = isLobby && board.isFacilitator && lobbyTab === 'setup';
+  const canEditColumns = COLUMN_EDIT_PHASES.includes(board.phase);
   const canWrite = board.phase === 'BRAINSTORM';
   const canModerate = ['BRAINSTORM', 'SHARE'].includes(board.phase);
 
@@ -484,7 +498,10 @@ export const RetroPage = () => {
         isBusy={isBusy}
         isTimerBusy={timerMutation.isPending}
         onAddColumn={(title) => addColumnMutation.mutate(title)}
-        onAddingColumnChange={setIsAddingColumn}
+        onAddingColumnChange={(isAdding) => {
+          setIsAddingColumn(isAdding);
+          if (isAdding) setLobbyTab('setup');
+        }}
         onAuthorFilterChange={setAuthorFilter}
         onHide={() => hideMutation.mutate()}
         onMaxVotesChange={(maxVotes) => maxVotesMutation.mutate(maxVotes)}
@@ -497,13 +514,35 @@ export const RetroPage = () => {
         receivedAt={dataUpdatedAt}
       />
 
-      {board.columns.length === 0 ? (
+      {isLobby && board.isFacilitator ? (
+        <Tabs onChange={(_event, value) => setLobbyTab(value)} value={lobbyTab}>
+          <Tab label="Waiting room" value="waiting" />
+          <Tab label="Board setup" value="setup" />
+        </Tabs>
+      ) : null}
+
+      {isLobby && !isSettingUp ? (
+        <LobbyView
+          facilitatorId={board.facilitatorId}
+          isConnected={isConnected}
+          isFacilitator={board.isFacilitator}
+          isStarting={phaseMutation.isPending}
+          members={members}
+          onStart={() => phaseMutation.mutate(nextOpeningPhase(board) as RetroPhase)}
+          participants={participants}
+          retroTitle={board.title}
+          startLabel={
+            nextOpeningPhase(board) === 'ICEBREAKER' ? 'Start with the icebreaker' : 'Start the retro'
+          }
+          teamName={teams?.find(({id}) => id === board.teamId)?.name}
+        />
+      ) : board.columns.length === 0 ? (
         // A blank board: nobody can write until there is somewhere to write.
         <Box sx={{border: '1px dashed', borderColor: 'divider', borderRadius: 2}}>
           {board.isFacilitator ? (
             <EmptyState
               action={
-                board.phase === 'BRAINSTORM'
+                canEditColumns
                   ? {label: 'Add a column', onClick: () => setIsAddingColumn(true)}
                   : undefined
               }
@@ -532,7 +571,7 @@ export const RetroPage = () => {
             ref={setBoardElement}
             sx={{position: 'relative', width: 'max-content'}}
           >
-            {!canWrite && !canVote && <CursorLayer cursors={cursors} />}
+            {!canWrite && !canVote && !isLobby && <CursorLayer cursors={cursors} />}
 
             <Stack direction="row" sx={{alignItems: 'flex-start', flexWrap: 'nowrap', gap: 2, zoom}}>
               {board.columns.map((column, index) => (
@@ -540,7 +579,7 @@ export const RetroPage = () => {
                   authorFilter={activeAuthorFilter}
                   canAddNote={['BRAINSTORM', 'SHARE'].includes(board.phase)}
                   canDecide={canDecide}
-                  canEditColumn={board.isFacilitator && board.phase === 'BRAINSTORM'}
+                  canEditColumn={board.isFacilitator && canEditColumns}
                   canGroup={canGroup}
                   canRemove={board.columns.length > 1}
                   canReveal={['SHARE', 'VOTE', 'DISCUSS'].includes(board.phase)}

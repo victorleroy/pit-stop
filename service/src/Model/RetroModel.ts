@@ -61,6 +61,8 @@ export interface BoardModel extends RetroSummaryModel {
   columns: ColumnModel[];
   /** Suggested timer duration, copied from the template; the facilitator still picks. */
   defaultTimerSeconds: number | null;
+  /** Not protected content: who facilitates already shows through the takeover rule. */
+  facilitatorId: string;
   maxVotes: number;
   /** Whether the caller has shared the text of their notes. */
   myNotesRevealed: boolean;

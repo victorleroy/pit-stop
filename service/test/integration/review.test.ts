@@ -33,14 +33,14 @@ describe('action review', () => {
     owner = await harness.createUser(orgId, 'Victor', 'admin');
     member = await harness.createUser(orgId, 'Alice');
     teamId = await harness.createTeam(owner, [member]);
-    previousRetroId = (await harness.container.retroManager.create(owner, teamId, 'Sprint 41')).id;
+    previousRetroId = (await harness.createStartedRetro(owner, teamId, 'Sprint 41')).id;
     await harness.container.retroManager.updateRetro(owner, previousRetroId, {
       phase: 'DISCUSS',
     });
     actionId = (await harness.container.actionManager.create(owner, previousRetroId, 'Fix the CI'))
       .id;
     await tick();
-    retroId = (await harness.container.retroManager.create(owner, teamId, 'Sprint 42')).id;
+    retroId = (await harness.createStartedRetro(owner, teamId, 'Sprint 42')).id;
   });
 
   afterEach(async () => harness.destroy());
@@ -209,7 +209,7 @@ describe('action review', () => {
     ).rejects.toMatchObject({status: 409});
 
     const otherTeamId = await harness.createTeam(owner);
-    const otherRetroId = (await harness.container.retroManager.create(owner, otherTeamId, 'X')).id;
+    const otherRetroId = (await harness.createStartedRetro(owner, otherTeamId, 'X')).id;
 
     await harness.container.retroManager.updateRetro(owner, otherRetroId, {
       phase: 'DISCUSS',
@@ -300,7 +300,7 @@ describe('action review', () => {
 
     it('re-broadcasts the other live retros of the team', async () => {
       const otherRetroId = (
-        await harness.container.retroManager.create(owner, teamId, 'Sprint 42 bis')
+        await harness.createStartedRetro(owner, teamId, 'Sprint 42 bis')
       ).id;
       const refresh = jest.spyOn(harness.container.hub, 'refreshRetros');
 

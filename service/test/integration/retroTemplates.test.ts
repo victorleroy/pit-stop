@@ -414,7 +414,7 @@ describe('retro templates', () => {
 
     beforeEach(async () => {
       retroId = (
-        await harness.container.retroManager.create(admin, teamId, 'Sprint 42', {
+        await harness.createStartedRetro(admin, teamId, 'Sprint 42', {
           maxVotes: 7,
           templateId: 'builtin:start-stop-continue',
         })

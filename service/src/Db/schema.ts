@@ -1,7 +1,14 @@
 import type {Generated} from 'kysely';
 
-export const RETRO_PHASES = ['BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS', 'ARCHIVED'] as const;
+/**
+ * Each phase joins this list with the feature that ships it, so the API refuses a phase that
+ * the database CHECK already accepts but nothing handles yet (ADR 0005).
+ */
+export const RETRO_PHASES = ['LOBBY', 'BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS', 'ARCHIVED'] as const;
 export type RetroPhase = (typeof RETRO_PHASES)[number];
+
+/** Before the board: a retro passes through them once, in this order, skipping the unused. */
+export const OPENING_PHASES = ['LOBBY', 'ICEBREAKER', 'REVIEW'] as const;
 
 export const ACTION_STATUSES = ['OPEN', 'DONE', 'DROPPED'] as const;
 export type ActionStatus = (typeof ACTION_STATUSES)[number];

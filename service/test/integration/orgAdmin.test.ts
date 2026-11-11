@@ -46,7 +46,7 @@ describe('organisation administration', () => {
   };
 
   const createRetroWithContent = async (notes: number) => {
-    const board = await harness.container.retroManager.create(teamAdmin, teamId, 'Sprint 42');
+    const board = await harness.createStartedRetro(teamAdmin, teamId, 'Sprint 42');
 
     for (let index = 0; index < notes; index += 1) {
       await harness.container.noteManager.create(
@@ -192,7 +192,7 @@ describe('organisation administration', () => {
 
       // A second team, 90 days old, whose only retro is 45 days old: idle.
       const idleTeam = await harness.createTeam(teamAdmin);
-      const idleRetro = await harness.container.retroManager.create(teamAdmin, idleTeam, 'Old');
+      const idleRetro = await harness.createStartedRetro(teamAdmin, idleTeam, 'Old');
       await backdate(idleRetro.id, 45);
       await backdateTeam(idleTeam, 90);
     });
