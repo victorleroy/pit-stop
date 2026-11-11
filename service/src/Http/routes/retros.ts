@@ -2,7 +2,7 @@ import {Hono} from 'hono';
 import type {Container} from '~/container';
 import type {RetroPhase} from '~/Db/schema';
 import {RenameClusterDto, GroupNoteDto} from '~/Dto/Retro/ClusterDto';
-import {CreateColumnDto, RenameColumnDto} from '~/Dto/Retro/ColumnDto';
+import {CreateColumnDto, RenameColumnDto, ReorderColumnsDto} from '~/Dto/Retro/ColumnDto';
 import {CreateRetroDto} from '~/Dto/Retro/CreateRetroDto';
 import {CreateNoteDto, UpdateNoteDto} from '~/Dto/Retro/NoteDto';
 import {UpdateRetroDto} from '~/Dto/Retro/UpdateRetroDto';
@@ -89,6 +89,16 @@ export const retroRoutes = (c: Container) => {
     );
 
     return context.json(board, 201);
+  });
+
+  app.put('/retros/:retroId/columns/order', async (context) => {
+    const retroId = context.req.param('retroId');
+    const body = await validateBody(context, ReorderColumnsDto);
+    const board = await c.hub.run(retroId, () =>
+      c.retroManager.reorderColumns(context.get('auth'), retroId, body.columnIds),
+    );
+
+    return context.json(board);
   });
 
   app.patch('/retros/:retroId/columns/:columnId', async (context) => {

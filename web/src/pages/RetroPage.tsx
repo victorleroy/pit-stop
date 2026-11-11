@@ -27,6 +27,7 @@ import {
   renameCluster,
   takeFacilitation,
   renameColumn,
+  reorderColumns,
   revealMyNotes,
   setNoteRevealed,
   ungroupNote,
@@ -49,6 +50,7 @@ import {SpeakingOrder} from '@/components/SpeakingOrder';
 import {useBoardSocket} from '@/hooks/useBoardSocket';
 import {SLIPSTREAM} from '@/ui/theme';
 import {readZoom, saveZoom, stepZoom} from '@/utils/boardZoom';
+import {moveColumn} from '@/utils/columnOrder';
 import {countOpenActions} from '@/utils/openActions';
 
 // Only used while the websocket is down.
@@ -243,6 +245,10 @@ export const RetroPage = () => {
       renameColumn(retroId as string, columnId, title),
     ...boardMutationOptions,
   });
+  const reorderColumnsMutation = useMutation({
+    mutationFn: (columnIds: string[]) => reorderColumns(retroId as string, columnIds),
+    ...boardMutationOptions,
+  });
   const removeColumnMutation = useMutation({
     mutationFn: (columnId: string) => removeColumn(retroId as string, columnId),
     ...boardMutationOptions,
@@ -323,6 +329,7 @@ export const RetroPage = () => {
     noteRevealMutation,
     addColumnMutation,
     renameColumnMutation,
+    reorderColumnsMutation,
     removeColumnMutation,
     createNoteMutation,
     updateNoteMutation,
@@ -507,9 +514,18 @@ export const RetroPage = () => {
                   index={index}
                   isBusy={isBusy}
                   isFacilitator={board.isFacilitator}
+                  isLast={index === board.columns.length - 1}
                   key={column.id}
                   onAddNote={(text) => createNoteMutation.mutate({columnId: column.id, text})}
                   onGroupNote={(noteId, targetId) => groupMutation.mutate({noteId, targetId})}
+                  onMoveColumn={
+                    board.columns.length > 1
+                      ? (delta) =>
+                          reorderColumnsMutation.mutate(
+                            moveColumn(board.columns.map(({id}) => id), index, delta),
+                          )
+                      : undefined
+                  }
                   onMoveNote={(noteId) => moveNoteMutation.mutate({columnId: column.id, noteId})}
                   onRemoveColumn={() =>
                     setConfirmRequest({

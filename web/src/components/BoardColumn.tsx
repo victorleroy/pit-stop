@@ -1,3 +1,5 @@
+import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import {
@@ -31,8 +33,10 @@ export const BoardColumn = ({
   index,
   isBusy,
   isFacilitator,
+  isLast,
   onAddNote,
   onGroupNote,
+  onMoveColumn,
   onMoveNote,
   onRemoveColumn,
   onRemoveNote,
@@ -60,8 +64,10 @@ export const BoardColumn = ({
   index: number;
   isBusy: boolean;
   isFacilitator: boolean;
+  isLast: boolean;
   onAddNote: (text: string) => void;
   onGroupNote: (noteId: string, targetId: string) => void;
+  onMoveColumn?: (delta: -1 | 1) => void;
   onMoveNote: (noteId: string) => void;
   onRemoveColumn: () => void;
   onRemoveNote: (noteId: string) => void;
@@ -155,6 +161,34 @@ export const BoardColumn = ({
 
           {canEditColumn && !isRenaming ? (
             <Stack direction="row" spacing={0.5}>
+              {onMoveColumn ? (
+                <>
+                  <Tooltip title="Move the column left">
+                    <span>
+                      <IconButton
+                        aria-label="Move column left"
+                        disabled={isBusy || index === 0}
+                        onClick={() => onMoveColumn(-1)}
+                        size="small"
+                      >
+                        <ChevronLeftRoundedIcon fontSize="inherit" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="Move the column right">
+                    <span>
+                      <IconButton
+                        aria-label="Move column right"
+                        disabled={isBusy || isLast}
+                        onClick={() => onMoveColumn(1)}
+                        size="small"
+                      >
+                        <ChevronRightRoundedIcon fontSize="inherit" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </>
+              ) : null}
               <Tooltip title="Rename the column">
                 {/* A disabled button fires no events: the span keeps the tooltip working. */}
                 <span>

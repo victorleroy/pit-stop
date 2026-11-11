@@ -48,6 +48,9 @@ export const addColumn = (retroId: string, title: string) =>
 export const renameColumn = (retroId: string, columnId: string, title: string) =>
   request<Board>(`/retros/${retroId}/columns/${columnId}`, {body: {title}, method: 'PATCH'});
 
+export const reorderColumns = (retroId: string, columnIds: string[]) =>
+  request<Board>(`/retros/${retroId}/columns/order`, {body: {columnIds}, method: 'PUT'});
+
 export const removeColumn = (retroId: string, columnId: string) =>
   request<Board>(`/retros/${retroId}/columns/${columnId}`, {method: 'DELETE'});
 

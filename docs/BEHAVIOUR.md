@@ -89,7 +89,7 @@ any other, including backwards.
 | Cast a vote | | | yes | | |
 | See **own** votes | | | yes | yes | yes |
 | See vote **totals** | | | | yes | yes |
-| Add, rename, delete a column | yes | | | | |
+| Add, rename, reorder, delete a column | yes | | | | |
 | Create an action | | | | yes | |
 | Edit an action | yes | yes | yes | yes | yes |
 
@@ -218,7 +218,11 @@ member.
 - **A column holding notes cannot be deleted** (`409`).
 - Inline editing (note text, column title, group title) is validated with Enter, or with the
   check button; Shift+Enter adds a newline in a note; Escape cancels; leaving the field saves.
-- `position` is assigned at creation from the current column count.
+- `position` is assigned at creation after the last column.
+- **Reorder**: the facilitator moves a column one step left or right with the arrows of its
+  header. The client sends the full new order (`PUT .../columns/order`, `{columnIds}`); it must
+  list every column of the board exactly once (`409` otherwise). Positions are rewritten
+  `0..n-1` and every participant receives the new board in real time.
 
 ### Notes
 
@@ -396,6 +400,7 @@ Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `429`.
 | PATCH | `/retros/{retroId}` | `200` `Board` |
 | DELETE | `/retros/{retroId}` | `204` |
 | POST | `/retros/{retroId}/columns` | `201` `Board` |
+| PUT | `/retros/{retroId}/columns/order` | `200` `Board` |
 | PATCH | `/retros/{retroId}/columns/{columnId}` | `200` `Board` |
 | DELETE | `/retros/{retroId}/columns/{columnId}` | `200` `Board` |
 | POST | `/retros/{retroId}/notes` | `201` `Board` |

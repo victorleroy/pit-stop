@@ -348,6 +348,31 @@ export class RetroManager {
     return this.getBoard(auth, retroId);
   }
 
+  /** The full new order, not a single move: two facilitators' tabs cannot interleave half-moves. */
+  public async reorderColumns(
+    auth: AuthContext,
+    retroId: string,
+    columnIds: string[],
+  ): Promise<BoardModel> {
+    const {retro} = await this.accessChecker.checkFacilitatorAccess(auth, retroId);
+    RetroAccessChecker.checkPhaseAllows(retro.phase, COLUMN_PHASES);
+
+    const {columns} = await this.boardRepository.loadBoard(retro);
+    const current = new Set(columns.map(({id}) => id));
+
+    if (
+      columnIds.length !== current.size ||
+      new Set(columnIds).size !== current.size ||
+      columnIds.some((id) => !current.has(id))
+    ) {
+      throw new ConflictHttpError('The order must list every column of the board once');
+    }
+
+    await this.columnRepository.reorder(retroId, columnIds);
+
+    return this.getBoard(auth, retroId);
+  }
+
   public async removeColumn(
     auth: AuthContext,
     retroId: string,

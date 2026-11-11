@@ -220,6 +220,69 @@ describe('phases', () => {
     ).rejects.toThrow('not allowed during the "SHARE" phase');
   });
 
+  describe('column order', () => {
+    const reorder = (auth: AuthContext, ids: string[]) =>
+      harness.container.retroManager.reorderColumns(auth, retroId, ids);
+
+    const currentIds = async () =>
+      (await harness.container.retroManager.getBoard(facilitator, retroId)).columns.map(
+        ({id}) => id,
+      );
+
+    it('lets the facilitator reorder the columns during the brainstorm, for everyone', async () => {
+      const [start, stop, keep] = await currentIds();
+
+      await reorder(facilitator, [keep!, start!, stop!]);
+
+      const seen = await harness.container.retroManager.getBoard(member, retroId);
+      expect(seen.columns.map(({title}) => title)).toEqual(['Continue', 'Start', 'Stop']);
+      expect(seen.columns.map(({order}) => order)).toEqual([0, 1, 2]);
+    });
+
+    it('keeps the new order for a column added afterwards', async () => {
+      const [start, stop, keep] = await currentIds();
+
+      await reorder(facilitator, [keep!, start!, stop!]);
+      const board = await harness.container.retroManager.addColumn(facilitator, retroId, 'Extra');
+
+      expect(board.columns.map(({title}) => title)).toEqual(['Continue', 'Start', 'Stop', 'Extra']);
+    });
+
+    it('is refused to a participant who is not the facilitator', async () => {
+      const ids = await currentIds();
+
+      await expect(reorder(member, [...ids].reverse())).rejects.toThrow();
+      expect(await currentIds()).toEqual(ids);
+    });
+
+    it('refuses an order that does not list every column exactly once', async () => {
+      const [start, stop, keep] = await currentIds();
+
+      await expect(reorder(facilitator, [keep!, start!])).rejects.toThrow('every column');
+      await expect(reorder(facilitator, [keep!, start!, start!])).rejects.toThrow('every column');
+      await expect(reorder(facilitator, [keep!, start!, 'nope'])).rejects.toThrow('every column');
+      expect(await currentIds()).toEqual([start, stop, keep]);
+    });
+
+    it.each(['SHARE', 'VOTE', 'DISCUSS'] as const)('is refused during %s', async (phase) => {
+      const ids = await currentIds();
+
+      await setPhase(phase);
+
+      await expect(reorder(facilitator, [...ids].reverse())).rejects.toThrow(
+        `not allowed during the "${phase}" phase`,
+      );
+    });
+
+    it('is refused on an archived retro', async () => {
+      const ids = await currentIds();
+
+      await setPhase('ARCHIVED');
+
+      await expect(reorder(facilitator, [...ids].reverse())).rejects.toThrow();
+    });
+  });
+
   it('refuses to drop a column that still holds notes', async () => {
     await addNote('a');
 

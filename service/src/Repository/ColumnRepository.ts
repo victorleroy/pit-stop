@@ -47,6 +47,19 @@ export class ColumnRepository {
       .execute();
   }
 
+  public async reorder(retroId: string, columnIds: string[]): Promise<void> {
+    await Promise.all(
+      columnIds.map((id, position) =>
+        this.db
+          .updateTable('columns')
+          .set({position})
+          .where('retroId', '=', retroId)
+          .where('id', '=', id)
+          .execute(),
+      ),
+    );
+  }
+
   public async remove(retroId: string, columnId: string): Promise<void> {
     await this.db
       .deleteFrom('columns')
