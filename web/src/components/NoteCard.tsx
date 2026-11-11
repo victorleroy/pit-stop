@@ -74,8 +74,8 @@ export const NoteCard = ({
           ? 'none'
           : 'linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 38%)',
         border: isWithheld ? '1px dashed #CFD7E3' : 0,
-        // Your own unshared note keeps its paper and gains an indigo edge.
-        borderLeft: isPending ? `3px solid ${SLIPSTREAM.indigo}` : undefined,
+        // Your own notes, shared or not, keep their paper and gain an indigo edge.
+        borderLeft: note.isMine ? `3px solid ${SLIPSTREAM.indigo}` : undefined,
         borderRadius: '10px',
         boxShadow: isWithheld ? 'none' : PAPER_SHADOW,
         color: isWithheld ? SLIPSTREAM.inkMuted : ink,
@@ -127,7 +127,13 @@ export const NoteCard = ({
           {/* In a narrow column the name gives way, never the state beside it. */}
           <Typography
             noWrap
-            sx={{color: 'inherit', flexGrow: 1, minWidth: 0, opacity: 0.65}}
+            sx={{
+              color: note.isMine ? SLIPSTREAM.indigo : 'inherit',
+              flexGrow: 1,
+              fontWeight: note.isMine ? 700 : undefined,
+              minWidth: 0,
+              opacity: note.isMine ? 1 : 0.65,
+            }}
             title={note.author.name}
             variant="textXs"
           >
