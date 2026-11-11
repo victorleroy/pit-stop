@@ -4,11 +4,11 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import NorthEastRoundedIcon from '@mui/icons-material/NorthEastRounded';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
-import {Avatar, Box, IconButton, Stack, Tooltip, Typography} from '@/ui';
+import {Box, IconButton, Stack, Tooltip, Typography} from '@/ui';
 import {useState} from 'react';
 import type {Note} from '@/api/types';
 import {InlineEditor} from '@/components/InlineEditor';
-import {initials} from '@/utils/initials';
+import {UserAvatar} from '@/components/UserAvatar';
 import {SLIPSTREAM} from '@/ui/theme';
 import {PAPER_SHADOW, PAPER_SHADOW_RAISED, noteColours} from '@/theme/texture';
 import {startNoteDrag} from '@/utils/noteDrag';
@@ -126,13 +126,12 @@ export const NoteCard = ({
         )}
 
         <Stack direction="row" spacing={1} sx={{alignItems: 'center', minHeight: 20}}>
-          <Avatar
+          <UserAvatar
+            {...note.author}
+            decorative
             size="small"
-            src={note.author.pictureUrl}
-            sx={{flexShrink: 0, fontSize: 10, height: 20, width: 20}}
-          >
-            {initials(note.author.name)}
-          </Avatar>
+            sx={{flexShrink: 0, fontSize: 10, fontWeight: 700, height: 20, width: 20}}
+          />
           {/* In a narrow column the name gives way, never the state beside it. */}
           <Typography
             noWrap

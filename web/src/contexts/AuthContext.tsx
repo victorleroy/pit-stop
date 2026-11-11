@@ -11,6 +11,8 @@ interface AuthContextValue {
   logout: () => void;
   /** Re-reads the current account, after something changed its memberships. */
   refresh: () => Promise<void>;
+  /** Swaps the current account in place: the cache stays, unlike `refresh`. */
+  replaceUser: (user: User) => void;
   user?: User;
 }
 
@@ -56,6 +58,8 @@ export const AuthProvider = ({children}: {children: ReactNode}) => {
     setUser(await fetchMe());
   }, [queryClient]);
 
+  const replaceUser = useCallback((next: User) => setUser(next), []);
+
   // An expired or revoked session signs out instead of leaving every page in error.
   useEffect(() => {
     const signOut = () => {
@@ -69,8 +73,8 @@ export const AuthProvider = ({children}: {children: ReactNode}) => {
   }, [queryClient]);
 
   const value = useMemo(
-    () => ({isLoading, login, logout, refresh, user}),
-    [isLoading, login, logout, refresh, user],
+    () => ({isLoading, login, logout, refresh, replaceUser, user}),
+    [isLoading, login, logout, refresh, replaceUser, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -39,7 +39,7 @@ export class SessionHub implements PresenceReader {
   private readonly queues = new Map<string, {pending: number; tail: Promise<unknown>}>();
 
   /** Set once the managers exist: the hub is built before them. Fails closed until then. */
-  private authorize: Authorizer = async () => false;
+  private authorize: Authorizer = async () => undefined;
 
   public constructor(
     private readonly db: Db,

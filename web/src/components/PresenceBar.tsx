@@ -1,7 +1,6 @@
-import {Avatar, Chip, Stack, Tooltip, Typography} from '@/ui';
+import {Box, Chip, Stack, Tooltip, Typography} from '@/ui';
 import type {Board, Participant} from '@/api/types';
-import {initials} from '@/utils/initials';
-import {userColour} from '@/utils/userColour';
+import {UserAvatar} from '@/components/UserAvatar';
 import {voteProgress} from '@/utils/voteProgress';
 
 export const PresenceBar = ({
@@ -34,21 +33,20 @@ export const PresenceBar = ({
                 : participant.name
             }
           >
-            <Avatar
-              size="small"
-              src={participant.pictureUrl}
-              sx={{
-                bgcolor: userColour(participant.userId),
-                color: '#FFFFFF',
-                ...(progress?.used(participant.userId) === board.maxVotes && {
-                  outline: '2px solid',
-                  outlineColor: 'success.main',
-                  outlineOffset: '1px',
-                }),
-              }}
-            >
-              {initials(participant.name)}
-            </Avatar>
+            {/* A span to hang the tooltip on: the avatar itself takes no ref. */}
+            <Box component="span" sx={{display: 'inline-flex'}}>
+              <UserAvatar
+                {...participant}
+                size="small"
+                sx={{
+                  ...(progress?.used(participant.userId) === board.maxVotes && {
+                    outline: '2px solid',
+                    outlineColor: 'success.main',
+                    outlineOffset: '1px',
+                  }),
+                }}
+              />
+            </Box>
           </Tooltip>
         ))}
       </Stack>

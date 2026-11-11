@@ -11,3 +11,6 @@ export const revokeInvitation = (invitationId: string) =>
 
 export const fetchOrgStats = (period: StatsPeriod) =>
   request<OrgStats>(`/org/stats?period=${period}`);
+
+export const removeMemberAvatar = (userId: string) =>
+  request<void>(`/org/members/${userId}/avatar`, {method: 'DELETE'});

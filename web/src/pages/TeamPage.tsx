@@ -7,7 +7,6 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import {
-  Avatar,
   Button,
   Card,
   Chip,
@@ -51,7 +50,7 @@ import {SURFACE} from '@/theme/texture';
  * so nobody has to reload to see it.
  */
 const LIST_POLL_INTERVAL_MS = 10_000;
-import {initials} from '@/utils/initials';
+import {UserAvatar} from '@/components/UserAvatar';
 import type {ConfirmRequest} from '@/components/ConfirmDialog';
 import {ConfirmDialog} from '@/components/ConfirmDialog';
 
@@ -449,9 +448,13 @@ export const TeamPage = () => {
                   {...props}
                   sx={{alignItems: 'center'}}
                 >
-                  <Avatar size="small" src={candidate.pictureUrl}>
-                    {initials(candidate.name)}
-                  </Avatar>
+                  <UserAvatar
+                    decorative
+                    id={candidate.id}
+                    name={candidate.name}
+                    pictureUrl={candidate.pictureUrl}
+                    size="small"
+                  />
                   <Stack sx={{minWidth: 0}}>
                     <Typography variant="textM">{candidate.name}</Typography>
                     <Typography color="textSecondary" noWrap variant="textXs">
@@ -639,15 +642,21 @@ export const TeamPage = () => {
                 transition: 'background-color 120ms ease',
               }}
             >
-              <Avatar size="small" src={member.pictureUrl}>
-                {initials(member.name)}
-              </Avatar>
+              <UserAvatar
+                decorative
+                name={member.name}
+                pictureUrl={member.pictureUrl}
+                size="small"
+                userId={member.userId}
+              />
 
               <Stack sx={{flexGrow: 1, minWidth: 0}}>
                 <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
-                  <Typography noWrap variant="textM">
-                    {member.name}
-                  </Typography>
+                  <Tooltip title={member.email}>
+                    <Typography noWrap variant="textM">
+                      {member.name}
+                    </Typography>
+                  </Tooltip>
                   {member.isAdmin ? (
                     <Tag color="primary" size="small">
                       Admin

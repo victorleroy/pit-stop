@@ -32,7 +32,10 @@ organisation.
 organizations  (id, name, status, created_at)
 org_domains    (org_id, domain, verified_at)
 org_members    (org_id, user_id, role, created_at)
-users          (id, email, name, picture_url, email_verified_at, created_at)
+users          (id, email, name, picture_url, email_verified_at, created_at,
+                name_source DEFAULT 'user', sso_name NULL, sso_picture_url NULL,
+                avatar_source DEFAULT 'auto')
+user_avatars   (id, user_id UNIQUE, mime, bytes, size, created_at)
 credentials    (user_id, kind, provider_id, password_hash, created_at)
 sessions       (token_hash, user_id, expires_at, created_at)
 invitations    (id, org_id, email, role, token_hash, invited_by,
@@ -56,7 +59,15 @@ is never something that has to be cleaned up after a crash.
 
 Enumerations: `phase in {BRAINSTORM, SHARE, VOTE, DISCUSS, ARCHIVED}`,
 `action.status in {OPEN, DONE, DROPPED}`, `timer.state in {IDLE, RUNNING, PAUSED}`,
-`organization.status in {demo, active, suspended}`, `org_members.role in {member, admin}`.
+`organization.status in {demo, active, suspended}`, `org_members.role in {member, admin}`,
+`users.name_source in {sso, user}`, `users.avatar_source in {auto, upload, initials}`
+(`preset` is reserved by the constraint, nothing writes it), `user_avatars.mime in
+{image/webp, image/jpeg}`.
+
+`users.name` and `users.picture_url` are the values displayed, recomputed in the row on every
+write; every join keeps reading them. `name_source` and `avatar_source` say where they come
+from, `sso_name` and `sso_picture_url` hold what the identity provider said last. An uploaded
+avatar lives in `user_avatars`, a table of its own so that reading a user never loads the bytes.
 `demo` only ever carries quotas in the `cloud` edition; see section 12.
 
 ### Nothing is denormalized — on purpose
@@ -118,7 +129,7 @@ This is the product's central promise. It lives in **one pure function**,
 |---|---|---|
 | **Note text** | Its author, always | `text` is returned when `revealed === true` **or** the caller is the author |
 | | Everybody else | `text` is returned **empty** (`''`) while `revealed === false` |
-| **Note author** | Everybody, always | `author.id` and `author.name` are always present, and `author.pictureUrl` when the user has one |
+| **Note author** | Everybody, always | `author.id` and `author.name` are always present, and `author.pictureUrl` when the user has one. Both are today's values, read by join: a new name or avatar shows on every note, archived retros included |
 | **Vote totals** | Everybody | Only in `DISCUSS` and `ARCHIVED` |
 | **Own votes** | Self | Only in `VOTE`, `DISCUSS`, `ARCHIVED`; otherwise `myVotes: 0` |
 | **Votes spent per person** | Everybody | Only in `VOTE`: `voteProgress[userId]` = how many votes they cast, never on which card; `{}` in every other phase |
@@ -151,6 +162,11 @@ Four levels, on three different scopes.
 | **Team admin** | `memberships.is_admin`, or being an org admin | Create and delete retros, rename the team, promote team admins; **add and remove members, by their own `is_admin` only** |
 | **Org admin** | `org_members.role = 'admin'` | Everything a team admin can do, on **every** team; manage org admins; list every team and its roster; **delete a team**; read organisation stats. **Cannot read a board of a team they have not joined, and cannot add themselves to one**: what they see of a team's content is counters and dates only, never a note's text, a title, an author or anybody's votes |
 | **Facilitator** | Retro creator, then transferable | Change phase, title, timer, votes per person, columns; moderate notes |
+
+**A profile is its owner's alone.** Everybody edits their own name and avatar, nobody else's:
+no route writes another user's profile. The one exception is moderation: an org admin may
+**remove** the uploaded avatar of a member of their organisation (`404` for anybody else),
+which falls back to the automatic avatar. They can neither set an avatar nor rename anybody.
 
 **Roles are read from the store on every call, never carried in the token.** A demotion takes
 effect immediately, not in twelve hours. Sessions are opaque rows, so revocation is immediate.
@@ -320,6 +336,36 @@ otherwise), and outside DISCUSS both calls answer `403` (`409` on an archived re
 dice, and they are cleared when the retro leaves DISCUSS or the session ends. They reveal
 nothing presence does not already show.
 
+### Profile
+
+- **Name.** One field. `PATCH /me {name}` trims it and collapses inner whitespace, then checks
+  1 to 80 characters; control and format characters (`\p{Cc}`, `\p{Cf}`) are refused, except
+  the zero-width joiner emoji sequences need. The name becomes the user's own:
+  `name_source = 'user'`. Two people may share a name; member lists show the email on hover.
+- **Avatar.** `auto` shows the identity provider's photo when there is one, else initials;
+  `upload` shows the uploaded image; `initials` shows initials even when a photo exists. The
+  choice wins over the provider, which wins over initials. `picture_url` is the provider's
+  photo, `/api/avatars/{id}` or nothing, accordingly. Initials always sit on the person's
+  colour, and remain the fallback when an image fails to load.
+- **Upload.** `PUT /me/avatar` with the image as the body. The browser crops it square and
+  re-encodes it to 256x256 WebP (JPEG where WebP cannot be produced), which also drops every
+  metadata. The service accepts at most 256 KB (`413`), WebP or JPEG only, recognised from the
+  bytes and matching the `Content-Type` (`415`), 10 uploads per hour per user (`429`). It
+  never decodes the image. A new upload replaces the previous one under a new id; leaving
+  `upload` deletes the image in the same transaction. `DELETE /me/avatar` returns to `auto`.
+- **Google sign-in** records the name (cleaned, cut to 80 characters) and the photo it
+  carries on every sign-in. While `name_source = 'sso'` the name follows; while the avatar is
+  `auto` the picture follows, for existing accounts too. A name or an avatar the user chose is
+  never overwritten by a sign-in. The response of `/auth/google` already carries the new
+  values. An account created by Google starts with `name_source = 'sso'`; one created by
+  invitation, registration, setup or dev login with `'user'`. A password sign-in touches no
+  `sso_*` value.
+- **Use my Google name.** `PATCH /me {useSsoName: true}` hands the name back to Google;
+  `409` while no Google name is known, `400` together with `name`.
+- **Live boards follow.** After any profile write, a Google sign-in that changed the name or
+  picture included, every live retro of the user's organisation is broadcast again from its
+  own queue: notes, assignees and presence show the new values without reconnecting.
+
 ### Teams
 
 A team is the confidentiality boundary around a board. It is private to its members.
@@ -368,8 +414,8 @@ Every route below lives under `/api`, in development (through the Vite proxy) as
 production (served by the service next to the SPA). `/health` and `/ws` stay at the root.
 
 Base: `Authorization: Bearer <token>` on everything except the public routes: `/config`,
-`/setup` and `/auth/*`.
-Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `429`.
+`/setup`, `/auth/*` and `/avatars/*`.
+Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `413`, `415`, `429`.
 
 | Method | Route | Response |
 |---|---|---|
@@ -384,7 +430,11 @@ Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `429`.
 | PUT | `/auth/password-reset` | `204` |
 | POST | `/auth/logout` | `204` |
 | POST | `/auth/dev-login` | `200` `{token, user}` — **local only**, `403` otherwise |
-| GET | `/me` | `200` `User` |
+| GET | `/me` | `200` `Profile` |
+| PATCH | `/me` | `200` `Profile` — `{name?, useSsoName?: true, avatar?: {source: 'auto'\|'initials'}}`; `400` empty or invalid; `409` no Google name known |
+| PUT | `/me/avatar` | `200` `Profile` — raw WebP or JPEG body; `413` over 256 KB, `415` other type, `429` |
+| DELETE | `/me/avatar` | `200` `Profile` — back to `auto` |
+| GET | `/avatars/{avatarId}` | `200` image, **public**, `nosniff`, `default-src 'none'; sandbox`, cached immutably; `404` unknown |
 | GET | `/teams` | `200` `Team[]` sorted by name |
 | POST | `/teams` | `201` `Team` |
 | PATCH | `/teams/{teamId}` | `200` `Team` — team admin or org admin renames `{name}` |
@@ -425,6 +475,7 @@ Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `429`.
 | PATCH | `/teams/{teamId}/actions/{actionId}` | `200` `Action` |
 | GET | `/org/admins` | `200` `User[]` |
 | GET | `/org/members` | `200` `OrgMember[]` sorted by name |
+| DELETE | `/org/members/{userId}/avatar` | `204` — org admin removes an uploaded avatar; `403`; `404` outside the organisation |
 | PUT | `/org/admins/{userId}` | `204` |
 | GET | `/org/stats?period=30d\|90d\|all` | `200` `OrgStats` — org admin only, `400` on another period |
 | GET | `/org/invitations` | `200` `Invitation[]` — org admin |
@@ -442,6 +493,8 @@ caller.** The client never has to recompose state. Keep it.
 ```ts
 User            { id, email, name, orgId, orgName?, orgStatus?, pictureUrl?,
                   isOrgAdmin?, isPlatformAdmin? }
+Profile         User & { nameSource: 'sso'|'user', avatarSource: 'auto'|'upload'|'initials',
+                  ssoPictureUrl?, hasSsoName }
 Team            { id, name, createdBy, createdAt?, isAdmin, isMember, memberCount }
 TeamMember      { userId, email, name, pictureUrl?, isAdmin, joinedAt? }
 OrgStats        { period, people: {total, admins}, teams: {total, idle},
@@ -491,10 +544,14 @@ Inbound actions: `subscribe`, `cursor`.
   move costs no write and no read.
 - Cursors are **not relayed during BRAINSTORM and VOTE** (they would show where others write
   or vote); the client does not draw them either. Every other phase relays them.
-- Each participant has one **stable colour** derived from their `userId` (hash into a fixed 12-colour palette, readable in light and dark theme). The cursor, its name label and the presence avatar fallback share it; it is computed client-side, nothing is stored.
+- Each participant has one **stable colour** derived from their `userId` (hash into a fixed 12-colour palette, readable in light and dark theme). The cursor, its name label and the initials of every avatar (`UserAvatar`: presence, notes, member lists, header) share it; it is computed client-side, nothing is stored.
 - Cursor coordinates are **board-relative**, as a fraction of the box the columns take, zoom
   included: every screen and every zoom level differs, the same fraction lands on the same note.
 - `presence.updated` deduplicates by `userId` (several tabs are one person) and sorts by name.
+- Before every board it sends, the session re-resolves each connection, and takes its name
+  and avatar from that answer: when one changed, `presence.updated` follows the board. A
+  profile write broadcasts every live retro of the organisation again (section 6, Profile);
+  cursors take the new name on their next move.
 - On subscribe: access check, then `broadcastBoard` **and** `broadcastPresence`, then the
   current dice to the new connection when somebody rolled.
 - Access refused on subscribe sends `{type: 'error'}` without closing the socket.
@@ -556,6 +613,7 @@ Inbound actions: `subscribe`, `cursor`.
 | `/reset-password/:token` | ResetPasswordPage | public |
 | `/verify-email/:token` | VerifyEmailPage | public |
 | `/teams` | TeamsPage | authenticated |
+| `/profile` | ProfilePage | authenticated: own name and avatar; reached from the header avatar |
 | `/retros` | MyRetrosPage | authenticated |
 | `/admin` | AdminPage | authenticated, org admin content: people, invitations, teams |
 | `/paddock` | PaddockPage | authenticated, platform admin only |
@@ -579,6 +637,8 @@ to the login screen.
 | Note text | required, <= 500 |
 | Cluster title | required, <= 60 |
 | Team name | required, <= 60, trimmed on rename |
+| Display name | 1 to 80 after trimming and collapsing spaces; no control or format character but the zero-width joiner |
+| Uploaded avatar | <= 256 KB, WebP or JPEG by its bytes and its `Content-Type` |
 | Action text | required, <= 300 |
 | `vote.delta` | integer, exactly `1` or `-1` |
 | `timer.seconds` | integer, 5 to 3600 |
@@ -599,6 +659,11 @@ to the login screen.
   only the `OPEN` ones from earlier retros.
 - A withheld note can be **moved** by the facilitator, but not rewritten.
 - A retro belonging to another organization returns `404`, never `403`.
+- A name or an avatar the user chose is never overwritten by a Google sign-in.
+- An account invited, then signed in with Google, gets its Google photo and keeps the name
+  given at the invitation.
+- An unconfirmed account taken over by Google takes the Google name: the name typed by
+  whoever registered the address does not survive.
 
 ---
 

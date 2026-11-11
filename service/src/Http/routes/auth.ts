@@ -130,5 +130,21 @@ export const authRoutes = (c: Container) => {
     }),
   );
 
+  /**
+   * Public: an <img> carries no bearer token (BEHAVIOUR.md section 9). The id is random and new
+   * on every upload, known only to the organisation through its models (SECURITY.md).
+   */
+  app.get('/avatars/:avatarId', async (context) => {
+    const avatar = await c.profileManager.findAvatar(context.req.param('avatarId'));
+
+    return context.body(new Uint8Array(avatar.bytes), 200, {
+      'Cache-Control': 'private, max-age=31536000, immutable',
+      'Content-Disposition': 'inline',
+      'Content-Security-Policy': "default-src 'none'; sandbox",
+      'Content-Type': avatar.mime,
+      'X-Content-Type-Options': 'nosniff',
+    });
+  });
+
   return app;
 };

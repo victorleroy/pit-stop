@@ -18,8 +18,14 @@ export interface Connection {
   userId: string;
 }
 
-/** Whether this session token still opens this retro, resolved from the store every time. */
-export type Authorizer = (token: string, retroId: string) => Promise<boolean>;
+/**
+ * Whether this session token still opens this retro, resolved from the store every time. The
+ * identity comes back with the answer, so a renamed participant shows under the new name.
+ */
+export type Authorizer = (
+  token: string,
+  retroId: string,
+) => Promise<{name: string; pictureUrl?: string} | undefined>;
 
 /**
  * The authoritative actor for one retro (ADR-001 D1).
@@ -99,9 +105,12 @@ export class RetroSession {
       recipients.map((connection) => this.authorize(connection.token, this.retroId)),
     );
     const evicted = new Set<string>();
+    let renamed = false;
 
     recipients.forEach((connection, index) => {
-      if (!allowed[index]) {
+      const identity = allowed[index];
+
+      if (!identity) {
         // Removed from the team, signed out, or suspended: the next board is not theirs.
         this.send(connection, {message: 'Retro not accessible', type: 'error'});
         this.connections.delete(connection);
@@ -110,13 +119,25 @@ export class RetroSession {
         return;
       }
 
+      if (connection.name !== identity.name || connection.pictureUrl !== identity.pictureUrl) {
+        connection.name = identity.name;
+
+        if (identity.pictureUrl) {
+          connection.pictureUrl = identity.pictureUrl;
+        } else {
+          delete connection.pictureUrl;
+        }
+
+        renamed = true;
+      }
+
       this.send(connection, {
         board: RetroManager.projectBoard(data, connection.userId),
         type: 'board.updated',
       });
     });
 
-    if (evicted.size) {
+    if (evicted.size || renamed) {
       this.broadcastPresence();
 
       const dropped = [...evicted].filter((userId) => !this.isWatching(userId) && this.dice.delete(userId));

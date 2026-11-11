@@ -1,6 +1,5 @@
 import {
   AppBar,
-  Avatar,
   Box,
   Button,
   Container,
@@ -10,9 +9,9 @@ import {
 } from '@/ui';
 import {Link, NavLink, Outlet, useMatch} from 'react-router-dom';
 import {Logo} from '@/components/Logo';
+import {UserAvatar} from '@/components/UserAvatar';
 import {useAuth} from '@/contexts/AuthContext';
 import {BOARD_BACKGROUND} from '@/theme/texture';
-import {initials} from '@/utils/initials';
 
 const NAV_ITEMS = [
   {label: 'My retros', to: '/retros'},
@@ -97,11 +96,27 @@ export const AppLayout = () => {
               </NavLink>
             ) : null}
 
-            <Avatar src={user?.pictureUrl}>{initials(user?.name)}</Avatar>
-            {/* On a phone the avatar alone says who is signed in. */}
-            <Typography sx={{display: {xs: 'none', md: 'block'}}} variant="textS">
-              {user?.name}
-            </Typography>
+            {/* On a phone the avatar alone says who is signed in, and is the whole target. */}
+            <Stack
+              aria-label="My profile"
+              component={Link}
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: 'center',
+                color: 'inherit',
+                justifyContent: 'center',
+                minHeight: 44,
+                minWidth: 44,
+                textDecoration: 'none',
+              }}
+              to="/profile"
+            >
+              {user ? <UserAvatar {...user} decorative /> : null}
+              <Typography sx={{display: {xs: 'none', md: 'block'}}} variant="textS">
+                {user?.name}
+              </Typography>
+            </Stack>
             <Button onClick={logout} size="small" variant="text">
               Sign out
             </Button>

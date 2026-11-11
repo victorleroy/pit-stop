@@ -1,4 +1,4 @@
-import {request} from '@/api/client';
+import {request, requestBlob} from '@/api/client';
 import type {AuthResponse, PublicConfig, User} from '@/api/types';
 
 export const fetchPublicConfig = () => request<PublicConfig>('/config');
@@ -51,3 +51,13 @@ export const confirmPasswordReset = (token: string, password: string) =>
   request<void>('/auth/password-reset', {body: {password, token}, method: 'PUT'});
 
 export const fetchMe = () => request<User>('/me');
+
+export const updateProfile = (changes: {
+  avatar?: {source: 'auto' | 'initials'};
+  name?: string;
+  useSsoName?: true;
+}) => request<User>('/me', {body: changes, method: 'PATCH'});
+
+export const uploadAvatar = (image: Blob) => requestBlob<User>('/me/avatar', image);
+
+export const deleteAvatar = () => request<User>('/me/avatar', {method: 'DELETE'});

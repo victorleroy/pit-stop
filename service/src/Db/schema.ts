@@ -14,12 +14,35 @@ export type OrgRole = (typeof ORG_ROLES)[number];
 
 export type CredentialKind = 'google' | 'password';
 
+export const NAME_SOURCES = ['sso', 'user'] as const;
+export type NameSource = (typeof NAME_SOURCES)[number];
+
+/** `preset` is reserved by the CHECK constraint for illustrated avatars; nothing writes it yet. */
+export const AVATAR_SOURCES = ['auto', 'upload', 'initials', 'preset'] as const;
+export type AvatarSource = (typeof AVATAR_SOURCES)[number];
+
+export const AVATAR_MIMES = ['image/webp', 'image/jpeg'] as const;
+export type AvatarMime = (typeof AVATAR_MIMES)[number];
+
 interface UsersTable {
   id: string;
   email: string;
   name: string;
   pictureUrl: string | null;
   emailVerifiedAt: string | null;
+  createdAt: string;
+  nameSource: Generated<NameSource>;
+  ssoName: string | null;
+  ssoPictureUrl: string | null;
+  avatarSource: Generated<AvatarSource>;
+}
+
+interface UserAvatarsTable {
+  id: string;
+  userId: string;
+  mime: AvatarMime;
+  bytes: Buffer;
+  size: number;
   createdAt: string;
 }
 
@@ -162,6 +185,7 @@ interface ActionsTable {
 
 export interface Database {
   users: UsersTable;
+  userAvatars: UserAvatarsTable;
   credentials: CredentialsTable;
   sessions: SessionsTable;
   organizations: OrganizationsTable;

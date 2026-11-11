@@ -12,6 +12,7 @@ import {InvitationManager} from '~/Manager/InvitationManager';
 import {NoteManager} from '~/Manager/NoteManager';
 import {PasswordResetManager} from '~/Manager/PasswordResetManager';
 import {PlatformManager} from '~/Manager/PlatformManager';
+import {ProfileManager} from '~/Manager/ProfileManager';
 import {RetroManager} from '~/Manager/RetroManager';
 import {SetupManager} from '~/Manager/SetupManager';
 import {TeamManager} from '~/Manager/TeamManager';
@@ -46,6 +47,7 @@ export interface Container {
   noteManager: NoteManager;
   passwordResetManager: PasswordResetManager;
   platformManager: PlatformManager;
+  profileManager: ProfileManager;
   retroManager: RetroManager;
   setupManager: SetupManager;
   teamManager: TeamManager;
@@ -93,6 +95,8 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
     sessionRepository,
   );
 
+  const profileManager = new ProfileManager(db, userRepository, orgRepository, roleChecker, hub);
+
   const authManager = new AuthManager(
     db,
     new GoogleClient(config.googleClientId),
@@ -101,20 +105,21 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
     sessionRepository,
     invitationRepository,
     mailer,
+    profileManager,
   );
 
   hub.setAuthorizer(async (token, retroId) => {
     const auth = await authManager.resolveSession(token);
 
     if (!auth) {
-      return false;
+      return undefined;
     }
 
     try {
       await accessChecker.checkRetroAccess(auth, retroId);
-      return true;
+      return {name: auth.name, ...(auth.pictureUrl ? {pictureUrl: auth.pictureUrl} : {})};
     } catch {
-      return false;
+      return undefined;
     }
   });
 
@@ -156,6 +161,7 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
     ),
     passwordResetManager: new PasswordResetManager(db, userRepository, sessionRepository, mailer),
     platformManager: new PlatformManager(db, orgRepository, sessionRepository, invitationManager),
+    profileManager,
     retroManager,
     setupManager: new SetupManager(db, orgRepository, userRepository, authManager),
     teamManager: new TeamManager(teamRepository, membershipRepository, roleChecker),

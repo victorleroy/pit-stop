@@ -2,6 +2,21 @@
 
 All notable changes are recorded here. Versions follow [semantic versioning](https://semver.org).
 
+## Unreleased
+
+### Added
+
+- Profile: edit your display name and avatar from the header. Upload a photo (cropped in the
+  browser), use your Google photo, or initials. Choices survive the next Google sign-in, and
+  open retros show them at once.
+- Organisation administrators can remove an uploaded avatar.
+
+### Fixed
+
+- Google photos now appear, and follow Google, for accounts created by invitation or
+  registration and for accounts created before this version.
+- An unconfirmed account taken over through Google sign-in takes the Google name.
+
 ## 0.2.0 — 2026-10-29
 
 ### Added

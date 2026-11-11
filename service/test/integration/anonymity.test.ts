@@ -64,6 +64,19 @@ describe('anonymity', () => {
     }
   });
 
+  it('gives a hidden note the author new avatar, never its text', async () => {
+    await harness.container.profileManager.uploadAvatar(
+      author,
+      'image/jpeg',
+      Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0]),
+    );
+
+    const note = await noteFor(other);
+
+    expect(note.text).toBe('');
+    expect(note.author.pictureUrl).toMatch(/^\/api\/avatars\/av_/);
+  });
+
   it('omits the author picture when the user has none', async () => {
     expect('pictureUrl' in (await noteFor(other)).author).toBe(false);
   });

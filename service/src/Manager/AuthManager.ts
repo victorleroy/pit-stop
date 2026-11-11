@@ -12,7 +12,8 @@ import {
 import type {GoogleClient} from '~/Client/GoogleClient';
 import type {Mailer} from '~/Mail/Mailer';
 import {emailVerificationEmail} from '~/Mail/templates';
-import type {AuthResponseModel, UserModel} from '~/Model/UserModel';
+import type {ProfileManager} from '~/Manager/ProfileManager';
+import type {AuthResponseModel, ProfileModel} from '~/Model/UserModel';
 import type {InvitationRepository} from '~/Repository/InvitationRepository';
 import type {OrgRepository} from '~/Repository/OrgRepository';
 import type {SessionRepository} from '~/Repository/SessionRepository';
@@ -49,6 +50,7 @@ export class AuthManager {
     private readonly sessionRepository: SessionRepository,
     private readonly invitationRepository: InvitationRepository,
     private readonly mailer: Mailer,
+    private readonly profileManager: ProfileManager,
   ) {}
 
   public async loginWithGoogle(idToken: string): Promise<AuthResponseModel> {
@@ -58,6 +60,9 @@ export class AuthManager {
     let user =
       (await this.userRepository.findOneByProvider('google', profile.sub)) ??
       (await this.userRepository.findOneByEmail(profile.email));
+    // A new account takes Google's name; so does one registered by somebody who never proved
+    // the address: the name they typed must not survive the owner's sign-in.
+    let claimName = false;
 
     if (!user) {
       user = await this.registerByVerifiedDomain({
@@ -65,11 +70,13 @@ export class AuthManager {
         name: profile.name,
         ...(profile.pictureUrl ? {pictureUrl: profile.pictureUrl} : {}),
       });
+      claimName = true;
     } else if (!user.emailVerifiedAt) {
       // Somebody registered this address without proving it: Google now proves it, so the
       // password they chose and any session they hold go, before the account is linked.
       await this.takeOverUnverified(user.id);
       await this.joinByVerifiedDomain(user);
+      claimName = true;
     }
 
     await this.userRepository.upsertCredential({
@@ -79,7 +86,16 @@ export class AuthManager {
     });
     await this.userRepository.markEmailVerified(user.id);
 
-    return this.issueSession(user);
+    const changed = await this.profileManager.applySsoProfile(user, profile, claimName);
+    // Re-read after the refresh, so the response already carries the new name and picture.
+    const refreshed = await this.findUser(user.id);
+    const response = await this.issueSession(refreshed);
+
+    if (changed) {
+      await this.profileManager.refreshLiveRetrosOf(response.user.orgId);
+    }
+
+    return response;
   }
 
   /**
@@ -283,7 +299,7 @@ export class AuthManager {
     await this.sessionRepository.revoke(TokenService.hash(token));
   }
 
-  public async getMe(auth: AuthContext): Promise<UserModel> {
+  public async getMe(auth: AuthContext): Promise<ProfileModel> {
     const user = await this.userRepository.findOneById(auth.userId);
 
     if (!user) {
@@ -304,6 +320,10 @@ export class AuthManager {
       orgId: auth.orgId,
       ...(org ? {orgName: org.name, orgStatus: org.status} : {}),
       ...(user.pictureUrl ? {pictureUrl: user.pictureUrl} : {}),
+      avatarSource: user.avatarSource,
+      hasSsoName: Boolean(user.ssoName),
+      nameSource: user.nameSource,
+      ...(user.ssoPictureUrl ? {ssoPictureUrl: user.ssoPictureUrl} : {}),
     };
   }
 

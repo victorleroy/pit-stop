@@ -1,16 +1,21 @@
 export type OrgStatus = 'demo' | 'active' | 'suspended';
 
 export interface User {
+  /** Profile fields below come with `GET /me` and the profile writes, not with a login. */
+  avatarSource?: 'auto' | 'upload' | 'initials';
   email: string;
+  hasSsoName?: boolean;
   id: string;
   isOrgAdmin?: boolean;
   /** Derived from configuration on the service, never stored: paddock access. */
   isPlatformAdmin?: boolean;
   name: string;
+  nameSource?: 'sso' | 'user';
   orgId: string;
   orgName?: string;
   orgStatus?: OrgStatus;
   pictureUrl?: string;
+  ssoPictureUrl?: string;
 }
 
 export interface AuthResponse {

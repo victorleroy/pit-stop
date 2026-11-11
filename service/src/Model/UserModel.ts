@@ -1,4 +1,4 @@
-import type {OrgRole, OrgStatus} from '~/Db/schema';
+import type {AvatarSource, NameSource, OrgRole, OrgStatus} from '~/Db/schema';
 
 export interface UserModel {
   email: string;
@@ -11,6 +11,16 @@ export interface UserModel {
   orgName?: string;
   orgStatus?: OrgStatus;
   pictureUrl?: string;
+}
+
+/** What the profile page needs on top: where the name and the picture come from. */
+export interface ProfileModel extends UserModel {
+  avatarSource: AvatarSource;
+  /** To offer "Use my Google name". */
+  hasSsoName: boolean;
+  nameSource: NameSource;
+  /** To offer "Use my Google photo". */
+  ssoPictureUrl?: string;
 }
 
 export interface AuthResponseModel {

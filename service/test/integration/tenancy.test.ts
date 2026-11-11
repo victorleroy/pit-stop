@@ -71,6 +71,12 @@ describe('multi-tenant isolation', () => {
     ).rejects.toThrow('not found in this organisation');
   });
 
+  it('refuses to remove the avatar of a member of another organisation', async () => {
+    await expect(
+      harness.container.profileManager.removeMemberAvatar(globex, acme.userId),
+    ).rejects.toMatchObject({status: 404});
+  });
+
   it('refuses to change the team administrators of another organisation', async () => {
     await expect(
       harness.container.teamManager.setMemberAdmin(globex, acmeTeamId, acme.userId, false),
