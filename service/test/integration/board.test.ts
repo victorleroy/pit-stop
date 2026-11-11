@@ -133,6 +133,72 @@ describe('board', () => {
       expect(board.columns[1]!.cards.map((card) => card.type)).toEqual(['note']);
     });
 
+    describe("someone else's note", () => {
+      let theirs: string;
+      let mine: string;
+
+      beforeEach(async () => {
+        await harness.container.retroManager.updateRetro(owner, retroId, {phase: 'BRAINSTORM'});
+        await harness.container.noteManager.create(member, retroId, columnId, 'from Alice');
+        await setPhase('SHARE');
+
+        const notesOf = async (auth: AuthContext) =>
+          (await harness.container.retroManager.getBoard(auth, retroId)).columns[0]!.cards.flatMap(
+            (card) => card.notes,
+          );
+
+        theirs = (await notesOf(owner)).find(({text}) => text === 'a')!.id;
+        mine = (await notesOf(member)).find(({text}) => text === 'from Alice')!.id;
+      });
+
+      it('lets any participant group a shared note they did not write', async () => {
+        await harness.container.noteManager.setMineRevealed(owner, retroId, true);
+
+        const board = await harness.container.clusterManager.group(member, retroId, theirs, mine);
+        const cluster = board.columns[0]!.cards.find(({type}) => type === 'cluster')!;
+
+        expect(cluster.notes.map(({id}) => id).sort()).toEqual([mine, theirs].sort());
+        expect(cluster.notes.find(({id}) => id === theirs)!.isMine).toBe(false);
+      });
+
+      it('lets any participant take a shared note they did not write out of a group', async () => {
+        await harness.container.noteManager.setMineRevealed(owner, retroId, true);
+        await harness.container.clusterManager.group(member, retroId, mine, theirs);
+
+        const board = await harness.container.clusterManager.ungroup(member, retroId, theirs);
+
+        expect(board.columns[0]!.cards.every(({type}) => type === 'note')).toBe(true);
+      });
+
+      it('refuses to group a note that is still face down', async () => {
+        await expect(
+          harness.container.clusterManager.group(member, retroId, theirs, mine),
+        ).rejects.toThrow('not been shared yet');
+      });
+
+      it('refuses to take a face-down note out of a group', async () => {
+        await harness.container.clusterManager.group(owner, retroId, theirs, mine);
+
+        await expect(
+          harness.container.clusterManager.ungroup(member, retroId, theirs),
+        ).rejects.toThrow('not been shared yet');
+      });
+
+      it('still refuses to move or delete a shared note they did not write', async () => {
+        await harness.container.noteManager.setMineRevealed(owner, retroId, true);
+        const board = await harness.container.retroManager.getBoard(member, retroId);
+
+        await expect(
+          harness.container.noteManager.update(member, retroId, theirs, {
+            columnId: board.columns[1]!.id,
+          }),
+        ).rejects.toThrow('Only the author or the facilitator');
+        await expect(
+          harness.container.noteManager.remove(member, retroId, theirs),
+        ).rejects.toThrow('Only the author or the facilitator');
+      });
+    });
+
     it('refuses a note that is not grouped', async () => {
       const [first] = await cardIds();
 

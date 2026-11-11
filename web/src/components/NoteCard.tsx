@@ -41,7 +41,9 @@ export const NoteCard = ({
   const [isEditing, setIsEditing] = useState(false);
 
   const {ink, paper} = noteColours(columnIndex);
-  const canHandle = canDrag && (note.isMine || isFacilitator);
+  const canMove = note.isMine || isFacilitator;
+  // Anyone can carry a shared note onto another card to group them, without owning it.
+  const canHandle = canDrag && (canMove || (canGroup && note.revealed));
   // The service sends no text until its author shares it: there is nothing to read here yet.
   const isWithheld = !note.revealed && !note.isMine;
   // Yours, written but not yet handed to the room. The one thing you still owe the team.
@@ -52,7 +54,7 @@ export const NoteCard = ({
   return (
     <Box
       draggable={canHandle && !isEditing}
-      onDragStart={(event) => startNoteDrag(event.dataTransfer, note.id, note.columnId)}
+      onDragStart={(event) => startNoteDrag(event.dataTransfer, note.id, note.columnId, !canMove)}
       sx={{
         '&:hover': canHandle
           ? {boxShadow: PAPER_SHADOW_RAISED, transform: 'translateY(-2px)'}
@@ -161,7 +163,7 @@ export const NoteCard = ({
           ) : null}
 
           <Stack direction="row" spacing={0.5} sx={{flexShrink: 0}}>
-            {isClustered && canGroup ? (
+            {isClustered && canGroup && (mine || note.revealed) ? (
               // The arrow says little on its own: the tooltip names the move.
               <Tooltip title="Take out of the group">
                 <span>

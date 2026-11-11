@@ -15,6 +15,7 @@ import {noteColours} from '@/theme/texture';
 import {useState} from 'react';
 import type {Column} from '@/api/types';
 import {CardStack} from '@/components/CardStack';
+import {isGroupOnlyDrag} from '@/utils/noteDrag';
 
 export const BoardColumn = ({
   canDecide,
@@ -87,13 +88,13 @@ export const BoardColumn = ({
       // Dropping on the column itself moves the note here; dropping on a card groups them.
       onDragLeave={() => setIsOver(false)}
       onDragOver={(event) => {
-        if (!canWrite) return;
+        if (!canWrite || isGroupOnlyDrag(event.dataTransfer)) return;
         event.preventDefault();
         setIsOver(true);
       }}
       onDrop={(event) => {
         setIsOver(false);
-        if (!canWrite || event.defaultPrevented) return;
+        if (!canWrite || event.defaultPrevented || isGroupOnlyDrag(event.dataTransfer)) return;
         const noteId = event.dataTransfer.getData('text/note-id');
         if (noteId) onMoveNote(noteId);
       }}

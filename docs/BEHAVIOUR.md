@@ -230,6 +230,13 @@ member.
   The board does not send such a request: while a note is dragged over a card of another
   column, that card shows a red outline and refuses the drop, with no error message.
 - A note cannot be grouped with itself (`409`).
+- **Any participant can group or ungroup any shared note**, their own or somebody else's:
+  arranging the board is a team effort, and the cluster shows no more than the note already
+  did. A note still face down can only be grouped or ungrouped by its author or the
+  facilitator (`403`). Grouping never grants the right to edit, move to another column or
+  delete somebody else's note.
+  On the board, a participant can drag somebody else's shared note onto a card, but not onto
+  a column: that drop is ignored rather than refused with an error.
 - Grouping onto a standalone note creates a cluster holding both notes.
 - Ungrouping: if the cluster would drop below **2** notes, it is dissolved and the remaining
   note becomes standalone again.
