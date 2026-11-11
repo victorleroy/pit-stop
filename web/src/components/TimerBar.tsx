@@ -2,10 +2,13 @@ import PauseRoundedIcon from '@mui/icons-material/PauseRounded';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import StopRoundedIcon from '@mui/icons-material/StopRounded';
 import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
+import VolumeOffRoundedIcon from '@mui/icons-material/VolumeOffRounded';
+import VolumeUpRoundedIcon from '@mui/icons-material/VolumeUpRounded';
 import {Box, Button, IconButton, Stack, Tooltip, Typography} from '@/ui';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import type {Timer, TimerAction} from '@/api/types';
 import {SLIPSTREAM} from '@/ui/theme';
+import {playTimerChime, readTimerMuted, saveTimerMuted, unlockTimerSound} from '@/utils/timerSound';
 
 const DEFAULT_DURATION_SECONDS = 300;
 
@@ -118,6 +121,37 @@ export const TimerControls = ({
 }) => {
   const {isSteady, remainingMs} = useRemainingMs(timer, receivedAt);
   const isOver = timer.state !== 'IDLE' && remainingMs === 0;
+  const [isMuted, setIsMuted] = useState(readTimerMuted);
+  const isMutedRef = useRef(isMuted);
+  isMutedRef.current = isMuted;
+  const previousMsRef = useRef<number | undefined>(undefined);
+  const isRunning = timer.state === 'RUNNING';
+
+  useEffect(() => {
+    window.addEventListener('pointerdown', unlockTimerSound, {once: true});
+    window.addEventListener('keydown', unlockTimerSound, {once: true});
+
+    return () => {
+      window.removeEventListener('pointerdown', unlockTimerSound);
+      window.removeEventListener('keydown', unlockTimerSound);
+    };
+  }, []);
+
+  // Rings on the way down to zero only: a board opened on an overdue timer stays silent.
+  useEffect(() => {
+    const previous = previousMsRef.current;
+    previousMsRef.current = isRunning ? remainingMs : undefined;
+
+    if (isRunning && previous !== undefined && previous > 0 && remainingMs === 0 && !isMutedRef.current) {
+      playTimerChime();
+    }
+  }, [isRunning, remainingMs]);
+
+  const toggleMuted = () => {
+    saveTimerMuted(!isMuted);
+    setIsMuted(!isMuted);
+    unlockTimerSound();
+  };
   const totalMs = timer.totalMs ?? 0;
   const left = totalMs > 0 ? Math.min(1, Math.max(0, remainingMs / totalMs)) : 0;
 
@@ -186,6 +220,16 @@ export const TimerControls = ({
           />
         </Box>
       </Stack>
+
+      <Tooltip title={isMuted ? 'Unmute the end sound' : 'Mute the end sound'}>
+        <IconButton
+          aria-label={isMuted ? 'Unmute the timer sound' : 'Mute the timer sound'}
+          onClick={toggleMuted}
+          size="small"
+        >
+          {isMuted ? <VolumeOffRoundedIcon fontSize="small" /> : <VolumeUpRoundedIcon fontSize="small" />}
+        </IconButton>
+      </Tooltip>
 
       {isFacilitator ? (
         // Icons rather than words: the clock already says what this is, and the toolbar

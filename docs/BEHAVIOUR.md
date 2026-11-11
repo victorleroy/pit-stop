@@ -284,6 +284,11 @@ Two stored states, so the network never eats the clock:
 | `extend` | `seconds` given; a timer exists | adds to `remaining_ms` when paused, otherwise pushes `ends_at` |
 | `stop` | — | clears both |
 
+Every participant hears a short chime (generated with the Web Audio API) when their local
+countdown reaches zero, once per run: a board opened on an overdue timer stays silent. A mute
+toggle beside the clock is stored per viewer in `localStorage`. A browser that blocks audio
+until the page was touched simply stays silent.
+
 `seconds` is bounded to `[5, 3600]`. Extending an already-overdue timer never yields a
 negative duration.
 
