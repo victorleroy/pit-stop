@@ -7,6 +7,7 @@ import type {Generated} from 'kysely';
 export const RETRO_PHASES = [
   'LOBBY',
   'ICEBREAKER',
+  'REVIEW',
   'BRAINSTORM',
   'SHARE',
   'VOTE',
@@ -164,6 +165,8 @@ interface RetrosTable {
   icebreakerCustomText: string | null;
   icebreakerAskedAt: string | null;
   icebreakerAnswersRevealed: Generated<number>;
+  actionReview: Generated<number>;
+  reviewFocusActionId: string | null;
 }
 
 interface IcebreakerAnswersTable {

@@ -1,5 +1,6 @@
 import {Type} from 'class-transformer';
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -24,6 +25,11 @@ export class TimerCommandDto {
 }
 
 export class UpdateRetroDto {
+  // Only while the retro has not started (LOBBY).
+  @IsOptional()
+  @IsBoolean()
+  public actionReview?: boolean;
+
   @IsOptional()
   @IsInt()
   @Min(1)

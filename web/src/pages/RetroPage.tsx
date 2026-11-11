@@ -1,6 +1,8 @@
 import CloseIcon from '@mui/icons-material/Close';
 import Divider from '@mui/material/Divider';
 import Drawer from '@mui/material/Drawer';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Switch from '@mui/material/Switch';
 import {useTheme} from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import {
@@ -21,6 +23,7 @@ import {
   clearReviewOutcome,
   createAction,
   createNote,
+  fetchActionStats,
   fetchBoard,
   groupNote,
   answerIcebreaker,
@@ -36,6 +39,7 @@ import {
   revealMyNotes,
   sendIcebreakerCommand,
   setNoteRevealed,
+  setReviewFocus,
   recordReviewOutcome,
   ungroupNote,
   updateAction,
@@ -50,11 +54,13 @@ import type {
   GameEvent,
   IcebreakerCommand,
   RetroPhase,
+  ReviewOutcome,
   TimerAction,
 } from '@/api/types';
 import type {ConfirmRequest} from '@/components/ConfirmDialog';
 import {ConfirmDialog} from '@/components/ConfirmDialog';
 import {ActionList} from '@/components/ActionList';
+import {ActionReview} from '@/components/ActionReview';
 import {BoardColumn} from '@/components/BoardColumn';
 import {CursorLayer} from '@/components/CursorLayer';
 import {EmptyState} from '@/components/EmptyState';
@@ -77,10 +83,12 @@ import {readZoom, saveZoom, stepZoom} from '@/utils/boardZoom';
 import {boardAuthors} from '@/utils/authorFilter';
 import {moveColumn} from '@/utils/columnOrder';
 import {countOpenActions} from '@/utils/openActions';
-import {COLUMN_EDIT_PHASES, nextOpeningPhase} from '@/utils/phases';
+import {COLUMN_EDIT_PHASES, REVIEW_OUTCOME_PHASES, nextOpeningPhase} from '@/utils/phases';
 
 // Only used while the websocket is down.
 const FALLBACK_POLL_INTERVAL_MS = 5_000;
+
+const STATS_DEBOUNCE_MS = 500;
 
 const FADE_WIDTH = 56;
 
@@ -259,6 +267,27 @@ export const RetroPage = () => {
     mutationFn: (phase: RetroPhase) => updateRetro(retroId as string, {phase}),
     ...boardMutationOptions,
   });
+  const actionReviewMutation = useMutation({
+    mutationFn: (actionReview: boolean) => updateRetro(retroId as string, {actionReview}),
+    ...boardMutationOptions,
+  });
+
+  // Stats change with every outcome: read again once the clicks of a review settle down.
+  const isReviewing = board?.phase === 'REVIEW';
+  const statsKey = ['teams', board?.teamId, 'actions', 'stats', retroId];
+  const {data: actionStats, refetch: refetchStats} = useQuery({
+    enabled: isReviewing && Boolean(board?.teamId),
+    queryFn: () => fetchActionStats(board?.teamId as string, retroId),
+    queryKey: statsKey,
+  });
+
+  useEffect(() => {
+    if (!isReviewing) return;
+
+    const timeout = setTimeout(() => void refetchStats(), STATS_DEBOUNCE_MS);
+
+    return () => clearTimeout(timeout);
+  }, [dataUpdatedAt, isReviewing, refetchStats]);
   const maxVotesMutation = useMutation({
     mutationFn: (maxVotes: number) => updateRetro(retroId as string, {maxVotes}),
     ...boardMutationOptions,
@@ -403,6 +432,33 @@ export const RetroPage = () => {
       void queryClient.invalidateQueries({queryKey: ['teams', board?.teamId, 'actions']});
     },
   });
+  const outcomeMutation = useMutation({
+    mutationFn: async ({
+      actionId,
+      comment,
+      outcome,
+    }: {
+      actionId: string;
+      comment?: string | null;
+      outcome: ReviewOutcome | null;
+    }) => {
+      await (outcome === null
+        ? clearReviewOutcome(retroId as string, actionId)
+        : recordReviewOutcome(retroId as string, actionId, outcome, comment));
+    },
+    onError: (cause: Error) => toast.error(cause.message),
+    onSuccess: () => {
+      if (!isConnected) void queryClient.invalidateQueries({queryKey});
+      void queryClient.invalidateQueries({queryKey: ['teams', board?.teamId, 'actions']});
+    },
+  });
+  const focusMutation = useMutation({
+    mutationFn: (actionId: string | null) => setReviewFocus(retroId as string, actionId),
+    onError: (cause: Error) => toast.error(cause.message),
+    onSuccess: () => {
+      if (!isConnected) void queryClient.invalidateQueries({queryKey});
+    },
+  });
   const voteMutation = useMutation({
     mutationFn: ({delta, targetId}: {delta: 1 | -1; targetId: string}) =>
       castVote(retroId as string, targetId, delta),
@@ -435,6 +491,8 @@ export const RetroPage = () => {
     createActionMutation,
     updateActionMutation,
     reviewMutation,
+    outcomeMutation,
+    actionReviewMutation,
   ];
   const isBusy = mutations.some(({isPending}) => isPending);
 
@@ -503,6 +561,27 @@ export const RetroPage = () => {
     updateActionMutation.mutate({actionId, status, teamId: board.teamId});
   const onTextChange = (actionId: string, text: string) =>
     updateActionMutation.mutate({actionId, teamId: board.teamId, text});
+  const facilitatorName = members?.find(({userId}) => userId === board.facilitatorId)?.name;
+
+  // Leaving the review is always possible; what nobody decided on stays open, said once.
+  const changePhase = (phase: RetroPhase) => {
+    const undecided = board.review.items.filter(({outcome}) => !outcome).length;
+
+    if (board.phase !== 'REVIEW' || phase === 'REVIEW' || undecided === 0) {
+      phaseMutation.mutate(phase);
+      return;
+    }
+
+    setConfirmRequest({
+      confirmLabel: 'Continue',
+      confirmTone: 'primary',
+      message: `${undecided} action${undecided === 1 ? ' has' : 's have'} not been reviewed. ${
+        undecided === 1 ? 'It stays' : 'They stay'
+      } open.`,
+      onConfirm: () => phaseMutation.mutate(phase),
+      title: 'Leave the review?',
+    });
+  };
 
   return (
     // The open panel takes the board's right edge, so the columns narrow instead of hiding under it.
@@ -567,7 +646,7 @@ export const RetroPage = () => {
         onHide={() => hideMutation.mutate()}
         onMaxVotesChange={(maxVotes) => maxVotesMutation.mutate(maxVotes)}
         onOpenActions={() => setIsActionsOpen((isOpen) => !isOpen)}
-        onPhaseChange={(phase) => phaseMutation.mutate(phase)}
+        onPhaseChange={changePhase}
         onReveal={() => revealMutation.mutate()}
         onTakeFacilitation={() => takeFacilitationMutation.mutate()}
         onTimer={(action, seconds) => timerMutation.mutate({action, seconds})}
@@ -585,19 +664,36 @@ export const RetroPage = () => {
           isTakingOver={takeFacilitationMutation.isPending}
           members={members}
           onSetUpBoard={() => setLobbyTab('setup')}
-          onStart={() => phaseMutation.mutate(nextOpeningPhase(board) as RetroPhase)}
+          onStart={() => phaseMutation.mutate(nextOpeningPhase(board))}
           onTakeOver={() => takeFacilitationMutation.mutate()}
           open={!isSettingUp}
           participants={participants}
           preview={
             board.isFacilitator ? (
-              <IcebreakerPreview
-                icebreaker={board.icebreaker}
-                isBusy={icebreakerMutation.isPending}
-                isFacilitator={board.isFacilitator}
-                onCustom={(text) => icebreakerMutation.mutate({action: 'custom', text})}
-                onDraw={() => icebreakerMutation.mutate({action: 'draw'})}
-              />
+              <Stack spacing={1.5}>
+                <IcebreakerPreview
+                  icebreaker={board.icebreaker}
+                  isBusy={icebreakerMutation.isPending}
+                  isFacilitator={board.isFacilitator}
+                  onCustom={(text) => icebreakerMutation.mutate({action: 'custom', text})}
+                  onDraw={() => icebreakerMutation.mutate({action: 'draw'})}
+                />
+                {board.review.items.length > 0 ? (
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={board.review.enabled}
+                        disabled={actionReviewMutation.isPending}
+                        onChange={(event) => actionReviewMutation.mutate(event.target.checked)}
+                        size="small"
+                      />
+                    }
+                    label={`Review ${board.review.items.length} open action${
+                      board.review.items.length === 1 ? '' : 's'
+                    } first`}
+                  />
+                ) : null}
+              </Stack>
             ) : undefined
           }
           retroTitle={board.title}
@@ -632,6 +728,18 @@ export const RetroPage = () => {
           onRemoveAnswer={() => removeAnswerMutation.mutate()}
           onReveal={() => icebreakerMutation.mutate({action: 'revealAnswers'})}
           participants={participants}
+        />
+      ) : board.phase === 'REVIEW' ? (
+        <ActionReview
+          facilitatorName={facilitatorName}
+          isBusy={outcomeMutation.isPending || focusMutation.isPending}
+          isFacilitator={board.isFacilitator}
+          onComment={(actionId, outcome, comment) => outcomeMutation.mutate({actionId, comment, outcome})}
+          onFocus={(actionId) => focusMutation.mutate(actionId)}
+          onOutcome={(actionId, outcome) => outcomeMutation.mutate({actionId, outcome})}
+          onUndo={(actionId) => outcomeMutation.mutate({actionId, outcome: null})}
+          review={board.review}
+          stats={actionStats}
         />
       ) : board.columns.length === 0 ? (
         // A blank board: nobody can write until there is somewhere to write.
@@ -771,7 +879,7 @@ export const RetroPage = () => {
           {board.review.items.length > 0 ? (
             <ActionList
               actions={board.review.items.map(({action}) => action)}
-              canComplete={board.phase !== 'ARCHIVED'}
+              canComplete={REVIEW_OUTCOME_PHASES.includes(board.phase)}
               canCreate={false}
               emptyLabel=""
               isBusy={isBusy}

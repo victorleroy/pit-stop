@@ -1,4 +1,4 @@
-import {IsIn, IsOptional, IsString, MaxLength, ValidateIf} from 'class-validator';
+import {IsIn, IsNotEmpty, IsOptional, IsString, MaxLength, ValidateIf} from 'class-validator';
 import {ACTION_REVIEW_OUTCOMES} from '~/Db/schema';
 
 export class ReviewOutcomeDto {
@@ -11,4 +11,12 @@ export class ReviewOutcomeDto {
   @IsString()
   @MaxLength(300)
   public comment?: string | null;
+}
+
+export class ReviewFocusDto {
+  /** `null` takes the focus off every action. */
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @IsNotEmpty()
+  public actionId!: string | null;
 }

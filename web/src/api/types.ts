@@ -50,6 +50,7 @@ export interface TeamSummary {
 export type RetroPhase =
   | 'LOBBY'
   | 'ICEBREAKER'
+  | 'REVIEW'
   | 'BRAINSTORM'
   | 'SHARE'
   | 'VOTE'

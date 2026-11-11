@@ -78,9 +78,11 @@ retro_template_columns (template_id, position, title, prompt NULL)
 There is no connections table: the `RetroSession` actor holds them in memory, so presence
 is never something that has to be cleaned up after a crash.
 
-Enumerations: `phase in {LOBBY, ICEBREAKER, BRAINSTORM, SHARE, VOTE, DISCUSS, ARCHIVED}`.
-The database already accepts `REVIEW`, and its columns, ahead of the feature that uses it
-(ADR-005); the API refuses it until then.
+Enumerations: `phase in {LOBBY, ICEBREAKER, REVIEW, BRAINSTORM, SHARE, VOTE, DISCUSS, ARCHIVED}`.
+
+The review lives in two columns of `retros`: `action_review` (0/1, default 1), whether the
+retro opens with a review, and `review_focus_action_id` (`ON DELETE SET NULL`), the action the
+facilitator is reviewing, set in `REVIEW` only.
 
 The icebreaker lives in four columns of `retros`: `icebreaker_question_id` (a bank id) or
 `icebreaker_custom_text` (the facilitator's own question), never both; `icebreaker_asked_at`,
@@ -126,22 +128,24 @@ The one thing a join must never change is section 4: the anonymity projection is
 The facilitator alone changes the phase. No transition is constrained, **except back to
 `LOBBY`**: any phase can move to any other, including backwards.
 
-| Operation | LOBBY | ICEBREAKER | BRAINSTORM | SHARE | VOTE | DISCUSS | ARCHIVED |
-|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| Create a note | | | yes | yes | | | |
-| Edit a note's **text** | | | yes | | | | |
-| Move or delete a note | | | yes | yes | | | |
-| Reveal or hide **own** notes, all or one | | | | yes | yes | yes | |
-| Group, ungroup, rename a cluster | | | | yes | | | |
-| Cast a vote | | | | | yes | | |
-| See **own** votes | | | | | yes | yes | yes |
-| See vote **totals** | | | | | | yes | yes |
-| Add, rename, reorder, delete a column | yes | | yes | | | | |
-| Create an action | | | | | | yes | |
-| Edit an action | yes | yes | yes | yes | yes | yes | yes |
-| Record or undo a review outcome | | | yes | yes | yes | yes | |
-| Change the icebreaker question (facilitator) | yes | yes | | | | | |
-| Answer the icebreaker, reveal or hide the answers | | yes | | | | | |
+| Operation | LOBBY | ICEBREAKER | REVIEW | BRAINSTORM | SHARE | VOTE | DISCUSS | ARCHIVED |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| Create a note | | | | yes | yes | | | |
+| Edit a note's **text** | | | | yes | | | | |
+| Move or delete a note | | | | yes | yes | | | |
+| Reveal or hide **own** notes, all or one | | | | | yes | yes | yes | |
+| Group, ungroup, rename a cluster | | | | | yes | | | |
+| Cast a vote | | | | | | yes | | |
+| See **own** votes | | | | | | yes | yes | yes |
+| See vote **totals** | | | | | | | yes | yes |
+| Add, rename, reorder, delete a column | yes | | | yes | | | | |
+| Create an action | | | | | | | yes | |
+| Edit an action | yes | yes | yes | yes | yes | yes | yes | yes |
+| Record or undo a review outcome | | | yes | yes | yes | yes | yes | |
+| Move the review focus (facilitator) | | | yes | | | | | |
+| Turn the review on or off (facilitator) | yes | | | | | | | |
+| Change the icebreaker question (facilitator) | yes | yes | | | | | | |
+| Answer the icebreaker, reveal or hide the answers | | yes | | | | | | |
 
 An operation refused because of the phase answers `403`, except in `ARCHIVED` (`409`).
 
@@ -154,7 +158,8 @@ reading it aloud. Its text stays frozen like every other note's once the brainst
    Rationale: regrouping notes recomposes the cards, and a vote cast on a card that no longer
    exists is lost anyway. Better to restart the round than to strand votes. Judging the target
    alone means a detour through an opening phase cannot bring votes back into the sharing.
-   Going back to `ICEBREAKER` keeps the votes, so the vote budget cannot change there (`409`).
+   Going back to `ICEBREAKER` or `REVIEW` keeps the votes, so the vote budget cannot change
+   there (`409`).
 
 2. **ARCHIVED is frozen but reversible.** Any change to an archived retro is refused (`409`)
    **except** a phase change. Reopening is always possible, to any phase but `LOBBY`. A review
@@ -170,7 +175,10 @@ The guards of a `PATCH` run in this order, inside the retro's queue: archived, b
 `LOBBY`, `LOBBY → LOBBY` no-op, votes per person, columns, timer, vote wipe, entry effects,
 write. **Entering `ICEBREAKER` asks the question**: one is drawn if the retro has none, and
 `icebreaker_asked_at` is set if it is null, in the same command. Coming back later keeps the
-question, its date and its answers.
+question, its date and its answers. **Entering `REVIEW` focuses the first action of
+`review.items` without an outcome in this retro** (none if all are decided); **leaving it drops
+the focus**, in the same write. `actionReview` changes only in `LOBBY` (`409` "The action
+review can only change before the retro starts").
 
 ---
 
@@ -379,13 +387,23 @@ member.
   reviewed, whatever their status now (a Done would otherwise vanish on the next broadcast).
   Oldest first, then by id. An action of this retro, a later one, or one closed elsewhere and
   never reviewed here is not part of it (`409`); an action of another team is `404`.
-- **Any member** records an outcome (`reviewedBy` keeps who), from the actions panel. One per
+- A retro reviews when `action_review` is on: `body.actionReview ?? true` at creation, then the
+  facilitator's switch in `LOBBY`; exposed as `review.enabled`. The review step is skipped
+  when it is off or `review.items` is empty (`nextOpeningPhase`), and shown in the stepper only
+  then or while in `REVIEW`. The service does not enforce that order.
+- **Focus** (`PUT /retros/{retroId}/review/focus {actionId | null}`): the facilitator's alone
+  (`403`), in `REVIEW` only (`403`, `409` in `ARCHIVED`), on an action of `review.items`
+  (`409`). It is board state: late joiners and a restart keep it. Recording an outcome does
+  not move it.
+- **Any member** records an outcome (`reviewedBy` keeps who), from the review screen or the
+  actions panel. One per
   action and retro, the last write wins. In one transaction, with one timestamp:
   - **Done** / **Drop** close the action (`closed_at` = the review time) unless it already has
     that status; **Keep** reopens it (`closed_at` NULL) and it comes back at the next retro.
   - The **same** outcome again only updates the comment: the review time and the closing date
     stay, so the metrics do not move.
-  - The comment is optional, at most 300 characters, trimmed; blank is none.
+  - The comment is optional, at most 300 characters, trimmed; blank is none. Left out, the
+    comment already there stays, so changing the outcome keeps it.
 - **Undo** removes the outcome. The action is reopened only if it still carries the closing that
   outcome made (same status, `closed_at` = review time); a Keep, or a closing or reopening done
   elsewhere since, leaves the status alone.
@@ -704,6 +722,7 @@ Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `413`, `
 | GET | `/teams/{teamId}/actions/stats?retroId=` | `200` `ActionStats` — any member, `404` for a retro of another team |
 | PUT | `/retros/{retroId}/review/actions/{actionId}` | `200` `ReviewItem` — `{outcome: 'DONE'\|'DROPPED'\|'KEPT', comment?}` |
 | DELETE | `/retros/{retroId}/review/actions/{actionId}` | `204` |
+| PUT | `/retros/{retroId}/review/focus` | `204` — facilitator, `{actionId: string \| null}`, `REVIEW` only |
 | GET | `/org/admins` | `200` `User[]` |
 | GET | `/org/members` | `200` `OrgMember[]` sorted by name |
 | DELETE | `/org/members/{userId}/avatar` | `204` — org admin removes an uploaded avatar; `403`; `404` outside the organisation |
@@ -798,8 +817,8 @@ epoch milliseconds; `points` in `game.hit` is the player's total, not a delta.
   connection. The anonymity rules of section 4 are the only ones that ever reach a client.
 - Cursors **never touch storage**: they are relayed straight to the other connections. A mouse
   move costs no write and no read.
-- Cursors are **not relayed during LOBBY, ICEBREAKER, BRAINSTORM and VOTE** (there is no
-  board in the waiting room nor during the icebreaker, and elsewhere they would show where others write or vote); the client does not
+- Cursors are **not relayed during LOBBY, ICEBREAKER, REVIEW, BRAINSTORM and VOTE** (there is
+  no board in the waiting room, the icebreaker nor the review, where the focus points, and elsewhere they would show where others write or vote); the client does not
   draw them either. Every other phase relays them.
 - Each participant has one **stable colour** derived from their `userId` (hash into a fixed 10-colour palette taken from the design system tokens of `web/src/ui/theme.ts`, all readable under white initials). The cursor, its name label and the initials of every avatar (`UserAvatar`: presence, notes, member lists, header) share it; it is computed client-side, nothing is stored.
 - Cursor coordinates are **board-relative**, as a fraction of the box the columns take, zoom
@@ -870,8 +889,19 @@ epoch milliseconds; `points` in `game.hit` is the player's total, not a delta.
   opened from the toolbar's `Actions · n` button, `n` being the open actions. On a wide screen
   the panel sits beside the board, which narrows; on a phone it slides over it. Turning a card
   into an action opens the panel. Its "Actions from previous retros" list is `review.items`:
-  **Drop** and **Done** record the outcome in this retro, **Reopen** undoes it. An archived retro
-  does not offer them.
+  **Drop** and **Done** record the outcome in this retro, **Reopen** undoes it, from `REVIEW` to
+  `DISCUSS` only (never in the waiting room, the icebreaker or an archived retro).
+- **Review** (`REVIEW`): the review screen replaces the columns. A banner (`x done since last
+  retro · y dropped · z open` and the completion trend, read again 500 ms after the board
+  settles); the actions in order, each with its assignee, origin retro (`Deleted retro`), age,
+  real status, outcome chip with comment and reviewer, and `Status changed since: …` when the
+  status disagrees with the outcome. The focused action is highlighted and scrolled into view
+  for everybody. **Drop**, **Keep**, **Done**, then **Undo** and an optional comment (300).
+  The facilitator moves the focus by clicking a row, `Previous` / `Next` (next undecided,
+  wrapping) or the arrow keys; others read `{name} is leading the review`. `Start brainstorming`
+  in the toolbar leaves it; leaving with undecided actions asks first ("They stay open").
+  The waiting room's facilitator card adds a `Review n open actions first` switch when there
+  is anything to review.
 - The team page shows a **Follow-through** card above its actions: done since the last retro,
   dropped, open, and one bar per retro of the completion trend, labelled in words too. It is
   hidden while it has nothing to report.

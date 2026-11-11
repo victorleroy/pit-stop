@@ -9,7 +9,7 @@ const pointLabel = (point: TrendPoint) =>
     : `${point.retroTitle}: ${point.done}/${point.done + point.dropped + point.kept} done, ${percent(point.rate)}`;
 
 /** One bar per retro that reviewed its actions; the label carries what the colour shows. */
-const Sparkline = ({points}: {points: TrendPoint[]}) => (
+export const Sparkline = ({points}: {points: TrendPoint[]}) => (
   <Stack spacing={0.5}>
     <Stack
       aria-label={`Completion rate over last ${points.length} retros: ${points

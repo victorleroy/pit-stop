@@ -135,12 +135,55 @@ describe('BoardToolbar and the icebreaker', () => {
     expect(onPhaseChange).toHaveBeenCalledWith('BRAINSTORM');
   });
 
-  it('moves on from the icebreaker to brainstorm while actions wait for review', () => {
-    const onPhaseChange = vi.fn();
-    const review = {enabled: true, focusActionId: null, items: [{}]} as unknown as Board['review'];
-    renderToolbar(board({icebreaker, phase: 'ICEBREAKER', review}), onPhaseChange);
+  const review = (enabled: boolean, count: number) =>
+    ({enabled, focusActionId: null, items: Array.from({length: count}, () => ({}))}) as unknown as Board['review'];
 
-    fireEvent.click(screen.getByRole('button', {name: 'Move on to Brainstorm'}));
+  it('moves on from the icebreaker to the review while actions wait for it', () => {
+    const onPhaseChange = vi.fn();
+    renderToolbar(board({icebreaker, phase: 'ICEBREAKER', review: review(true, 1)}), onPhaseChange);
+
+    fireEvent.click(screen.getByRole('button', {name: 'Move on to Review'}));
+
+    expect(onPhaseChange).toHaveBeenCalledWith('REVIEW');
+  });
+
+  it('starts the retro on the review when there is no icebreaker', () => {
+    const onPhaseChange = vi.fn();
+    renderToolbar(board({review: review(true, 2)}), onPhaseChange);
+
+    fireEvent.click(screen.getByRole('button', {name: 'Start the retro'}));
+
+    expect(onPhaseChange).toHaveBeenCalledWith('REVIEW');
+  });
+
+  it('keeps the review out of the stepper when it is off or empty, but not while in it', () => {
+    renderToolbar(board({phase: 'BRAINSTORM', review: review(false, 2)}));
+    expect(screen.queryByText('Review')).toBeNull();
+    cleanup();
+
+    renderToolbar(board({phase: 'BRAINSTORM', review: review(true, 0)}));
+    expect(screen.queryByText('Review')).toBeNull();
+    cleanup();
+
+    renderToolbar(board({phase: 'REVIEW', review: review(true, 0)}));
+    expect(screen.getByText('Review')).toBeTruthy();
+    expect(screen.getByText(/Did we do what we decided\?/)).toBeTruthy();
+  });
+
+  it('puts the review between the icebreaker and the brainstorm', () => {
+    renderToolbar(board({icebreaker, phase: 'BRAINSTORM', review: review(true, 1)}));
+
+    const order = ['Icebreaker', 'Review', 'Brainstorm'].map((label) => screen.getByText(label));
+
+    expect(order[0]!.compareDocumentPosition(order[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(order[1]!.compareDocumentPosition(order[2]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('starts brainstorming from the review, even with no column', () => {
+    const onPhaseChange = vi.fn();
+    renderToolbar(board({phase: 'REVIEW', review: review(true, 1)}), onPhaseChange);
+
+    fireEvent.click(screen.getByRole('button', {name: 'Start brainstorming'}));
 
     expect(onPhaseChange).toHaveBeenCalledWith('BRAINSTORM');
   });

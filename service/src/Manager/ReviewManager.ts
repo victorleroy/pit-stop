@@ -14,7 +14,10 @@ import {RetroAccessChecker} from '~/Security/RetroAccessChecker';
  * Outcomes are tied to the retro that recorded them, and an archived retro is frozen: unlike
  * an action edit, recording one is refused in ARCHIVED (BEHAVIOUR.md section 3).
  */
-const REVIEW_OUTCOME_PHASES: RetroPhase[] = ['BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS'];
+const REVIEW_OUTCOME_PHASES: RetroPhase[] = ['REVIEW', 'BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS'];
+
+/** The shared focus exists while the team walks through its actions, nowhere else. */
+const REVIEW_PHASES: RetroPhase[] = ['REVIEW'];
 
 const TREND_POINTS = 6;
 
@@ -36,7 +39,8 @@ export class ReviewManager {
     rawComment?: string | null,
   ): Promise<ReviewItemModel> {
     const {action, existing, retro} = await this.findReviewable(auth, retroId, actionId);
-    const comment = rawComment?.trim() || null;
+    const comment =
+      rawComment === undefined ? (existing?.comment ?? null) : rawComment?.trim() || null;
 
     await auth.db.unscoped.transaction().execute(async (trx) => {
       // The same outcome again only corrects the comment: the closing date, and with it the
@@ -96,6 +100,30 @@ export class ReviewManager {
 
       await this.actionReviewRepository.remove(actionId, retroId, trx);
     });
+  }
+
+  /**
+   * Points everyone at the same action, the facilitator's to move. The focus is board state:
+   * it reaches late joiners and survives a restart like the rest of the board.
+   */
+  public async setFocus(auth: AuthContext, retroId: string, actionId: string | null): Promise<void> {
+    const {retro} = await this.accessChecker.checkFacilitatorAccess(auth, retroId);
+
+    RetroAccessChecker.checkPhaseAllows(retro.phase, REVIEW_PHASES);
+
+    if (actionId !== null) {
+      const action = await this.actionRepository.findOneById(auth.db, actionId);
+      const isReviewed =
+        action?.teamId === retro.teamId &&
+        (RetroManager.isCarriedOver(retro, action) ||
+          (await this.actionReviewRepository.findOne(auth.db, actionId, retroId)) !== undefined);
+
+      if (!isReviewed) {
+        throw new ConflictHttpError('This action is not part of this review');
+      }
+    }
+
+    await this.retroRepository.update(retroId, {reviewFocusActionId: actionId});
   }
 
   /**

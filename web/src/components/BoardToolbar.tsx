@@ -28,7 +28,7 @@ import type {Board, RetroPhase, TimerAction} from '@/api/types';
 import {SaveAsTemplateDialog} from '@/components/SaveAsTemplateDialog';
 import {TimerControls} from '@/components/TimerBar';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
-import {COLUMN_EDIT_PHASES, nextOpeningPhase} from '@/utils/phases';
+import {COLUMN_EDIT_PHASES, hasReviewStep, nextOpeningPhase} from '@/utils/phases';
 import {boardAuthors} from '@/utils/authorFilter';
 import {WASH_EDGE} from '@/theme/texture';
 
@@ -38,6 +38,7 @@ const PHASE_LABELS: Record<RetroPhase, string> = {
   DISCUSS: 'Discuss',
   ICEBREAKER: 'Icebreaker',
   LOBBY: 'Waiting room',
+  REVIEW: 'Review',
   SHARE: 'Share',
   VOTE: 'Vote',
 };
@@ -48,6 +49,7 @@ const PHASE_HINTS: Record<RetroPhase, string> = {
   DISCUSS: 'Going through the topics in vote order.',
   ICEBREAKER: 'Answer in one line, or out loud.',
   LOBBY: 'The retro has not started yet. Say hello while everyone arrives.',
+  REVIEW: 'Did we do what we decided?',
   SHARE: 'Share your notes to make them readable. You can hide them again. A note added now is shared at once.',
   VOTE: 'Everyone spends their votes on the topics to discuss.',
 };
@@ -129,13 +131,16 @@ export const BoardToolbar = ({
   };
 
   const isIcebreaker = board.phase === 'ICEBREAKER';
-  // The step only exists for a retro that has a question to ask: an old retro keeps its track.
-  const steps: RetroPhase[] =
-    board.icebreaker || isIcebreaker ? ['ICEBREAKER', ...WORKING_PHASES] : WORKING_PHASES;
+  const isReview = board.phase === 'REVIEW';
+  // An opening step only exists for a retro that uses it: an old retro keeps its track.
+  const steps: RetroPhase[] = [
+    ...(board.icebreaker || isIcebreaker ? (['ICEBREAKER'] as const) : []),
+    ...(hasReviewStep(board) || isReview ? (['REVIEW'] as const) : []),
+    ...WORKING_PHASES,
+  ];
   const currentIndex = steps.indexOf(board.phase);
   const isLobby = board.phase === 'LOBBY';
   const openingPhase = nextOpeningPhase(board);
-  // REVIEW is not a phase the service accepts yet: the icebreaker leads to the next step shown.
   const nextPhase = isLobby ? undefined : steps[currentIndex + 1];
   const isArchived = board.phase === 'ARCHIVED';
   const canReveal = ['SHARE', 'VOTE', 'DISCUSS'].includes(board.phase);
@@ -146,8 +151,8 @@ export const BoardToolbar = ({
   // The board's structure is settled while people write, and by the facilitator alone.
   const canAddColumn = board.isFacilitator && COLUMN_EDIT_PHASES.includes(board.phase);
   const hasColumns = board.columns.length > 0;
-  // The icebreaker is answered before any column exists: leaving it needs none.
-  const canMoveOn = hasColumns || isIcebreaker;
+  // The opening steps need no column, and neither does the brainstorm they lead to.
+  const canMoveOn = hasColumns || isIcebreaker || isReview;
   const isSettingVotes = VOTE_SETTING_PHASES.includes(board.phase);
   const votesLeftLabel = `${board.myVotesLeft} vote${board.myVotesLeft === 1 ? '' : 's'} left`;
 
@@ -245,14 +250,14 @@ export const BoardToolbar = ({
       onClick={() => nextPhase && onPhaseChange(nextPhase)}
       variant="contained"
     >
-      Move on to {nextPhase ? PHASE_LABELS[nextPhase] : ''}
+      {isReview ? 'Start brainstorming' : `Move on to ${nextPhase ? PHASE_LABELS[nextPhase] : ''}`}
     </Button>
   );
 
   const startButton = (
     <Button
       disabled={isBusy}
-      onClick={() => onPhaseChange(openingPhase as RetroPhase)}
+      onClick={() => onPhaseChange(openingPhase)}
       variant="contained"
     >
       {openingPhase === 'ICEBREAKER' ? 'Start with the icebreaker' : 'Start the retro'}

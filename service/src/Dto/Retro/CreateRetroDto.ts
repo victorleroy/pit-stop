@@ -40,4 +40,9 @@ export class CreateRetroDto {
   @IsOptional()
   @IsBoolean()
   public icebreaker?: boolean;
+
+  // Left out, the retro reviews the team's open actions.
+  @IsOptional()
+  @IsBoolean()
+  public actionReview?: boolean;
 }

@@ -30,7 +30,13 @@ export const VOTE_OPTIONS = Array.from({length: 10}, (_, index) => index + 1);
 export const createRetro = (
   teamId: string,
   title: string,
-  options: {columns?: string[]; icebreaker?: boolean; maxVotes?: number; templateId?: string} = {},
+  options: {
+    actionReview?: boolean;
+    columns?: string[];
+    icebreaker?: boolean;
+    maxVotes?: number;
+    templateId?: string;
+  } = {},
 ) => request<Board>(`/teams/${teamId}/retros`, {body: {...options, title}, method: 'POST'});
 
 export const sendIcebreakerCommand = (retroId: string, command: IcebreakerCommand) =>
@@ -47,6 +53,7 @@ export const fetchBoard = (retroId: string) => request<Board>(`/retros/${retroId
 export const updateRetro = (
   retroId: string,
   changes: {
+    actionReview?: boolean;
     maxVotes?: number;
     phase?: RetroPhase;
     timer?: {action: TimerAction; seconds?: number};
@@ -134,6 +141,9 @@ export const recordReviewOutcome = (
 
 export const clearReviewOutcome = (retroId: string, actionId: string) =>
   request<void>(`/retros/${retroId}/review/actions/${actionId}`, {method: 'DELETE'});
+
+export const setReviewFocus = (retroId: string, actionId: string | null) =>
+  request<void>(`/retros/${retroId}/review/focus`, {body: {actionId}, method: 'PUT'});
 
 export const fetchActionStats = (teamId: string, retroId?: string) =>
   request<ActionStats>(

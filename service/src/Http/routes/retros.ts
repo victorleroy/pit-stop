@@ -7,7 +7,7 @@ import {CreateRetroDto} from '~/Dto/Retro/CreateRetroDto';
 import {IcebreakerAnswerDto, IcebreakerCommandDto} from '~/Dto/Retro/IcebreakerDto';
 import {CreateNoteDto, UpdateNoteDto} from '~/Dto/Retro/NoteDto';
 import {UpdateRetroDto} from '~/Dto/Retro/UpdateRetroDto';
-import {ReviewOutcomeDto} from '~/Dto/Retro/ReviewDto';
+import {ReviewFocusDto, ReviewOutcomeDto} from '~/Dto/Retro/ReviewDto';
 import {CastVoteDto} from '~/Dto/Retro/VoteDto';
 import {CreateActionDto} from '~/Dto/Action/ActionDto';
 import {HandOverDto} from '~/Dto/Admin/AdminDto';
@@ -43,6 +43,7 @@ export const retroRoutes = (c: Container) => {
       context.req.param('teamId'),
       body.title,
       {
+        ...(body.actionReview === undefined ? {} : {actionReview: body.actionReview}),
         ...(body.columns === undefined ? {} : {columns: body.columns}),
         ...(body.icebreaker === undefined ? {} : {icebreaker: body.icebreaker}),
         ...(body.maxVotes === undefined ? {} : {maxVotes: body.maxVotes}),
@@ -63,6 +64,7 @@ export const retroRoutes = (c: Container) => {
 
     const board = await c.hub.run(retroId, () =>
       c.retroManager.updateRetro(context.get('auth'), retroId, {
+        ...(body.actionReview === undefined ? {} : {actionReview: body.actionReview}),
         ...(body.maxVotes === undefined ? {} : {maxVotes: body.maxVotes}),
         ...(body.phase ? {phase: body.phase as RetroPhase} : {}),
         ...(body.title ? {title: body.title} : {}),
@@ -387,6 +389,17 @@ export const retroRoutes = (c: Container) => {
       c.reviewManager.clearOutcome(auth, retroId, context.req.param('actionId')),
     );
     await refreshTeamBoards(auth, retroId);
+
+    return context.body(null, 204);
+  });
+
+  app.put('/retros/:retroId/review/focus', async (context) => {
+    const retroId = context.req.param('retroId');
+    const body = await validateBody(context, ReviewFocusDto);
+
+    await c.hub.run(retroId, () =>
+      c.reviewManager.setFocus(context.get('auth'), retroId, body.actionId),
+    );
 
     return context.body(null, 204);
   });

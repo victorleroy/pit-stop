@@ -137,7 +137,13 @@ export class RetroManager {
     auth: AuthContext,
     teamId: string,
     title: string,
-    options: {columns?: string[]; icebreaker?: boolean; maxVotes?: number; templateId?: string} = {},
+    options: {
+      actionReview?: boolean;
+      columns?: string[];
+      icebreaker?: boolean;
+      maxVotes?: number;
+      templateId?: string;
+    } = {},
   ): Promise<BoardModel> {
     // Membership first, then the role: an org admin passes the role check on every team, and
     // without this the retro would be written before the board read refused to return it.
@@ -167,6 +173,7 @@ export class RetroManager {
     await auth.db.unscoped.transaction().execute(async (trx) => {
       await this.retroRepository.create(
         {
+          actionReview: (options.actionReview ?? true) ? 1 : 0,
           createdBy: auth.userId,
           defaultTimerSeconds: template?.timerSeconds ?? null,
           icebreakerQuestionId,
@@ -229,8 +236,8 @@ export class RetroManager {
       myVotesLeft: Math.max(0, retro.maxVotes - myVotes.reduce((total, {count}) => total + count, 0)),
       phase: retro.phase,
       review: {
-        enabled: true,
-        focusActionId: null,
+        enabled: Boolean(retro.actionReview),
+        focusActionId: retro.reviewFocusActionId,
         items: RetroManager.buildReviewItems(retro, actions, actionReviews),
       },
       teamId: retro.teamId,
@@ -374,6 +381,7 @@ export class RetroManager {
     auth: AuthContext,
     retroId: string,
     changes: {
+      actionReview?: boolean;
       maxVotes?: number;
       phase?: RetroPhase;
       timer?: {action: TimerAction; seconds?: number};
@@ -385,7 +393,11 @@ export class RetroManager {
     // An archived retro is frozen, but never a dead end: reopening it is always possible.
     if (
       retro.phase === 'ARCHIVED' &&
-      (!changes.phase || changes.title || changes.timer || changes.maxVotes !== undefined)
+      (!changes.phase ||
+        changes.title ||
+        changes.timer ||
+        changes.maxVotes !== undefined ||
+        changes.actionReview !== undefined)
     ) {
       throw new ConflictHttpError('Reopen the retro before changing it');
     }
@@ -393,6 +405,11 @@ export class RetroManager {
     // LOBBY means "not started yet", which stops being true the moment it is left.
     if (changes.phase === 'LOBBY' && retro.phase !== 'LOBBY') {
       throw new ConflictHttpError('The retro has already started');
+    }
+
+    // Whether the retro opens with a review is part of its preparation, settled before it starts.
+    if (changes.actionReview !== undefined && retro.phase !== 'LOBBY') {
+      throw new ConflictHttpError('The action review can only change before the retro starts');
     }
 
     if (changes.phase === 'LOBBY') {
@@ -444,8 +461,23 @@ export class RetroManager {
       }
     }
 
+    // Entering the review puts the first action nobody has decided on in focus; leaving it
+    // drops the focus, so coming back starts from what is still undecided.
+    const reviewChanges: UpdateRetroInput = {};
+
+    if (changes.phase === 'REVIEW' && retro.phase !== 'REVIEW') {
+      const data = await this.boardRepository.loadBoard(retro);
+      const items = RetroManager.buildReviewItems(retro, data.actions, data.actionReviews);
+
+      reviewChanges.reviewFocusActionId = items.find((item) => !item.outcome)?.action.id ?? null;
+    } else if (changes.phase && changes.phase !== 'REVIEW' && retro.phase === 'REVIEW') {
+      reviewChanges.reviewFocusActionId = null;
+    }
+
     await this.retroRepository.update(retroId, {
       ...icebreakerChanges,
+      ...reviewChanges,
+      ...(changes.actionReview === undefined ? {} : {actionReview: changes.actionReview ? 1 : 0}),
       ...(changes.maxVotes === undefined ? {} : {maxVotes: changes.maxVotes}),
       ...(changes.phase ? {phase: changes.phase} : {}),
       ...(changes.title ? {title: changes.title} : {}),

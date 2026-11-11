@@ -66,6 +66,7 @@ const PHASE_LABELS: Record<RetroPhase, string> = {
   DISCUSS: 'Discuss',
   ICEBREAKER: 'Icebreaker',
   LOBBY: 'Waiting room',
+  REVIEW: 'Review',
   SHARE: 'Share',
   VOTE: 'Vote',
 };

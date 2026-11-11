@@ -114,6 +114,15 @@ describe('action review', () => {
     expect((await action()).closedAt).toBe(first.reviewedAt);
   });
 
+  it('keeps the comment when the outcome changes without one', async () => {
+    await record('DONE', 'Shipped');
+    await record('KEPT');
+
+    expect((await reviewRows())[0]).toMatchObject({comment: 'Shipped', outcome: 'KEPT'});
+    await record('DROPPED', null);
+    expect((await reviewRows())[0]!.comment).toBeNull();
+  });
+
   it('stores a blank comment as none', async () => {
     const item = await record('DONE', '   ');
 
@@ -181,7 +190,7 @@ describe('action review', () => {
   });
 
   it('records an outcome in every phase but ARCHIVED', async () => {
-    for (const phase of ['SHARE', 'VOTE', 'DISCUSS'] as const) {
+    for (const phase of ['REVIEW', 'SHARE', 'VOTE', 'DISCUSS'] as const) {
       await harness.container.retroManager.updateRetro(owner, retroId, {
         phase,
       });
@@ -233,7 +242,7 @@ describe('action review', () => {
   it('gives the same review block to every reader, in every phase', async () => {
     await record('DONE', 'Shipped');
 
-    for (const phase of ['BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS', 'ARCHIVED'] as const) {
+    for (const phase of ['REVIEW', 'BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS', 'ARCHIVED', 'REVIEW'] as const) {
       await harness.container.retroManager.updateRetro(owner, retroId, {
         phase,
       });
@@ -264,6 +273,136 @@ describe('action review', () => {
       'disk full',
     );
     expect(await action()).toMatchObject({closedAt: null, status: 'OPEN'});
+  });
+
+  /** BEHAVIOUR.md section 3, REVIEW: the facilitator walks the team through its open actions. */
+  describe('REVIEW phase', () => {
+    let secondActionId: string;
+
+    const enter = (phase: 'REVIEW' | 'BRAINSTORM' | 'SHARE' | 'DISCUSS' | 'ARCHIVED') =>
+      harness.container.retroManager.updateRetro(owner, retroId, {phase});
+    const focus = (id: string | null, auth = owner) => review(harness).setFocus(auth, retroId, id);
+
+    beforeEach(async () => {
+      secondActionId = (
+        await harness.container.actionManager.create(owner, previousRetroId, 'Write the runbook')
+      ).id;
+      await tick();
+      // Reviewed by a retro opened after both actions were decided.
+      retroId = (await harness.createStartedRetro(owner, teamId, 'Sprint 43')).id;
+    });
+
+    it('focuses the first undecided action on entering, and drops the focus on leaving', async () => {
+      await record('DONE');
+      await expect(enter('REVIEW')).resolves.toMatchObject({
+        review: {focusActionId: secondActionId},
+      });
+      await expect(enter('BRAINSTORM')).resolves.toMatchObject({review: {focusActionId: null}});
+    });
+
+    it('focuses nothing when every action is decided', async () => {
+      await record('KEPT');
+      await review(harness).recordOutcome(member, retroId, secondActionId, 'DROPPED');
+
+      await expect(enter('REVIEW')).resolves.toMatchObject({review: {focusActionId: null}});
+    });
+
+    it('keeps the focus where it is when the action under it is decided', async () => {
+      await enter('REVIEW');
+      await record('DONE');
+
+      expect((await itemsFor(member)).focusActionId).toBe(actionId);
+    });
+
+    it('lets the facilitator alone move the focus, for everyone', async () => {
+      await enter('REVIEW');
+      await focus(secondActionId);
+
+      expect((await itemsFor(member)).focusActionId).toBe(secondActionId);
+      await focus(null);
+      expect((await itemsFor(member)).focusActionId).toBeNull();
+      await expect(focus(actionId, member)).rejects.toMatchObject({status: 403});
+    });
+
+    it('refuses to move the focus outside REVIEW, with a conflict once archived', async () => {
+      await expect(focus(actionId)).rejects.toMatchObject({status: 403});
+      await enter('ARCHIVED');
+      await expect(focus(actionId)).rejects.toMatchObject({status: 409});
+    });
+
+    it('refuses to focus an action this retro does not review', async () => {
+      await enter('DISCUSS');
+
+      const ownActionId = (await harness.container.actionManager.create(owner, retroId, 'New one')).id;
+
+      await enter('REVIEW');
+      await expect(focus(ownActionId)).rejects.toMatchObject({status: 409});
+    });
+
+    it('comes back to REVIEW from any phase, ARCHIVED included, with its outcomes', async () => {
+      await enter('REVIEW');
+      await record('DONE', 'Shipped');
+      await enter('ARCHIVED');
+      await expect(enter('REVIEW')).resolves.toMatchObject({
+        phase: 'REVIEW',
+        review: {focusActionId: secondActionId},
+      });
+      expect((await itemsFor(member)).items[0]).toMatchObject({comment: 'Shipped', outcome: 'DONE'});
+    });
+
+    it('enters REVIEW and the brainstorm without a column, nothing further', async () => {
+      const blank = await harness.container.retroManager.create(owner, teamId, 'Blank', {columns: []});
+      const move = (phase: 'REVIEW' | 'BRAINSTORM' | 'SHARE') =>
+        harness.container.retroManager.updateRetro(owner, blank.id, {phase});
+
+      await expect(move('REVIEW')).resolves.toMatchObject({phase: 'REVIEW'});
+      await expect(move('SHARE')).rejects.toMatchObject({status: 409});
+      await expect(move('BRAINSTORM')).resolves.toMatchObject({phase: 'BRAINSTORM'});
+    });
+
+    it('keeps the votes on a detour through REVIEW, and wipes them on arriving in SHARE', async () => {
+      const board = await harness.container.retroManager.getBoard(owner, retroId);
+
+      await harness.container.noteManager.create(owner, retroId, board.columns[0]!.id, 'Flaky CI');
+      await enter('SHARE');
+      await harness.container.retroManager.updateRetro(owner, retroId, {phase: 'VOTE'});
+
+      const voting = await harness.container.retroManager.getBoard(owner, retroId);
+
+      await harness.container.voteManager.cast(owner, retroId, voting.columns[0]!.cards[0]!.id, 1);
+      await enter('DISCUSS');
+      await expect(enter('REVIEW')).resolves.toMatchObject({myVotesLeft: 4});
+      await expect(
+        harness.container.retroManager.updateRetro(owner, retroId, {maxVotes: 3}),
+      ).rejects.toMatchObject({message: 'Votes per person can only change before voting starts'});
+      await expect(enter('SHARE')).resolves.toMatchObject({myVotesLeft: 5});
+    });
+
+    it('reviews by default, and can be turned off in the waiting room only', async () => {
+      const lobby = await harness.container.retroManager.create(owner, teamId, 'Sprint 43');
+
+      expect(lobby.review.enabled).toBe(true);
+      await expect(
+        harness.container.retroManager.updateRetro(owner, lobby.id, {actionReview: false}),
+      ).resolves.toMatchObject({review: {enabled: false}});
+      await expect(
+        harness.container.retroManager.updateRetro(member, lobby.id, {actionReview: true}),
+      ).rejects.toMatchObject({status: 403});
+      await expect(
+        harness.container.retroManager.updateRetro(owner, retroId, {actionReview: false}),
+      ).rejects.toMatchObject({
+        message: 'The action review can only change before the retro starts',
+        status: 409,
+      });
+    });
+
+    it('creates a retro without review when asked', async () => {
+      const board = await harness.container.retroManager.create(owner, teamId, 'Sprint 43', {
+        actionReview: false,
+      });
+
+      expect(board.review).toMatchObject({enabled: false, focusActionId: null});
+    });
   });
 
   describe('over HTTP', () => {
@@ -313,6 +452,45 @@ describe('action review', () => {
 
       expect(response.status).toBe(200);
       expect(refresh).toHaveBeenCalledWith([otherRetroId]);
+    });
+
+    it('moves the focus and validates it', async () => {
+      await harness.container.retroManager.updateRetro(owner, retroId, {phase: 'REVIEW'});
+
+      const path = `/retros/${retroId}/review/focus`;
+      const put = (body: unknown, auth = owner) =>
+        request(path, {body: JSON.stringify(body), method: 'PUT'}, auth);
+
+      expect((await put({actionId: actionId})).status).toBe(204);
+      expect((await put({actionId: null})).status).toBe(204);
+      expect((await put({actionId: ''})).status).toBe(400);
+      expect((await put({})).status).toBe(400);
+      expect((await put({actionId}, member)).status).toBe(403);
+    });
+
+    it('turns the review off at creation and in the waiting room', async () => {
+      const created = await request(`/teams/${teamId}/retros`, {
+        body: JSON.stringify({actionReview: false, title: 'Sprint 43'}),
+        method: 'POST',
+      }, owner);
+      const board = (await created.json()) as {id: string; review: {enabled: boolean}};
+
+      expect(board.review.enabled).toBe(false);
+
+      const patched = await request(`/retros/${board.id}`, {
+        body: JSON.stringify({actionReview: true}),
+        method: 'PATCH',
+      }, owner);
+
+      expect(await patched.json()).toMatchObject({review: {enabled: true}});
+      expect(
+        (
+          await request(`/retros/${board.id}`, {
+            body: JSON.stringify({actionReview: 'yes'}),
+            method: 'PATCH',
+          }, owner)
+        ).status,
+      ).toBe(400);
     });
 
     it('refuses the review to an org admin who is not in the team', async () => {

@@ -2,6 +2,8 @@ import type {Db} from '~/Db/connection';
 import type {ActionReviewOutcome, ActionStatus, RetroPhase} from '~/Db/schema';
 
 export interface RetroRow {
+  /** Always 0 or 1: whether the retro reviews the team's open actions before the brainstorm. */
+  actionReview: number;
   createdAt: string;
   createdBy: string;
   defaultTimerSeconds: number | null;
@@ -17,6 +19,8 @@ export interface RetroRow {
   maxVotes: number;
   orgId: string;
   phase: RetroPhase;
+  /** The action the facilitator is reviewing, in REVIEW only. */
+  reviewFocusActionId: string | null;
   teamId: string;
   /** Snapshot of the template the retro started from, never joined (ADR 0004). */
   templateId: string | null;

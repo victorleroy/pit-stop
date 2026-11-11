@@ -27,6 +27,8 @@ const RETRO_COLUMNS = [
   'icebreakerCustomText',
   'icebreakerAskedAt',
   'icebreakerAnswersRevealed',
+  'actionReview',
+  'reviewFocusActionId',
 ] as const;
 
 /**

@@ -23,9 +23,13 @@ const RETRO_COLUMNS = [
   'icebreakerCustomText',
   'icebreakerAskedAt',
   'icebreakerAnswersRevealed',
+  'actionReview',
+  'reviewFocusActionId',
 ] as const;
 
 export interface CreateRetroInput {
+  /** 0 or 1; left out, the column default (1) applies. */
+  actionReview?: number;
   createdBy: string;
   defaultTimerSeconds?: number | null;
   /** Drawn, not asked yet: the question is asked on entering ICEBREAKER. */
@@ -41,6 +45,7 @@ export interface CreateRetroInput {
 }
 
 export interface UpdateRetroInput {
+  actionReview?: number;
   facilitatorId?: string;
   icebreakerAnswersRevealed?: number;
   icebreakerAskedAt?: string | null;
@@ -48,6 +53,7 @@ export interface UpdateRetroInput {
   icebreakerQuestionId?: string | null;
   maxVotes?: number;
   phase?: RetroPhase;
+  reviewFocusActionId?: string | null;
   timerEndsAt?: string | null;
   timerRemainingMs?: number | null;
   timerTotalMs?: number | null;
@@ -137,6 +143,7 @@ export class RetroRepository {
     await executor
       .insertInto('retros')
       .values({
+        ...(input.actionReview === undefined ? {} : {actionReview: input.actionReview}),
         createdAt: new Date().toISOString(),
         createdBy: input.createdBy,
         defaultTimerSeconds: input.defaultTimerSeconds ?? null,
