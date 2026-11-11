@@ -426,11 +426,14 @@ export class RetroManager {
           throw new ConflictHttpError('There is no timer to extend');
         }
 
+        const currentMs = isPaused ? retro.timerRemainingMs! : runningRemainingMs;
+
+        if (seconds < 0 && currentMs === 0) {
+          throw new ConflictHttpError('The timer is already over');
+        }
+
         // A negative extension that exceeds what is left ends the round instead of going below zero.
-        const remainingMs = Math.max(
-          0,
-          (isPaused ? retro.timerRemainingMs! : runningRemainingMs) + seconds * 1000,
-        );
+        const remainingMs = Math.max(0, currentMs + seconds * 1000);
         // The round follows the extension, otherwise the bar would run past its own end.
         const total = Math.max(remainingMs, (retro.timerTotalMs ?? 0) + seconds * 1000);
 

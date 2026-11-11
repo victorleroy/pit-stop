@@ -5,7 +5,7 @@ import type {DieRoll, Participant} from '@/api/types';
 import {DieFace, RollingDie} from '@/components/DieFace';
 import {speakingOrder} from '@/utils/speakingOrder';
 
-export const DIE_SIZE = 40;
+const DIE_SIZE = 40;
 const FACE_SIZE = 32;
 
 const dieBox = {

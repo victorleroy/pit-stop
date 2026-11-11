@@ -27,6 +27,7 @@ export const useDiceSpin = (
     const landed = rolls.filter(({userId}) => !known.has(userId) && !spinning[userId] && userId !== mine);
 
     if (mine && (!rolls.length || rolls.some(({userId}) => userId === mine))) setMine(undefined);
+    if (isSnapshot) setToHold(undefined);
 
     if (!rolls.length) {
       setSpinning({});
@@ -38,7 +39,7 @@ export const useDiceSpin = (
     }
   }
 
-  if (toHold && toHold !== mine && !spinning[toHold] && rolls.some(({userId}) => userId === toHold)) {
+  if (toHold && !isSnapshot && toHold !== mine && !spinning[toHold] && rolls.some(({userId}) => userId === toHold)) {
     setToHold(undefined);
     setHold({until: Date.now() + HOLD_MS, userId: toHold});
   }

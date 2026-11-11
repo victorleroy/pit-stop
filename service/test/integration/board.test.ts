@@ -465,10 +465,10 @@ describe('board', () => {
       expect(board.timer.remainingMs).toBe(0);
       expect(board.timer.totalMs).toBe(0);
 
-      await timer('pause');
-      const frozen = await timer('extend', -60);
+      await expect(timer('extend', -60)).rejects.toThrow('already over');
 
-      expect(frozen.timer.remainingMs).toBe(0);
+      await timer('pause');
+      await expect(timer('extend', -60)).rejects.toThrow('already over');
     });
 
     it('refuses to shorten a timer that does not exist', async () => {

@@ -408,7 +408,7 @@ export const BoardToolbar = ({
                       font: 'inherit',
                       p: 0,
                       // On a phone the die needs a little of the track's width beside Discuss.
-                      width: {xs: dice ? 58 : 64, sm: 92},
+                      width: {xs: dice ? 54 : 64, sm: 92},
                     }}
                   >
                     {/*

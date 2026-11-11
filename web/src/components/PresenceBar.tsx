@@ -125,7 +125,7 @@ export const PresenceBar = ({
                   <Stack
                     aria-label={`${ordinal(rank)}, rolled ${value}`}
                     direction="row"
-                    key={`${rank}-${value}`}
+                    key={value}
                     role="img"
                     sx={{
                       alignItems: 'center',

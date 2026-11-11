@@ -408,7 +408,8 @@ template's suggested duration (`board.defaultTimerSeconds`), 5 minutes otherwise
 The facilitator's `-1` and `+1` buttons send `-60` and `+60`; they exist only while a timer is
 running or paused. A cut larger than what is left ends the round instead: the remaining time
 clamps to `0` (a running clock reaches zero at once, chime included), never below. Extending an
-already-overdue timer never yields a negative duration.
+already-overdue timer never yields a negative duration; cutting one is `409` and its `-1` is
+disabled.
 
 ### Waiting room game
 

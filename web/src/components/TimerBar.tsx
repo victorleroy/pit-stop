@@ -325,7 +325,7 @@ export const TimerControls = ({
             <span>
               <Button
                 aria-label="Remove a minute from the timer"
-                disabled={isBusy}
+                disabled={isBusy || isOver}
                 onClick={() => onTimer('extend', -EXTEND_SECONDS)}
                 size="small"
                 sx={{minWidth: 0, px: 1}}
