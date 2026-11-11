@@ -525,6 +525,11 @@ Inbound actions: `subscribe`, `cursor`.
   over the board. Only the columns scale; the toolbar and the cursors of others keep their size.
   The zoom is per viewer, kept in `localStorage` under `pit-stop.board-zoom`, and falls back to
   100% when storage is unavailable.
+- **Filter by person**: once at least two people wrote on the board, the toolbar offers a
+  `Everyone` select listing the note authors, which every card already names (section 4), so
+  the filter tells nothing the board does not. Picking one or several fades every other note,
+  shared or not, in every phase; `Everyone` clears it. The filter is client-side, per viewer
+  and not kept across reloads; it complements the indigo edge on the viewer's own notes.
 
 ### Routes
 

@@ -27,6 +27,7 @@ import type {Board, RetroPhase, TimerAction} from '@/api/types';
 import {TimerControls} from '@/components/TimerBar';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
 import {DEFAULT_ZOOM, ZOOM_LEVELS, stepZoom} from '@/utils/boardZoom';
+import {boardAuthors} from '@/utils/authorFilter';
 import {WASH_EDGE} from '@/theme/texture';
 
 const PHASE_LABELS: Record<RetroPhase, string> = {
@@ -55,12 +56,14 @@ const VOTE_SETTING_PHASES: RetroPhase[] = ['BRAINSTORM', 'SHARE'];
  * Everything the facilitator needs mid-session, on a single line whenever it fits.
  */
 export const BoardToolbar = ({
+  authorFilter,
   board,
   isAddingColumn,
   isBusy,
   isTimerBusy,
   onAddColumn,
   onAddingColumnChange,
+  onAuthorFilterChange,
   onHide,
   onMaxVotesChange,
   onOpenActions,
@@ -73,6 +76,7 @@ export const BoardToolbar = ({
   receivedAt,
   zoom,
 }: {
+  authorFilter: string[];
   board: Board;
   /** Owned by the page, so an empty board can open the same dialog from its own button. */
   isAddingColumn: boolean;
@@ -81,6 +85,7 @@ export const BoardToolbar = ({
   isTimerBusy: boolean;
   onAddColumn: (title: string) => void;
   onAddingColumnChange: (isAdding: boolean) => void;
+  onAuthorFilterChange: (authorIds: string[]) => void;
   onHide: () => void;
   onMaxVotesChange: (maxVotes: number) => void;
   onOpenActions: () => void;
@@ -176,6 +181,37 @@ export const BoardToolbar = ({
           </Button>
         ) : null}
       </>
+    ) : null;
+
+  // Only names every card already shows: filtering never tells more than the board does.
+  const authors = boardAuthors(board);
+  const authorNames = new Map(authors.map(({id, name}) => [id, name]));
+  const selectedAuthors = authorFilter.filter((id) => authorNames.has(id));
+
+  const filterBlock =
+    authors.length > 1 ? (
+      <Select
+        inputProps={{'aria-label': 'Filter by person'}}
+        displayEmpty
+        multiple
+        onChange={(event) => {
+          const value = event.target.value as string[];
+          onAuthorFilterChange(value.includes('') ? [] : value);
+        }}
+        renderValue={(ids: string[]) =>
+          ids.length ? ids.map((id) => authorNames.get(id)).join(', ') : 'Everyone'
+        }
+        size="small"
+        sx={{'& .MuiSelect-select': {py: 0.5}, maxWidth: 220, minWidth: 120}}
+        value={selectedAuthors}
+      >
+        <MenuItem value="">Everyone</MenuItem>
+        {authors.map(({id, name}) => (
+          <MenuItem key={id} value={id}>
+            {name}
+          </MenuItem>
+        ))}
+      </Select>
     ) : null;
 
   const moveOnButton = (
@@ -311,7 +347,7 @@ export const BoardToolbar = ({
     </Stack>
   ) : null;
 
-  const blocks = [timerBlock, myBlock, zoomBlock, actionsBlock, facilitatorBlock].filter(Boolean);
+  const blocks = [timerBlock, myBlock, filterBlock, zoomBlock, actionsBlock, facilitatorBlock].filter(Boolean);
 
   return (
     <Card elevation={0} sx={{overflow: 'hidden'}}>

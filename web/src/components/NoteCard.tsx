@@ -22,6 +22,7 @@ export const NoteCard = ({
   columnIndex,
   isBusy,
   isClustered,
+  isDimmed = false,
   isFacilitator,
   note,
   onRemove,
@@ -37,6 +38,7 @@ export const NoteCard = ({
   columnIndex: number;
   isBusy: boolean;
   isClustered: boolean;
+  isDimmed?: boolean;
   isFacilitator: boolean;
   note: Note;
   onRemove: () => void;
@@ -79,8 +81,9 @@ export const NoteCard = ({
         boxShadow: isWithheld ? 'none' : PAPER_SHADOW,
         color: isWithheld ? SLIPSTREAM.inkMuted : ink,
         cursor: canHandle && !isEditing ? 'grab' : 'default',
+        opacity: isDimmed ? 0.3 : 1,
         p: 1.25,
-        transition: 'transform 140ms ease, box-shadow 140ms ease',
+        transition: 'transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease',
       }}
     >
       <Stack spacing={0.75}>

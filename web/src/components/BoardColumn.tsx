@@ -20,6 +20,7 @@ import {CardStack} from '@/components/CardStack';
 import {isGroupOnlyDrag} from '@/utils/noteDrag';
 
 export const BoardColumn = ({
+  authorFilter,
   canAddNote,
   canDecide,
   canGroup,
@@ -51,6 +52,7 @@ export const BoardColumn = ({
   showTotals,
   votesLeft,
 }: {
+  authorFilter: string[];
   canAddNote: boolean;
   canDecide: boolean;
   canGroup: boolean;
@@ -222,6 +224,7 @@ export const BoardColumn = ({
 
         {column.cards.map((card) => (
           <CardStack
+            authorFilter={authorFilter}
             canDecide={canDecide}
             canGroup={canGroup}
             canModerate={canModerate}

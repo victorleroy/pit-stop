@@ -13,6 +13,7 @@ import {
 import {useState} from 'react';
 import type {Card} from '@/api/types';
 import {NoteCard} from '@/components/NoteCard';
+import {isFilteredOut} from '@/utils/authorFilter';
 import {InlineEditor} from '@/components/InlineEditor';
 import {SLIPSTREAM} from '@/ui/theme';
 import {isDraggedFromOtherColumn} from '@/utils/noteDrag';
@@ -71,6 +72,7 @@ const VoteCount = ({
  * vote on, and the drop target when grouping.
  */
 export const CardStack = ({
+  authorFilter,
   canDecide = false,
   canGroup,
   canModerate,
@@ -93,6 +95,8 @@ export const CardStack = ({
   showTotals,
   votesLeft,
 }: {
+  /** Author ids picked in the board's filter: the other notes fade, none means everybody. */
+  authorFilter: string[];
   canDecide?: boolean;
   canGroup: boolean;
   canModerate: boolean;
@@ -235,6 +239,7 @@ export const CardStack = ({
             columnIndex={columnIndex}
             isBusy={isBusy}
             isClustered={isCluster}
+            isDimmed={isFilteredOut(note.author.id, authorFilter)}
             isFacilitator={isFacilitator}
             key={note.id}
             note={note}

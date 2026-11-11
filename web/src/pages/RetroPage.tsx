@@ -143,6 +143,7 @@ export const RetroPage = () => {
   );
   // Per viewer: each screen picks its own, cursors stay fractions of the board whatever it is.
   const [zoom, setZoom] = useState(readZoom);
+  const [authorFilter, setAuthorFilter] = useState<string[]>([]);
   const [boardElement, setBoardElement] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => saveZoom(zoom), [zoom]);
@@ -442,12 +443,14 @@ export const RetroPage = () => {
       </Stack>
 
       <BoardToolbar
+        authorFilter={authorFilter}
         board={board}
         isAddingColumn={isAddingColumn}
         isBusy={isBusy}
         isTimerBusy={timerMutation.isPending}
         onAddColumn={(title) => addColumnMutation.mutate(title)}
         onAddingColumnChange={setIsAddingColumn}
+        onAuthorFilterChange={setAuthorFilter}
         onHide={() => hideMutation.mutate()}
         onMaxVotesChange={(maxVotes) => maxVotesMutation.mutate(maxVotes)}
         onOpenActions={() => setIsActionsOpen((isOpen) => !isOpen)}
@@ -501,6 +504,7 @@ export const RetroPage = () => {
             <Stack direction="row" sx={{alignItems: 'flex-start', flexWrap: 'nowrap', gap: 2, zoom}}>
               {board.columns.map((column, index) => (
                 <BoardColumn
+                  authorFilter={authorFilter}
                   canAddNote={['BRAINSTORM', 'SHARE'].includes(board.phase)}
                   canDecide={canDecide}
                   canEditColumn={board.isFacilitator && board.phase === 'BRAINSTORM'}
