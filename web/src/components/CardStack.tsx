@@ -166,11 +166,12 @@ export const CardStack = ({
             : isCluster
               ? 'divider'
               : 'transparent',
-        // Square, like the notes it holds.
-        borderRadius: 0,
-        borderStyle: isCluster || isRefused ? 'solid' : 'dashed',
+        // The Card theme's shadow would paint a second, square layer behind a lone note.
+        borderRadius: isCluster ? '14px' : '10px',
+        borderStyle: 'solid',
         borderWidth: isOver || isRefused ? 2 : 1,
         // The vote badge straddles the corner, and Paper clips its overflow by default.
+        boxShadow: 'none',
         overflow: 'visible',
         p: isCluster ? 1.5 : 0,
         position: 'relative',
