@@ -801,7 +801,7 @@ epoch milliseconds; `points` in `game.hit` is the player's total, not a delta.
 - Cursors are **not relayed during LOBBY, ICEBREAKER, BRAINSTORM and VOTE** (there is no
   board in the waiting room nor during the icebreaker, and elsewhere they would show where others write or vote); the client does not
   draw them either. Every other phase relays them.
-- Each participant has one **stable colour** derived from their `userId` (hash into a fixed 12-colour palette, readable in light and dark theme). The cursor, its name label and the initials of every avatar (`UserAvatar`: presence, notes, member lists, header) share it; it is computed client-side, nothing is stored.
+- Each participant has one **stable colour** derived from their `userId` (hash into a fixed 10-colour palette taken from the design system tokens of `web/src/ui/theme.ts`, all readable under white initials). The cursor, its name label and the initials of every avatar (`UserAvatar`: presence, notes, member lists, header) share it; it is computed client-side, nothing is stored.
 - Cursor coordinates are **board-relative**, as a fraction of the box the columns take, zoom
   included: every screen and every zoom level differs, the same fraction lands on the same note.
 - `presence.updated` deduplicates by `userId` (several tabs are one person) and sorts by name.

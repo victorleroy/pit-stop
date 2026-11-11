@@ -1,4 +1,5 @@
 import {describe, expect, it} from 'vitest';
+import {SLIPSTREAM} from '@/ui/theme';
 import {USER_PALETTE, userColour} from '@/utils/userColour';
 
 describe('userColour', () => {
@@ -12,6 +13,12 @@ describe('userColour', () => {
     );
 
     expect(used.size).toBe(USER_PALETTE.length);
+  });
+
+  it('only uses colours of the design system', () => {
+    const themeColours = new Set<string>([...Object.values(SLIPSTREAM).flat()]);
+
+    expect(USER_PALETTE.every((colour) => themeColours.has(colour))).toBe(true);
   });
 
   it('separates users whose ids differ by one character', () => {
