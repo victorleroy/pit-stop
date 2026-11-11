@@ -1,11 +1,15 @@
 import type {WebSocket} from 'ws';
 import {RetroManager} from '~/Manager/RetroManager';
-import type {PresenceParticipant, WebSocketEvent} from '~/Model/WebSocketModel';
+import type {DieRoll, PresenceParticipant, WebSocketEvent} from '~/Model/WebSocketModel';
 import type {BoardRepository, RetroRow} from '~/Repository/BoardRepository';
 import {logger} from '~/logger';
 import type {RetroPhase} from '~/Db/schema';
 
 const CURSOR_HIDDEN_PHASES: RetroPhase[] = ['BRAINSTORM', 'VOTE'];
+
+export const DICE_PHASE: RetroPhase = 'DISCUSS';
+
+export type RollOutcome = 'absent' | 'already-rolled' | 'closed' | 'rolled';
 
 export interface Connection {
   name: string;
@@ -34,8 +38,8 @@ export class RetroSession {
 
   private phase: RetroPhase | undefined;
 
-  /** Drawn by the facilitator; held here only, so it ends with the session. */
-  private speakingOrder: PresenceParticipant[] | undefined;
+  /** One die per person, held here only: it ends with the session or with the DISCUSS phase. */
+  private readonly dice = new Map<string, DieRoll & {tieBreak: number}>();
 
   public constructor(
     public readonly retroId: string,
@@ -87,6 +91,10 @@ export class RetroSession {
 
     this.phase = retro.phase;
 
+    if (this.phase !== DICE_PHASE && this.dice.size) {
+      this.resetDice();
+    }
+
     const data = await this.boardRepository.loadBoard(retro);
     const recipients = [...this.connections];
     const allowed = await Promise.all(
@@ -123,29 +131,44 @@ export class RetroSession {
     }
   }
 
-  /** A random order of the people connected right now, sent to every one of them. */
-  public drawSpeakingOrder(random: () => number = Math.random): PresenceParticipant[] {
-    const order = this.participants();
-
-    for (let index = order.length - 1; index > 0; index -= 1) {
-      const other = Math.floor(random() * (index + 1));
-
-      [order[index], order[other]] = [order[other]!, order[index]!];
+  /** Each person rolls their own die, once; the tie-breaker is drawn now and never sent. */
+  public rollDie(userId: string, random: () => number = Math.random): RollOutcome {
+    if (this.phase !== DICE_PHASE) {
+      return 'closed';
     }
 
-    this.speakingOrder = order;
-
-    for (const connection of [...this.connections]) {
-      this.send(connection, {order, type: 'speakingOrder.drawn'});
+    if (this.dice.has(userId)) {
+      return 'already-rolled';
     }
 
-    return order;
+    const participant = this.participants().find((candidate) => candidate.userId === userId);
+
+    if (!participant) {
+      return 'absent';
+    }
+
+    this.dice.set(userId, {...participant, tieBreak: random(), value: Math.floor(random() * 6) + 1});
+    this.broadcastDice();
+
+    return 'rolled';
   }
 
-  /** Somebody joining after the draw sees it too. */
-  public sendSpeakingOrder(connection: Connection): void {
-    if (this.speakingOrder) {
-      this.send(connection, {order: this.speakingOrder, type: 'speakingOrder.drawn'});
+  public resetDice(): void {
+    this.dice.clear();
+    this.broadcastDice();
+  }
+
+  /** Highest first; equal faces keep the order their hidden tie-breakers gave them. */
+  public rolls(): DieRoll[] {
+    return [...this.dice.values()]
+      .sort((left, right) => right.value - left.value || right.tieBreak - left.tieBreak)
+      .map(({tieBreak: _tieBreak, ...roll}) => roll);
+  }
+
+  /** Somebody joining after the first roll sees the dice too. */
+  public sendDice(connection: Connection): void {
+    if (this.dice.size) {
+      this.send(connection, {rolls: this.rolls(), type: 'dice.updated'});
     }
   }
 
@@ -172,6 +195,14 @@ export class RetroSession {
 
   public sendTo(connection: Connection, event: WebSocketEvent): void {
     this.send(connection, event);
+  }
+
+  private broadcastDice(): void {
+    const rolls = this.rolls();
+
+    for (const connection of [...this.connections]) {
+      this.send(connection, {rolls, type: 'dice.updated'});
+    }
   }
 
   private participants(): PresenceParticipant[] {

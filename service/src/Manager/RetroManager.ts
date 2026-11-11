@@ -184,8 +184,13 @@ export class RetroManager {
     return used;
   }
 
-  public async checkFacilitator(auth: AuthContext, retroId: string): Promise<void> {
-    await this.accessChecker.checkFacilitatorAccess(auth, retroId);
+  /** The speaking-order dice exist during the discussion only; resetting them is the facilitator's. */
+  public async checkDice(auth: AuthContext, retroId: string, asFacilitator: boolean): Promise<void> {
+    const {retro} = asFacilitator
+      ? await this.accessChecker.checkFacilitatorAccess(auth, retroId)
+      : await this.accessChecker.checkRetroAccess(auth, retroId);
+
+    RetroAccessChecker.checkPhaseAllows(retro.phase, ['DISCUSS']);
   }
 
   public async updateRetro(

@@ -6,6 +6,11 @@ export interface PresenceParticipant {
   userId: string;
 }
 
+/** One participant's die; the list comes ranked, highest first, ties already broken. */
+export interface DieRoll extends PresenceParticipant {
+  value: number;
+}
+
 /** Board-relative, as a fraction of its box: every screen is a different size. */
 export interface CursorModel {
   name: string;
@@ -19,5 +24,5 @@ export type WebSocketEvent =
   | {cursor: CursorModel; type: 'cursor.moved'}
   | {participants: PresenceParticipant[]; type: 'presence.updated'}
   | {message: string; type: 'error'}
-  | {order: PresenceParticipant[]; type: 'speakingOrder.drawn'}
+  | {rolls: DieRoll[]; type: 'dice.updated'}
   | {type: 'cursor.left'; userId: string};

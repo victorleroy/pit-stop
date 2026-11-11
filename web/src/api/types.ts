@@ -137,6 +137,11 @@ export interface Participant {
   userId: string;
 }
 
+/** One participant's die; the service sends them ranked, highest first, ties already broken. */
+export interface DieRoll extends Participant {
+  value: number;
+}
+
 /** Board-relative, as a fraction of its box: every screen is a different size. */
 export interface Cursor {
   name: string;
@@ -150,7 +155,7 @@ export type ServerEvent =
   | {cursor: Cursor; type: 'cursor.moved'}
   | {message: string; type: 'error'}
   | {participants: Participant[]; type: 'presence.updated'}
-  | {order: Participant[]; type: 'speakingOrder.drawn'}
+  | {rolls: DieRoll[]; type: 'dice.updated'}
   | {type: 'cursor.left'; userId: string};
 
 export interface OrgMemberTeam {

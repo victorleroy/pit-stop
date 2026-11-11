@@ -1,8 +1,9 @@
 import type {Db} from '~/Db/connection';
 import type {PresenceReader} from '~/Manager/AdminManager';
 import type {BoardRepository, RetroRow} from '~/Repository/BoardRepository';
+import {ConflictHttpError, ForbiddenHttpError} from '~/Error/HttpError';
 import {logger} from '~/logger';
-import type {PresenceParticipant} from '~/Model/WebSocketModel';
+import type {DieRoll} from '~/Model/WebSocketModel';
 import type {Authorizer, Connection} from '~/Realtime/RetroSession';
 import {RetroSession} from '~/Realtime/RetroSession';
 
@@ -132,9 +133,28 @@ export class SessionHub implements PresenceReader {
     }
   }
 
-  /** Nobody connected, nobody to order: the draw needs the live session. */
-  public drawSpeakingOrder(retroId: string): PresenceParticipant[] {
-    return this.sessions.get(retroId)?.drawSpeakingOrder() ?? [];
+  /** A die belongs to somebody in the room: rolling needs the live session. */
+  public rollDie(retroId: string, userId: string): DieRoll[] {
+    const session = this.sessions.get(retroId);
+    const outcome = session?.rollDie(userId) ?? 'absent';
+
+    if (outcome === 'absent') {
+      throw new ConflictHttpError('Join the retro to roll your die');
+    }
+
+    if (outcome === 'already-rolled') {
+      throw new ConflictHttpError('You already rolled your die');
+    }
+
+    if (outcome === 'closed') {
+      throw new ForbiddenHttpError('Dice are only rolled during the discussion');
+    }
+
+    return session!.rolls();
+  }
+
+  public resetDice(retroId: string): void {
+    this.sessions.get(retroId)?.resetDice();
   }
 
   /** Backs the facilitation takeover rule without any storage (BEHAVIOUR.md section 5). */

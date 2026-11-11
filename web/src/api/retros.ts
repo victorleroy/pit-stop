@@ -3,7 +3,7 @@ import type {
   Action,
   ActionStatus,
   Board,
-  Participant,
+  DieRoll,
   RetroPhase,
   RetroSummary,
   TeamRetroSummary,
@@ -109,8 +109,11 @@ export const removeRetro = (retroId: string) =>
 export const takeFacilitation = (retroId: string) =>
   request<void>(`/retros/${retroId}/facilitator`, {method: 'POST'});
 
-export const drawSpeakingOrder = (retroId: string) =>
-  request<{order: Participant[]}>(`/retros/${retroId}/speaking-order`, {method: 'POST'});
+export const rollDie = (retroId: string) =>
+  request<{rolls: DieRoll[]}>(`/retros/${retroId}/dice`, {method: 'POST'});
+
+export const resetDice = (retroId: string) =>
+  request<void>(`/retros/${retroId}/dice`, {method: 'DELETE'});
 
 export const handOverFacilitation = (retroId: string, userId: string) =>
   request<void>(`/retros/${retroId}/facilitator`, {body: {userId}, method: 'PUT'});

@@ -271,12 +271,22 @@ export const retroRoutes = (c: Container) => {
     return context.body(null, 204);
   });
 
-  app.post('/retros/:retroId/speaking-order', async (context) => {
+  app.post('/retros/:retroId/dice', async (context) => {
+    const retroId = context.req.param('retroId');
+    const auth = context.get('auth');
+
+    await c.retroManager.checkDice(auth, retroId, false);
+
+    return context.json({rolls: c.hub.rollDie(retroId, auth.userId)});
+  });
+
+  app.delete('/retros/:retroId/dice', async (context) => {
     const retroId = context.req.param('retroId');
 
-    await c.retroManager.checkFacilitator(context.get('auth'), retroId);
+    await c.retroManager.checkDice(context.get('auth'), retroId, true);
+    c.hub.resetDice(retroId);
 
-    return context.json({order: c.hub.drawSpeakingOrder(retroId)});
+    return context.body(null, 204);
   });
 
   // ------------------------------------------------------------------ actions

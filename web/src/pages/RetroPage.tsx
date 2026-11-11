@@ -19,13 +19,14 @@ import {
   castVote,
   createAction,
   createNote,
-  drawSpeakingOrder,
   fetchBoard,
   groupNote,
   hideMyNotes,
   removeColumn,
   removeNote,
   renameCluster,
+  resetDice,
+  rollDie,
   takeFacilitation,
   renameColumn,
   reorderColumns,
@@ -44,6 +45,7 @@ import {ActionList} from '@/components/ActionList';
 import {BoardColumn} from '@/components/BoardColumn';
 import {CursorLayer} from '@/components/CursorLayer';
 import {EmptyState} from '@/components/EmptyState';
+import {useAuth} from '@/contexts/AuthContext';
 import {useToast} from '@/contexts/ToastContext';
 import {BoardToolbar} from '@/components/BoardToolbar';
 import {PresenceBar} from '@/components/PresenceBar';
@@ -174,10 +176,11 @@ export const RetroPage = () => {
   const queryKey = ['retros', retroId, 'board'];
 
   const toast = useToast();
+  const {user} = useAuth();
 
   const onBoard = (next: Board) => queryClient.setQueryData(queryKey, next);
 
-  const {cursors, hideCursor, isConnected, participants, sendCursor, speakingOrder} = useBoardSocket({
+  const {cursors, hideCursor, isConnected, participants, rolls, sendCursor} = useBoardSocket({
     onBoard,
     retroId,
   });
@@ -217,8 +220,12 @@ export const RetroPage = () => {
     onError: (cause: Error) => toast.error(cause.message),
     onSuccess: () => queryClient.invalidateQueries({queryKey}),
   });
-  const speakingOrderMutation = useMutation({
-    mutationFn: () => drawSpeakingOrder(retroId as string),
+  const rollDieMutation = useMutation({
+    mutationFn: () => rollDie(retroId as string),
+    onError: (cause: Error) => toast.error(cause.message),
+  });
+  const resetDiceMutation = useMutation({
+    mutationFn: () => resetDice(retroId as string),
     onError: (cause: Error) => toast.error(cause.message),
   });
   const timerMutation = useMutation({
@@ -431,12 +438,17 @@ export const RetroPage = () => {
             <PresenceBar board={board} isConnected={isConnected} participants={participants} />
           </Stack>
         </Stack>
-        <SpeakingOrder
-          canDraw={board.isFacilitator && isConnected}
-          isBusy={speakingOrderMutation.isPending}
-          onDraw={() => speakingOrderMutation.mutate()}
-          order={speakingOrder}
-        />
+        {board.phase === 'DISCUSS' && isConnected ? (
+          <SpeakingOrder
+            isBusy={rollDieMutation.isPending || resetDiceMutation.isPending}
+            isFacilitator={board.isFacilitator}
+            myUserId={user?.id}
+            onReset={() => resetDiceMutation.mutate()}
+            onRoll={() => rollDieMutation.mutate()}
+            participants={participants}
+            rolls={rolls}
+          />
+        ) : null}
         <Link
           style={{color: 'inherit', textDecoration: 'none', width: 'fit-content'}}
           to={`/teams/${board.teamId}`}

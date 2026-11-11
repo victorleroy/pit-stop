@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {tokenStorage} from '@/api/client';
-import type {Board, Cursor, Participant, ServerEvent} from '@/api/types';
+import type {Board, Cursor, DieRoll, Participant, ServerEvent} from '@/api/types';
 
 // Must match the service: it answers this subprotocol and reads the token offered next to it.
 const SOCKET_PROTOCOL = 'pit-stop';
@@ -41,7 +41,7 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
   const [isConnected, setIsConnected] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [cursors, setCursors] = useState<TimestampedCursor[]>([]);
-  const [speakingOrder, setSpeakingOrder] = useState<Participant[]>([]);
+  const [rolls, setRolls] = useState<DieRoll[]>([]);
   const onBoardRef = useRef(onBoard);
   onBoardRef.current = onBoard;
 
@@ -123,7 +123,7 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
           setCursors((current) => current.filter(({userId}) => present.has(userId)));
         }
 
-        if (payload.type === 'speakingOrder.drawn') setSpeakingOrder(payload.order);
+        if (payload.type === 'dice.updated') setRolls(payload.rolls);
 
         if (payload.type === 'cursor.moved') {
           const {cursor} = payload;
@@ -146,7 +146,7 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
         setIsConnected(false);
         setParticipants([]);
         setCursors([]);
-        setSpeakingOrder([]);
+        setRolls([]);
 
         if (refused) return;
 
@@ -179,5 +179,5 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
     };
   }, [retroId]);
 
-  return {cursors, hideCursor, isConnected, participants, sendCursor, speakingOrder};
+  return {cursors, hideCursor, isConnected, participants, rolls, sendCursor};
 };

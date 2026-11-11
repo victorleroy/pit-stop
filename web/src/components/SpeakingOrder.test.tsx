@@ -3,37 +3,50 @@ import {cleanup, fireEvent, render, screen} from '@testing-library/react';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {SpeakingOrder} from '@/components/SpeakingOrder';
 
-const order = [
-  {name: 'Bob', userId: 'u2'},
-  {name: 'Alice', userId: 'u1'},
-];
+const alice = {name: 'Alice', userId: 'u1'};
+const bob = {name: 'Bob', userId: 'u2'};
+
+const props = {
+  isBusy: false,
+  isFacilitator: false,
+  myUserId: alice.userId,
+  onReset: vi.fn(),
+  onRoll: vi.fn(),
+  participants: [alice, bob],
+};
 
 describe('SpeakingOrder', () => {
   afterEach(cleanup);
 
-  it('lists the drawn order as received, numbered', () => {
-    render(<SpeakingOrder canDraw={false} isBusy={false} onDraw={vi.fn()} order={order} />);
+  it('ranks the rolls as received, then the people still to roll', () => {
+    render(<SpeakingOrder {...props} rolls={[{...bob, value: 5}]} />);
 
     const items = screen.getAllByRole('listitem').map((item) => item.textContent);
 
-    expect(items).toEqual(['1. Bob', '2. Alice']);
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(items).toEqual(['1. Bob', 'You']);
   });
 
-  it('lets the facilitator draw', () => {
-    const onDraw = vi.fn();
+  it('lets me roll my own die only', () => {
+    const onRoll = vi.fn();
 
-    render(<SpeakingOrder canDraw isBusy={false} onDraw={onDraw} order={[]} />);
-    fireEvent.click(screen.getByRole('button', {name: 'Draw speaking order'}));
+    render(<SpeakingOrder {...props} onRoll={onRoll} rolls={[]} />);
+    fireEvent.click(screen.getByRole('button', {name: 'Roll your die'}));
 
-    expect(onDraw).toHaveBeenCalledOnce();
+    expect(onRoll).toHaveBeenCalledOnce();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
-  it('shows nothing to a participant before any draw', () => {
-    const {container} = render(
-      <SpeakingOrder canDraw={false} isBusy={false} onDraw={vi.fn()} order={[]} />,
-    );
+  it('lets the facilitator alone reset the dice once somebody rolled', () => {
+    const rolls = [{...bob, value: 2}];
+    const {rerender} = render(<SpeakingOrder {...props} rolls={rolls} />);
 
-    expect(container.innerHTML).toBe('');
+    expect(screen.queryByRole('button', {name: 'Reset the dice'})).toBeNull();
+
+    const onReset = vi.fn();
+
+    rerender(<SpeakingOrder {...props} isFacilitator onReset={onReset} rolls={rolls} />);
+    fireEvent.click(screen.getByRole('button', {name: 'Reset the dice'}));
+
+    expect(onReset).toHaveBeenCalledOnce();
   });
 });

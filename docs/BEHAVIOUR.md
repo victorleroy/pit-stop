@@ -310,13 +310,15 @@ negative duration.
 
 ### Speaking order
 
-The facilitator can draw a random speaking order (a die button under the title), in any
-phase. The draw shuffles the people connected to the retro at that moment (deduplicated by
-`userId`, like presence) and sends `speakingOrder.drawn` to every connection; everyone sees the
-same numbered list. Drawing again replaces it. The order is held in memory by the
+During DISCUSS only, everybody connected gets a die under the title and rolls their own, once
+(`POST /retros/{retroId}/dice`). The order builds up as the dice land, highest face first; equal
+faces are settled by a tie-breaker drawn with the roll and never sent. Every roll sends
+`dice.updated` with the ranked list to every connection. The facilitator can reset every die
+(`DELETE /retros/{retroId}/dice`). Rolling needs a live connection to the retro (`409`
+otherwise), and outside DISCUSS both calls answer `403`. The dice are held in memory by the
 `RetroSession` actor only: nothing is stored, somebody subscribing later receives the current
-order, and it ends with the session (last participant leaving, or a restart). It reveals
-nothing presence does not already show. Nobody connected means an empty order.
+dice, and they are cleared when the retro leaves DISCUSS or the session ends. They reveal
+nothing presence does not already show.
 
 ### Teams
 
@@ -416,7 +418,8 @@ Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `429`.
 | POST | `/retros/{retroId}/votes` | `200` `Board` |
 | POST | `/retros/{retroId}/facilitator` | `204` |
 | PUT | `/retros/{retroId}/facilitator` | `204` |
-| POST | `/retros/{retroId}/speaking-order` | `200` `{order: [{userId, name, pictureUrl?}]}` — facilitator only |
+| POST | `/retros/{retroId}/dice` | `200` `{rolls: [{userId, name, pictureUrl?, value}]}` — DISCUSS, own die, once |
+| DELETE | `/retros/{retroId}/dice` | `204` — DISCUSS, facilitator only |
 | GET | `/teams/{teamId}/actions` | `200` `Action[]`, most recent first |
 | POST | `/retros/{retroId}/actions` | `201` `Action` |
 | PATCH | `/teams/{teamId}/actions/{actionId}` | `200` `Action` |
@@ -474,7 +477,7 @@ Six outbound events, to keep identical:
 { type: 'presence.updated', participants: [{userId, name, pictureUrl?}] }
 { type: 'cursor.moved',     cursor: {userId, name, x, y} }
 { type: 'cursor.left',      userId }
-{ type: 'speakingOrder.drawn', order: [{userId, name, pictureUrl?}] }
+{ type: 'dice.updated',     rolls: [{userId, name, pictureUrl?, value}] }
 { type: 'error',            message }
 ```
 
@@ -493,7 +496,7 @@ Inbound actions: `subscribe`, `cursor`.
   included: every screen and every zoom level differs, the same fraction lands on the same note.
 - `presence.updated` deduplicates by `userId` (several tabs are one person) and sorts by name.
 - On subscribe: access check, then `broadcastBoard` **and** `broadcastPresence`, then the
-  current speaking order to the new connection when one was drawn.
+  current dice to the new connection when somebody rolled.
 - Access refused on subscribe sends `{type: 'error'}` without closing the socket.
 - A dead connection is pruned on the first failed send.
 - **An action edit refreshes every live board of its team.** The edit runs in the queue of
@@ -513,7 +516,7 @@ Inbound actions: `subscribe`, `cursor`.
 - **Reconnection backoff: 1s, 2s, 5s, 10s**, then stays at 10s. The attempt counter resets on
   a successful open.
 - On open, the client sends `{action: 'subscribe', retroId}`.
-- On close, participants, cursors and the speaking order are cleared.
+- On close, participants, cursors and the dice are cleared.
 - **Cursors are throttled to one message every 120 ms** (about 8 per second); interpolation on
   arrival already looks continuous.
 - A cursor with no update for **8 s** is considered gone; a sweep runs every 2 s.

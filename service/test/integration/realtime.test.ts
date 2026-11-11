@@ -266,7 +266,7 @@ describe('live retros', () => {
       .notes[0]!.text).toBe('');
   });
 
-  it('lets the facilitator alone draw a speaking order, sent to everyone and to late joiners', async () => {
+  describe('speaking-order dice', () => {
     const connect = async (auth: AuthContext) => {
       const socket = Object.assign(new EventEmitter(), {
         close: jest.fn(),
@@ -284,9 +284,9 @@ describe('live retros', () => {
 
       return socket;
     };
-    const orders = (socket: {sent: string[]}) =>
-      socket.sent.map((raw) => JSON.parse(raw)).filter((event) => event.type === 'speakingOrder.drawn');
-    const request = (auth: AuthContext) => {
+    const dice = (socket: {sent: string[]}) =>
+      socket.sent.map((raw) => JSON.parse(raw)).filter((event) => event.type === 'dice.updated');
+    const request = (auth: AuthContext, method: 'DELETE' | 'POST') => {
       const app = new Hono<{Variables: Variables}>();
 
       app.use('*', async (context, next) => {
@@ -296,25 +296,114 @@ describe('live retros', () => {
       app.route('/', retroRoutes(harness.container));
       app.onError(errorHandler);
 
-      return app.request(`/retros/${retroId}/speaking-order`, {method: 'POST'});
+      return app.request(`/retros/${retroId}/dice`, {method});
     };
+    const enter = (phase: 'BRAINSTORM' | 'SHARE' | 'VOTE' | 'DISCUSS' | 'ARCHIVED') =>
+      harness.container.hub.run(retroId, () =>
+        harness.container.retroManager.updateRetro(owner, retroId, {phase}),
+      );
 
-    const facilitator = await connect(owner);
-    const participant = await connect(member);
+    it('refuses rolling and resetting outside DISCUSS', async () => {
+      await connect(owner);
 
-    expect((await request(member)).status).toBe(403);
-    expect(orders(participant)).toHaveLength(0);
+      for (const phase of ['BRAINSTORM', 'SHARE', 'VOTE'] as const) {
+        await enter(phase);
+        expect((await request(owner, 'POST')).status).toBe(403);
+        expect((await request(owner, 'DELETE')).status).toBe(403);
+      }
 
-    const response = await request(owner);
-    const {order} = (await response.json()) as {order: {userId: string}[]};
+      await enter('ARCHIVED');
+      expect((await request(owner, 'POST')).status).toBe(409);
+    });
 
-    expect(response.status).toBe(200);
-    expect(order.map(({userId}) => userId).sort()).toEqual([member.userId, owner.userId].sort());
-    expect(orders(facilitator).at(-1).order).toEqual(order);
-    expect(orders(participant).at(-1).order).toEqual(order);
+    it('lets each person roll their own die once, sent to everyone and to late joiners', async () => {
+      await enter('DISCUSS');
 
-    const lateTab = await connect(member);
+      const facilitator = await connect(owner);
+      const participant = await connect(member);
 
-    expect(orders(lateTab).at(-1).order).toEqual(order);
+      const response = await request(member, 'POST');
+      const {rolls} = (await response.json()) as {rolls: {userId: string; value: number}[]};
+
+      expect(response.status).toBe(200);
+      expect(rolls).toHaveLength(1);
+      expect(rolls[0]!.userId).toBe(member.userId);
+      expect(rolls[0]!.value).toBeGreaterThanOrEqual(1);
+      expect(rolls[0]!.value).toBeLessThanOrEqual(6);
+      expect(rolls[0]).not.toHaveProperty('tieBreak');
+      expect(dice(facilitator).at(-1).rolls).toEqual(rolls);
+      expect(dice(participant).at(-1).rolls).toEqual(rolls);
+
+      expect((await request(member, 'POST')).status).toBe(409);
+      expect(dice(facilitator)).toHaveLength(1);
+
+      await request(owner, 'POST');
+
+      const lateTab = await connect(member);
+
+      expect(dice(lateTab).at(-1).rolls).toHaveLength(2);
+    });
+
+    it('refuses a roll from somebody not in the room', async () => {
+      await enter('DISCUSS');
+      await connect(owner);
+
+      expect((await request(member, 'POST')).status).toBe(409);
+    });
+
+    it('lets the facilitator alone reset every die', async () => {
+      await enter('DISCUSS');
+
+      const participant = await connect(member);
+
+      await connect(owner);
+      await request(member, 'POST');
+
+      expect((await request(member, 'DELETE')).status).toBe(403);
+      expect((await request(owner, 'DELETE')).status).toBe(204);
+      expect(dice(participant).at(-1).rolls).toEqual([]);
+      expect((await request(member, 'POST')).status).toBe(200);
+    });
+
+    it('clears the dice when the retro leaves DISCUSS', async () => {
+      await enter('DISCUSS');
+
+      const participant = await connect(member);
+
+      await request(member, 'POST');
+      await enter('VOTE');
+
+      expect(dice(participant).at(-1).rolls).toEqual([]);
+
+      await enter('DISCUSS');
+      expect((await request(member, 'POST')).status).toBe(200);
+    });
+
+    it('ranks the highest face first and breaks ties with the hidden draw', async () => {
+      await enter('DISCUSS');
+      await connect(owner);
+      await connect(member);
+
+      const session = harness.container.hub.get(retroId)!;
+      const sequence = (...values: number[]) => () => values.shift()!;
+
+      // tie-breaker first, then the face.
+      expect(session.rollDie(owner.userId, sequence(0.2, 0.9))).toBe('rolled');
+      expect(session.rollDie(member.userId, sequence(0.8, 0.95))).toBe('rolled');
+
+      expect(session.rolls().map(({userId, value}) => [userId, value])).toEqual([
+        [member.userId, 6],
+        [owner.userId, 6],
+      ]);
+
+      session.resetDice();
+      session.rollDie(owner.userId, sequence(0.1, 0.5));
+      session.rollDie(member.userId, sequence(0.9, 0.1));
+
+      expect(session.rolls().map(({userId, value}) => [userId, value])).toEqual([
+        [owner.userId, 4],
+        [member.userId, 1],
+      ]);
+    });
   });
 });
