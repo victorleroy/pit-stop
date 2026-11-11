@@ -16,6 +16,7 @@ import type {Card} from '@/api/types';
 import {NoteCard} from '@/components/NoteCard';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
 import {SLIPSTREAM} from '@/ui/theme';
+import {isDraggedFromOtherColumn} from '@/utils/noteDrag';
 
 const COUNT_TONES = {
   muted: {
@@ -113,6 +114,7 @@ export const CardStack = ({
   votesLeft: number;
 }) => {
   const [isOver, setIsOver] = useState(false);
+  const [isRefused, setIsRefused] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [titleDraft, setTitleDraft] = useState(card.title ?? '');
   const titleRef = useAutoFocus(isRenaming);
@@ -138,14 +140,27 @@ export const CardStack = ({
   return (
     <CardSurface
       elevation={0}
-      onDragLeave={() => setIsOver(false)}
+      onDragLeave={() => {
+        setIsOver(false);
+        setIsRefused(false);
+      }}
       onDragOver={(event) => {
         if (!canGroup) return;
+        const columnId = card.notes[0]?.columnId;
+        if (columnId && isDraggedFromOtherColumn(event.dataTransfer, columnId)) {
+          // A cluster lives in one column: refuse the drop here rather than let the column
+          // underneath accept it.
+          event.stopPropagation();
+          event.dataTransfer.dropEffect = 'none';
+          setIsRefused(true);
+          return;
+        }
         event.preventDefault();
         setIsOver(true);
       }}
       onDrop={(event) => {
         setIsOver(false);
+        setIsRefused(false);
         if (!canGroup) return;
         const noteId = event.dataTransfer.getData('text/note-id');
         if (noteId && noteId !== card.id) {
@@ -156,11 +171,17 @@ export const CardStack = ({
       }}
       sx={{
         bgcolor: isCluster ? 'rgba(15, 23, 42, 0.03)' : 'transparent',
-        borderColor: isOver ? 'primary.main' : isCluster ? 'divider' : 'transparent',
+        borderColor: isRefused
+          ? 'error.main'
+          : isOver
+            ? 'primary.main'
+            : isCluster
+              ? 'divider'
+              : 'transparent',
         // Square, like the notes it holds.
         borderRadius: 0,
-        borderStyle: isCluster ? 'solid' : 'dashed',
-        borderWidth: isOver ? 2 : 1,
+        borderStyle: isCluster || isRefused ? 'solid' : 'dashed',
+        borderWidth: isOver || isRefused ? 2 : 1,
         // The vote badge straddles the corner, and Paper clips its overflow by default.
         overflow: 'visible',
         p: isCluster ? 1.5 : 0,

@@ -9,6 +9,7 @@ import {useAutoFocus} from '@/hooks/useAutoFocus';
 import {initials} from '@/utils/initials';
 import {SLIPSTREAM} from '@/ui/theme';
 import {PAPER_SHADOW, PAPER_SHADOW_RAISED, noteColours} from '@/theme/texture';
+import {startNoteDrag} from '@/utils/noteDrag';
 
 export const NoteCard = ({
   canDrag,
@@ -62,7 +63,7 @@ export const NoteCard = ({
   return (
     <Box
       draggable={canHandle && !isEditing}
-      onDragStart={(event) => event.dataTransfer.setData('text/note-id', note.id)}
+      onDragStart={(event) => startNoteDrag(event.dataTransfer, note.id, note.columnId)}
       sx={{
         '&:hover': canHandle
           ? {boxShadow: PAPER_SHADOW_RAISED, transform: 'translateY(-2px)'}

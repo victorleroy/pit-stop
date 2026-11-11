@@ -225,6 +225,8 @@ member.
 - Grouping is allowed **only in `SHARE`**, because once votes are cast they belong to a card
   and moving notes would silently move other people's votes.
 - **Only inside the same column** (`409`).
+  The board does not send such a request: while a note is dragged over a card of another
+  column, that card shows a red outline and refuses the drop, with no error message.
 - A note cannot be grouped with itself (`409`).
 - Grouping onto a standalone note creates a cluster holding both notes.
 - Ungrouping: if the cluster would drop below **2** notes, it is dissolved and the remaining
