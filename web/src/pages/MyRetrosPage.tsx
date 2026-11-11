@@ -1,4 +1,9 @@
+import MenuItem from '@mui/material/MenuItem';
+import Menu from '@mui/material/Menu';
+import type {MouseEvent} from 'react';
+import {useState} from 'react';
 import {
+  Button,
   Chip,
   Loader,
   Stack,
@@ -7,8 +12,10 @@ import {
 import {useQuery} from '@tanstack/react-query';
 import {Link, useNavigate} from 'react-router-dom';
 import {fetchMyRetros} from '@/api/retros';
+import {fetchTeams} from '@/api/teams';
 import type {RetroPhase} from '@/api/types';
 import {EmptyState} from '@/components/EmptyState';
+import {NewRetroDialog} from '@/components/NewRetroDialog';
 import {TeamDot} from '@/components/TeamDot';
 import {SURFACE} from '@/theme/texture';
 
@@ -29,6 +36,20 @@ export const MyRetrosPage = () => {
     // A retro somebody else starts has to show up without a reload.
     refetchInterval: 10_000,
   });
+
+  const {data: teams} = useQuery({queryFn: fetchTeams, queryKey: ['teams']});
+  const adminTeams = (teams ?? []).filter(({isAdmin}) => isAdmin);
+  const [pickerAnchor, setPickerAnchor] = useState<HTMLElement>();
+  const [newRetroTeamId, setNewRetroTeamId] = useState<string>();
+
+  // Only a team admin starts a retro: one team starts directly, several ask which one first.
+  const onNewRetro = (event: MouseEvent<HTMLButtonElement>) => {
+    if (adminTeams.length > 1) {
+      setPickerAnchor(event.currentTarget);
+    } else if (adminTeams[0]) {
+      setNewRetroTeamId(adminTeams[0].id);
+    }
+  };
 
   const live = (retros ?? []).filter(({phase}) => phase !== 'ARCHIVED');
   const archived = (retros ?? []).filter(({phase}) => phase === 'ARCHIVED');
@@ -98,6 +119,39 @@ export const MyRetrosPage = () => {
 
   return (
     <Stack spacing={4}>
+      {adminTeams.length > 0 ? (
+        <Stack sx={{alignItems: 'flex-end'}}>
+          <Button onClick={onNewRetro} variant="contained">
+            New retro
+          </Button>
+        </Stack>
+      ) : null}
+
+      <Menu
+        anchorEl={pickerAnchor}
+        onClose={() => setPickerAnchor(undefined)}
+        open={Boolean(pickerAnchor)}
+      >
+        {adminTeams.map((team) => (
+          <MenuItem
+            key={team.id}
+            onClick={() => {
+              setPickerAnchor(undefined);
+              setNewRetroTeamId(team.id);
+            }}
+          >
+            {team.name}
+          </MenuItem>
+        ))}
+      </Menu>
+
+      {newRetroTeamId ? (
+        <NewRetroDialog
+          onClose={() => setNewRetroTeamId(undefined)}
+          teamId={newRetroTeamId}
+        />
+      ) : null}
+
       {isLoading ? (
         <Stack sx={{alignItems: 'center', py: 6}}>
           <Loader />

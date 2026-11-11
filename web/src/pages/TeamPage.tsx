@@ -13,7 +13,6 @@ import {
   Dialog,
   IconButton,
   Loader,
-  Select,
   Stack,
   Tag,
   TextField,
@@ -23,15 +22,7 @@ import {
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {useEffect, useRef, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
-import {
-  createRetro,
-  DEFAULT_MAX_VOTES,
-  fetchActions,
-  fetchRetros,
-  removeRetro,
-  updateAction,
-  VOTE_OPTIONS,
-} from '@/api/retros';
+import {fetchActions, fetchRetros, removeRetro, updateAction} from '@/api/retros';
 import {
   addTeamMember,
   deleteTeam,
@@ -46,6 +37,7 @@ import {
 } from '@/api/teams';
 import type {ActionStatus, OrgMember, RetroPhase, Team, TeamMember} from '@/api/types';
 import {ActionList} from '@/components/ActionList';
+import {NewRetroDialog} from '@/components/NewRetroDialog';
 import {useAuth} from '@/contexts/AuthContext';
 import {useToast} from '@/contexts/ToastContext';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
@@ -61,16 +53,6 @@ const LIST_POLL_INTERVAL_MS = 10_000;
 import {initials} from '@/utils/initials';
 import type {ConfirmRequest} from '@/components/ConfirmDialog';
 import {ConfirmDialog} from '@/components/ConfirmDialog';
-
-/** Ready-made column sets: teams rarely run the same format twice in a row. */
-const TEMPLATES = [
-  {columns: ['Start', 'Stop', 'Continue'], label: 'Start / Stop / Continue'},
-  {columns: ['Mad', 'Sad', 'Glad'], label: 'Mad / Sad / Glad'},
-  {columns: ['Liked', 'Learned', 'Lacked', 'Longed for'], label: '4L'},
-  {columns: ['What worked', 'What got stuck', 'Ideas', 'Kudos'], label: 'Wrap-up + kudos'},
-  // For a format of its own: the facilitator lays the columns out on the board first.
-  {columns: [], label: 'Blank'},
-];
 
 // The search matches the e-mail too: two people can share a name, never an address.
 const filterCandidates = createFilterOptions<OrgMember>({
@@ -174,15 +156,11 @@ export const TeamPage = () => {
   const queryClient = useQueryClient();
   const toast = useToast();
   const onFailure = (cause: Error) => toast.error(cause.message);
-  const [title, setTitle] = useState('');
-  const [template, setTemplate] = useState(TEMPLATES[0].label);
   const [isStarting, setIsStarting] = useState(false);
-  const [maxVotes, setMaxVotes] = useState(DEFAULT_MAX_VOTES);
   const [isAddingMember, setIsAddingMember] = useState(false);
   const [selectedCandidates, setSelectedCandidates] = useState<OrgMember[]>([]);
   const [isRenaming, setIsRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
-  const titleInputRef = useAutoFocus(isStarting);
   const nameInputRef = useAutoFocus(isRenaming);
   const cancelledRenameRef = useRef(false);
   const {user} = useAuth();
@@ -192,11 +170,6 @@ export const TeamPage = () => {
   >(undefined);
   const [isMemberMenuOpen, setIsMemberMenuOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  const closeDialog = () => {
-    setIsStarting(false);
-    setTitle('');
-  };
 
   const closeMemberDialog = () => {
     setIsAddingMember(false);
@@ -308,24 +281,6 @@ export const TeamPage = () => {
     onSuccess: () => queryClient.invalidateQueries({queryKey: ['teams', teamId, 'actions']}),
   });
 
-  const createMutation = useMutation({
-    mutationFn: ({
-      columns,
-      retroMaxVotes,
-      retroTitle,
-    }: {
-      columns: string[];
-      retroMaxVotes: number;
-      retroTitle: string;
-    }) => createRetro(teamId as string, retroTitle, columns, retroMaxVotes),
-    onError: onFailure,
-    onSuccess: (board) => {
-      closeDialog();
-      void queryClient.invalidateQueries({queryKey: ['teams', teamId, 'retros']});
-      navigate(`/teams/${teamId}/retros/${board.id}`);
-    },
-  });
-
   // A failed load is reported once, not on every render the query triggers.
   useEffect(() => {
     if (error) toast.error((error as Error).message);
@@ -333,21 +288,6 @@ export const TeamPage = () => {
 
   const memberIds = new Set((members ?? []).map(({userId}) => userId));
   const candidates = (orgMembers ?? []).filter(({id}) => !memberIds.has(id));
-
-  // Only an unknown label falls back to the default set: the empty columns of Blank are a
-  // choice, sent as such.
-  const columnsOf = (label: string) =>
-    TEMPLATES.find((item) => item.label === label)?.columns ?? TEMPLATES[0].columns;
-
-  const start = () => {
-    if (!title.trim()) return;
-
-    createMutation.mutate({
-      columns: columnsOf(template),
-      retroMaxVotes: maxVotes,
-      retroTitle: title.trim(),
-    });
-  };
 
   const startRenaming = () => {
     cancelledRenameRef.current = false;
@@ -468,79 +408,7 @@ export const TeamPage = () => {
         </Link>
       </Stack>
 
-      <Dialog onClose={closeDialog} open={isStarting} size="small">
-        <DialogTitle>New retrospective</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{pt: 1}}>
-            <TextField
-              fullWidth
-              inputRef={titleInputRef}
-              label="Title"
-              onChange={(event) => setTitle(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key !== 'Enter') return;
-
-                event.preventDefault();
-                start();
-              }}
-              placeholder="Sprint 12"
-              size="small"
-              value={title}
-            />
-            <Stack spacing={0.75}>
-              <Select
-                fullWidth
-                inputProps={{'aria-label': 'Template'}}
-                onChange={(event) => setTemplate(event.target.value as string)}
-                size="small"
-                value={template}
-              >
-                {TEMPLATES.map(({label}) => (
-                  <MenuItem key={label} value={label}>
-                    {label}
-                  </MenuItem>
-                ))}
-              </Select>
-              <Typography color="textSecondary" variant="textXs">
-                {columnsOf(template).length === 0
-                  ? 'No column yet: you add them on the board before people write.'
-                  : `Columns: ${columnsOf(template).join(' · ')}. You can rename them or add more while people write.`}
-              </Typography>
-            </Stack>
-            <Stack spacing={0.75}>
-              <Typography variant="textS">Votes per person</Typography>
-              <Select
-                fullWidth
-                inputProps={{'aria-label': 'Votes per person'}}
-                onChange={(event) => setMaxVotes(Number(event.target.value))}
-                size="small"
-                value={maxVotes}
-              >
-                {VOTE_OPTIONS.map((count) => (
-                  <MenuItem key={count} value={count}>
-                    {count} vote{count > 1 ? 's' : ''}
-                  </MenuItem>
-                ))}
-              </Select>
-              <Typography color="textSecondary" variant="textXs">
-                Fewer votes force a choice and keep the discussion on what matters most.
-              </Typography>
-            </Stack>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeDialog} variant="text">
-            Cancel
-          </Button>
-          <Button
-            disabled={!title.trim() || createMutation.isPending}
-            onClick={start}
-            variant="contained"
-          >
-            Start
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {isStarting ? <NewRetroDialog onClose={() => setIsStarting(false)} teamId={teamId as string} /> : null}
 
       <Dialog onClose={closeMemberDialog} open={isAddingMember} size="small">
         <DialogTitle>Add members</DialogTitle>

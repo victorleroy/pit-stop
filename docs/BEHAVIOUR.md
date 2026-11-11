@@ -299,6 +299,9 @@ A team is the confidentiality boundary around a board. It is private to its memb
   memberships go with it, through `ON DELETE CASCADE`. Anybody still on one of its boards
   receives the `error` event "This retro was deleted". `GET /teams/{id}/summary` gives the
   confirmation its counters, `{retroCount, actionCount}`, and nothing else.
+- The **My retros** page offers **New retro** to a team admin, with the same form as the team
+  page: one administered team starts directly, several ask which one first. Without an
+  administered team, the button is not shown.
 
 ### Organisation stats
 
