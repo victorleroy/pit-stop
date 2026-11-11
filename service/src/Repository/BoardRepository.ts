@@ -26,6 +26,7 @@ export interface ColumnRow {
 export interface NoteRow {
   authorId: string;
   authorName: string;
+  authorPictureUrl: string | null;
   clusterId: string | null;
   columnId: string;
   createdAt: string;
@@ -94,6 +95,7 @@ export class BoardRepository {
           'notes.id',
           'notes.authorId',
           'users.name as authorName',
+          'users.pictureUrl as authorPictureUrl',
           'notes.clusterId',
           'notes.columnId',
           'notes.createdAt',

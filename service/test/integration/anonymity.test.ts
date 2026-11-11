@@ -50,6 +50,24 @@ describe('anonymity', () => {
     expect(note.isMine).toBe(false);
   });
 
+  it('gives the author picture with the author, in every phase', async () => {
+    await harness.container.db
+      .updateTable('users')
+      .set({pictureUrl: 'https://img.test/victor.png'})
+      .where('id', '=', author.userId)
+      .execute();
+
+    for (const phase of ['SHARE', 'VOTE', 'DISCUSS', 'ARCHIVED'] as const) {
+      await setPhase(phase);
+
+      expect((await noteFor(other)).author.pictureUrl).toBe('https://img.test/victor.png');
+    }
+  });
+
+  it('omits the author picture when the user has none', async () => {
+    expect('pictureUrl' in (await noteFor(other)).author).toBe(false);
+  });
+
   it('never leaks the text of another participant', async () => {
     const board = await harness.container.retroManager.getBoard(other, retroId);
 

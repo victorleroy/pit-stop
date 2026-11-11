@@ -115,7 +115,7 @@ This is the product's central promise. It lives in **one pure function**,
 |---|---|---|
 | **Note text** | Its author, always | `text` is returned when `revealed === true` **or** the caller is the author |
 | | Everybody else | `text` is returned **empty** (`''`) while `revealed === false` |
-| **Note author** | Everybody, always | `author.id` and `author.name` are always present |
+| **Note author** | Everybody, always | `author.id` and `author.name` are always present, and `author.pictureUrl` when the user has one |
 | **Vote totals** | Everybody | Only in `DISCUSS` and `ARCHIVED` |
 | **Own votes** | Self | Only in `VOTE`, `DISCUSS`, `ARCHIVED`; otherwise `myVotes: 0` |
 | **Votes spent per person** | Everybody | Only in `VOTE`: `voteProgress[userId]` = how many votes they cast, never on which card; `{}` in every other phase |
@@ -395,7 +395,7 @@ OrgStats        { period, people: {total, admins}, teams: {total, idle},
                   actions: {open, done, dropped} }
 Action          { id, retroId, retroTitle, text, status, assignee?: {id,name}, createdAt? }
 Timer           { state: 'IDLE'|'RUNNING'|'PAUSED', endsAt?, remainingMs? }
-Note            { id, columnId, author: {id,name}, isMine, revealed, text, createdAt? }
+Note            { id, columnId, author: {id,name,pictureUrl?}, isMine, revealed, text, createdAt? }
 Card            { id, type: 'note'|'cluster', notes: Note[], myVotes, title?, totalVotes? }
 Column          { id, title, order, cards: Card[] }
 Board           { id, title, phase, teamId, createdBy, createdAt?, isFacilitator,

@@ -5,6 +5,7 @@ import type {TimerModel} from '~/Model/TimerModel';
 export interface NoteAuthorModel {
   id: string;
   name: string;
+  pictureUrl?: string;
 }
 
 export interface NoteModel {

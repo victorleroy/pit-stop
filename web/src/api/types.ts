@@ -47,6 +47,7 @@ export type RetroPhase = 'BRAINSTORM' | 'SHARE' | 'VOTE' | 'DISCUSS' | 'ARCHIVED
 export interface NoteAuthor {
   id: string;
   name: string;
+  pictureUrl?: string;
 }
 
 export interface Note {

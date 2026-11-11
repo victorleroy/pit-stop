@@ -464,7 +464,11 @@ export class RetroManager {
     const revealed = Boolean(note.revealed);
 
     return {
-      author: {id: note.authorId, name: note.authorName},
+      author: {
+        id: note.authorId,
+        name: note.authorName,
+        ...(note.authorPictureUrl ? {pictureUrl: note.authorPictureUrl} : {}),
+      },
       columnId: note.columnId,
       createdAt: note.createdAt,
       id: note.id,

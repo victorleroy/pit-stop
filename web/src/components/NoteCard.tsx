@@ -2,10 +2,11 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import NorthEastRoundedIcon from '@mui/icons-material/NorthEastRounded';
-import {Box, IconButton, Stack, TextField, Tooltip, Typography} from '@/ui';
+import {Avatar, Box, IconButton, Stack, TextField, Tooltip, Typography} from '@/ui';
 import {useState} from 'react';
 import type {Note} from '@/api/types';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
+import {initials} from '@/utils/initials';
 import {SLIPSTREAM} from '@/ui/theme';
 import {PAPER_SHADOW, PAPER_SHADOW_RAISED, noteColours} from '@/theme/texture';
 
@@ -124,6 +125,13 @@ export const NoteCard = ({
         )}
 
         <Stack direction="row" spacing={1} sx={{alignItems: 'center', minHeight: 24}}>
+          <Avatar
+            size="small"
+            src={note.author.pictureUrl}
+            sx={{flexShrink: 0, fontSize: 10, height: 20, width: 20}}
+          >
+            {initials(note.author.name)}
+          </Avatar>
           {/* In a narrow column the name gives way, never the state beside it. */}
           <Typography
             noWrap
