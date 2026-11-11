@@ -22,7 +22,7 @@ import {
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {useEffect, useRef, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
-import {fetchActions, fetchRetros, removeRetro, updateAction} from '@/api/retros';
+import {fetchActionStats, fetchActions, fetchRetros, removeRetro, updateAction} from '@/api/retros';
 import {
   addTeamMember,
   deleteTeam,
@@ -37,6 +37,7 @@ import {
 } from '@/api/teams';
 import type {ActionStatus, OrgMember, RetroPhase, Team, TeamMember} from '@/api/types';
 import {ActionList} from '@/components/ActionList';
+import {FollowThrough} from '@/components/FollowThrough';
 import {NewRetroDialog} from '@/components/NewRetroDialog';
 import {useAuth} from '@/contexts/AuthContext';
 import {useToast} from '@/contexts/ToastContext';
@@ -199,6 +200,13 @@ export const TeamPage = () => {
     enabled: Boolean(teamId) && isMember,
     queryFn: () => fetchActions(teamId as string),
     queryKey: ['teams', teamId, 'actions'],
+    refetchInterval: LIST_POLL_INTERVAL_MS,
+  });
+
+  const {data: actionStats} = useQuery({
+    enabled: Boolean(teamId) && isMember,
+    queryFn: () => fetchActionStats(teamId as string),
+    queryKey: ['teams', teamId, 'actions', 'stats'],
     refetchInterval: LIST_POLL_INTERVAL_MS,
   });
 
@@ -589,6 +597,8 @@ export const TeamPage = () => {
           </Typography>
         ) : null}
       </Stack>
+
+      <FollowThrough stats={actionStats} />
 
       <Card sx={{p: 3}}>
         <ActionList

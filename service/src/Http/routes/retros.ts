@@ -1,17 +1,20 @@
 import {Hono} from 'hono';
 import type {Container} from '~/container';
-import type {RetroPhase} from '~/Db/schema';
+import type {ActionReviewOutcome, RetroPhase} from '~/Db/schema';
 import {RenameClusterDto, GroupNoteDto} from '~/Dto/Retro/ClusterDto';
 import {CreateColumnDto, RenameColumnDto, ReorderColumnsDto} from '~/Dto/Retro/ColumnDto';
 import {CreateRetroDto} from '~/Dto/Retro/CreateRetroDto';
 import {CreateNoteDto, UpdateNoteDto} from '~/Dto/Retro/NoteDto';
 import {UpdateRetroDto} from '~/Dto/Retro/UpdateRetroDto';
+import {ReviewOutcomeDto} from '~/Dto/Retro/ReviewDto';
 import {CastVoteDto} from '~/Dto/Retro/VoteDto';
 import {CreateActionDto} from '~/Dto/Action/ActionDto';
 import {HandOverDto} from '~/Dto/Admin/AdminDto';
 import type {Variables} from '~/Http/middleware/auth';
 import {validateBody} from '~/Http/middleware/validate';
 import type {TimerAction} from '~/Model/TimerModel';
+import type {AuthContext} from '~/Security/AuthContext';
+import {logger} from '~/logger';
 
 /**
  * Every board mutation goes through the hub: the command is handled in that retro's queue,
@@ -299,6 +302,53 @@ export const retroRoutes = (c: Container) => {
     );
 
     return context.json(action, 201);
+  });
+
+  // ------------------------------------------------------------------ review
+
+  /**
+   * A review outcome can change the action's status, which the other live boards of the team
+   * carry over. The write has committed: a failed refresh is logged, never returned.
+   */
+  const refreshTeamBoards = async (auth: AuthContext, retroId: string): Promise<void> => {
+    try {
+      await c.hub.refreshRetros(
+        await c.retroManager.findSiblingRetroIds(auth, retroId, c.hub.liveRetroIds()),
+      );
+    } catch (error: unknown) {
+      logger.error({err: error, retroId}, 'Team boards refresh failed');
+    }
+  };
+
+  app.put('/retros/:retroId/review/actions/:actionId', async (context) => {
+    const auth = context.get('auth');
+    const retroId = context.req.param('retroId');
+    const body = await validateBody(context, ReviewOutcomeDto);
+    const item = await c.hub.run(retroId, () =>
+      c.reviewManager.recordOutcome(
+        auth,
+        retroId,
+        context.req.param('actionId'),
+        body.outcome as ActionReviewOutcome,
+        body.comment,
+      ),
+    );
+
+    await refreshTeamBoards(auth, retroId);
+
+    return context.json(item);
+  });
+
+  app.delete('/retros/:retroId/review/actions/:actionId', async (context) => {
+    const auth = context.get('auth');
+    const retroId = context.req.param('retroId');
+
+    await c.hub.run(retroId, () =>
+      c.reviewManager.clearOutcome(auth, retroId, context.req.param('actionId')),
+    );
+    await refreshTeamBoards(auth, retroId);
+
+    return context.body(null, 204);
   });
 
   return app;

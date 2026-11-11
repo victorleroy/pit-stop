@@ -20,6 +20,8 @@ this page is the bug.
 | **Card** | The unit of display and the target of a vote: either a standalone note or a cluster. |
 | **Action** | A decision. Lives at **team** level, not at retro level. |
 | **Facilitator** | The person driving a retro's phases. Exactly one at a time. |
+| **Review** | Going over, in a retro, the actions it carries over: did we do what we decided? |
+| **Outcome** | What a review decided for one action: **Done**, **Drop** or **Keep** (still relevant, carried over again). |
 
 ---
 
@@ -51,14 +53,17 @@ notes          (id, retro_id, column_id, cluster_id NULL, author_id,
 clusters       (id, retro_id, column_id, title NULL)
 votes          (retro_id, user_id, target_id, count)
 actions        (id, team_id, org_id, retro_id, text, status,
-                assignee_id NULL, created_at)
+                assignee_id NULL, created_at, closed_at NULL)
+action_reviews (id, org_id, team_id, action_id, retro_id, outcome, comment NULL,
+                reviewed_by NULL, reviewed_at)   UNIQUE (action_id, retro_id)
 ```
 
 There is no connections table: the `RetroSession` actor holds them in memory, so presence
 is never something that has to be cleaned up after a crash.
 
 Enumerations: `phase in {BRAINSTORM, SHARE, VOTE, DISCUSS, ARCHIVED}`,
-`action.status in {OPEN, DONE, DROPPED}`, `timer.state in {IDLE, RUNNING, PAUSED}`,
+`action.status in {OPEN, DONE, DROPPED}`, `action_review.outcome in {DONE, DROPPED, KEPT}`,
+`timer.state in {IDLE, RUNNING, PAUSED}`,
 `organization.status in {demo, active, suspended}`, `org_members.role in {member, admin}`,
 `users.name_source in {sso, user}`, `users.avatar_source in {auto, upload, initials}`
 (`preset` is reserved by the constraint, nothing writes it), `user_avatars.mime in
@@ -103,6 +108,7 @@ any other, including backwards.
 | Add, rename, reorder, delete a column | yes | | | | |
 | Create an action | | | | yes | |
 | Edit an action | yes | yes | yes | yes | yes |
+| Record or undo a review outcome | yes | yes | yes | yes | |
 
 A note created during `SHARE` is created **already shared** (`revealed = true`): its author is
 reading it aloud. Its text stays frozen like every other note's once the brainstorm is over.
@@ -115,7 +121,9 @@ reading it aloud. Its text stays frozen like every other note's once the brainst
    exists is lost anyway. Better to restart the round than to strand votes.
 
 2. **ARCHIVED is frozen but reversible.** Any change to an archived retro is refused (`409`)
-   **except** a phase change. Reopening is always possible.
+   **except** a phase change. Reopening is always possible. A review outcome belongs to the
+   retro that recorded it, so it is refused in `ARCHIVED` (`409`) even though editing the
+   action itself is not.
 
 ---
 
@@ -295,6 +303,37 @@ member.
 - `assigneeId: null` unassigns.
 - **Automatic carry-over:** every `OPEN` action from an **earlier** retro of the same team
   comes back in the board's `carriedOverActions`. This is the product's value loop.
+- **Closing date**: every change of `status` to `DONE` or `DROPPED` sets `closed_at`, a change
+  to `OPEN` clears it, the same status sent again leaves it alone. Actions closed before this
+  date was recorded keep `closed_at` NULL and are left out of the metrics.
+
+### Review
+
+- A retro **reviews** `review.items`: the actions it carries over, plus those it already
+  reviewed, whatever their status now (a Done would otherwise vanish on the next broadcast).
+  Oldest first, then by id. An action of this retro, a later one, or one closed elsewhere and
+  never reviewed here is not part of it (`409`); an action of another team is `404`.
+- **Any member** records an outcome (`reviewedBy` keeps who), from the actions panel. One per
+  action and retro, the last write wins. In one transaction, with one timestamp:
+  - **Done** / **Drop** close the action (`closed_at` = the review time) unless it already has
+    that status; **Keep** reopens it (`closed_at` NULL) and it comes back at the next retro.
+  - The **same** outcome again only updates the comment: the review time and the closing date
+    stay, so the metrics do not move.
+  - The comment is optional, at most 300 characters, trimmed; blank is none.
+- **Undo** removes the outcome. The action is reopened only if it still carries the closing that
+  outcome made (same status, `closed_at` = review time); a Keep, or a closing or reopening done
+  elsewhere since, leaves the status alone.
+- A review and an edit from the team page are not serialised with each other: the last write
+  wins on the status, and the panel always shows the action's real status.
+- **Metrics** (`GET /teams/{teamId}/actions/stats?retroId=`, any member, never in the board):
+  - `doneSinceLastRetro` / `droppedSinceLastRetro`: actions now `DONE` / `DROPPED` closed since
+    the retro before `retroId` (all recorded closings when there is none). Without `retroId`
+    it counts since the team's latest retro. Closings outside a review count.
+  - `openCount`: the team's open actions now.
+  - `completionTrend`: the last 6 retros that reviewed anything, plus `retroId` as the
+    `current` point when it is not among them (dropping the oldest), oldest first;
+    `rate = done / (done + dropped + kept)` to 2 decimals, `null` when nothing was reviewed.
+    Actions left without an outcome are not counted.
 
 ### Timer
 
@@ -473,6 +512,9 @@ Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `413`, `
 | GET | `/teams/{teamId}/actions` | `200` `Action[]`, most recent first |
 | POST | `/retros/{retroId}/actions` | `201` `Action` |
 | PATCH | `/teams/{teamId}/actions/{actionId}` | `200` `Action` |
+| GET | `/teams/{teamId}/actions/stats?retroId=` | `200` `ActionStats` — any member, `404` for a retro of another team |
+| PUT | `/retros/{retroId}/review/actions/{actionId}` | `200` `ReviewItem` — `{outcome: 'DONE'\|'DROPPED'\|'KEPT', comment?}` |
+| DELETE | `/retros/{retroId}/review/actions/{actionId}` | `204` |
 | GET | `/org/admins` | `200` `User[]` |
 | GET | `/org/members` | `200` `OrgMember[]` sorted by name |
 | DELETE | `/org/members/{userId}/avatar` | `204` — org admin removes an uploaded avatar; `403`; `404` outside the organisation |
@@ -500,7 +542,13 @@ TeamMember      { userId, email, name, pictureUrl?, isAdmin, joinedAt? }
 OrgStats        { period, people: {total, admins}, teams: {total, idle},
                   retros: {count, total}, notes: {count, perRetro},
                   actions: {open, done, dropped} }
-Action          { id, retroId, retroTitle, text, status, assignee?: {id,name}, createdAt? }
+Action          { id, retroId, retroTitle, text, status, assignee?: {id,name}, createdAt?,
+                  closedAt }
+ReviewItem      { action: Action, outcome?, comment?, reviewedAt?,
+                  reviewedBy?: {id, name, pictureUrl?} }
+ActionStats     { openCount, doneSinceLastRetro, droppedSinceLastRetro,
+                  completionTrend: [{retroId, retroTitle, createdAt, done, dropped, kept,
+                                     rate, current}] }
 Timer           { state: 'IDLE'|'RUNNING'|'PAUSED', endsAt?, remainingMs? }
 Note            { id, columnId, author: {id,name,pictureUrl?}, isMine, revealed, text, createdAt? }
 Card            { id, type: 'note'|'cluster', notes: Note[], myVotes, title?, totalVotes? }
@@ -508,7 +556,8 @@ Column          { id, title, order, cards: Card[] }
 Board           { id, title, phase, teamId, createdBy, createdAt?, isFacilitator,
                   columns, maxVotes, myVotesLeft, myNotesRevealed, votesRevealed,
                   voteProgress: {[userId]: votesSpent},
-                  timer, actions, carriedOverActions }
+                  timer, actions, carriedOverActions,
+                  review: {enabled, focusActionId, items: ReviewItem[]} }
 ```
 
 ### Ordering, to preserve
@@ -560,7 +609,9 @@ Inbound actions: `subscribe`, `cursor`.
   the retro the action came from (outside any queue when that retro was deleted), then every
   other retro of the team somebody is connected to is re-broadcast through its own queue
   (`SessionHub.liveRetroIds()` narrowed to the team, then `SessionHub.refreshRetros(ids)`), so
-  the board that carries the action over never shows a stale status.
+  the board that carries the action over never shows a stale status. A review outcome does
+  the same from the queue of the retro that records it. No event is added: outcomes travel in
+  `board.updated`.
 
 ---
 
@@ -584,8 +635,12 @@ Inbound actions: `subscribe`, `cursor`.
 - The retro's actions (this retro's and those carried over) live in a panel on the right,
   opened from the toolbar's `Actions · n` button, `n` being the open actions. On a wide screen
   the panel sits beside the board, which narrows; on a phone it slides over it. Turning a card
-  into an action opens the panel. A carried-over action can be closed (**Drop** or **Done**)
-  from the panel, without going to the team page.
+  into an action opens the panel. Its "Actions from previous retros" list is `review.items`:
+  **Drop** and **Done** record the outcome in this retro, **Reopen** undoes it. An archived retro
+  does not offer them.
+- The team page shows a **Follow-through** card above its actions: done since the last retro,
+  dropped, open, and one bar per retro of the completion trend, labelled in words too. It is
+  hidden while it has nothing to report.
 - The retro opens on a single band: the way back to the team, the title (cut with an ellipsis
   when too long, never wrapped) and, on the right, the zoom. The presence sits beside the title
   on a wide screen and on its own line under the band on a phone. The band is the same in every
@@ -656,7 +711,8 @@ to the login screen.
 - A person with no team still appears in the organization's member list.
 - Two tabs of one person count as **one** presence but two connections.
 - `actions` holds this retro's actions **whatever their status**; `carriedOverActions` holds
-  only the `OPEN` ones from earlier retros.
+  only the `OPEN` ones from earlier retros; `review.items` is `carriedOverActions` plus the
+  actions this retro already reviewed. An action of the current retro is never reviewed.
 - A withheld note can be **moved** by the facilitator, but not rewritten.
 - A retro belonging to another organization returns `404`, never `403`.
 - A name or an avatar the user chose is never overwritten by a Google sign-in.

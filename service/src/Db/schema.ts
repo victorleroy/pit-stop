@@ -6,6 +6,9 @@ export type RetroPhase = (typeof RETRO_PHASES)[number];
 export const ACTION_STATUSES = ['OPEN', 'DONE', 'DROPPED'] as const;
 export type ActionStatus = (typeof ACTION_STATUSES)[number];
 
+export const ACTION_REVIEW_OUTCOMES = ['DONE', 'DROPPED', 'KEPT'] as const;
+export type ActionReviewOutcome = (typeof ACTION_REVIEW_OUTCOMES)[number];
+
 export const ORG_STATUSES = ['demo', 'active', 'suspended'] as const;
 export type OrgStatus = (typeof ORG_STATUSES)[number];
 
@@ -181,6 +184,20 @@ interface ActionsTable {
   status: Generated<ActionStatus>;
   assigneeId: string | null;
   createdAt: string;
+  /** Set by every close, cleared by a reopen; NULL for actions closed before it existed. */
+  closedAt: string | null;
+}
+
+interface ActionReviewsTable {
+  id: string;
+  orgId: string;
+  teamId: string;
+  actionId: string;
+  retroId: string;
+  outcome: ActionReviewOutcome;
+  comment: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string;
 }
 
 export interface Database {
@@ -202,4 +219,5 @@ export interface Database {
   notes: NotesTable;
   votes: VotesTable;
   actions: ActionsTable;
+  actionReviews: ActionReviewsTable;
 }

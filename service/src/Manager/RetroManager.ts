@@ -1,7 +1,7 @@
 import {v4 as uuid} from 'uuid';
 import type {RetroPhase} from '~/Db/schema';
 import {BadRequestHttpError, ConflictHttpError, NotFoundHttpError} from '~/Error/HttpError';
-import type {ActionModel} from '~/Model/ActionModel';
+import type {ActionModel, ReviewItemModel} from '~/Model/ActionModel';
 import type {
   BoardModel,
   CardModel,
@@ -12,6 +12,7 @@ import type {
 } from '~/Model/RetroModel';
 import type {TimerAction, TimerModel} from '~/Model/TimerModel';
 import type {
+  ActionReviewRow,
   ActionRow,
   BoardData,
   NoteRow,
@@ -73,6 +74,18 @@ export class RetroManager {
     retroIds: string[],
   ): Promise<string[]> {
     return this.retroRepository.findIdsByTeamId(auth.db, teamId, retroIds);
+  }
+
+  /** The other retros of this retro's team among the given ones. */
+  public async findSiblingRetroIds(
+    auth: AuthContext,
+    retroId: string,
+    retroIds: string[],
+  ): Promise<string[]> {
+    const {retro} = await this.accessChecker.checkRetroAccess(auth, retroId);
+    const ids = await this.findTeamRetroIds(auth, retro.teamId, retroIds);
+
+    return ids.filter((id) => id !== retroId);
   }
 
   /** Every retro of every team the caller belongs to, most recent first. */
@@ -141,7 +154,7 @@ export class RetroManager {
    * broadcast so the anonymity rules only ever live in one place.
    */
   public static projectBoard(data: BoardData, userId: string): BoardModel {
-    const {actions, clusters, columns, notes, retro, votes} = data;
+    const {actionReviews, actions, clusters, columns, notes, retro, votes} = data;
     const myVotes = votes.filter((vote) => vote.userId === userId);
 
     return {
@@ -151,12 +164,7 @@ export class RetroManager {
       // Anything still open from an earlier retro comes back on the board for review; an
       // action decided after this retro is not "earlier", even when it is open.
       carriedOverActions: actions
-        .filter(
-          (action) =>
-            action.retroId !== retro.id &&
-            action.status === 'OPEN' &&
-            action.createdAt < retro.createdAt,
-        )
+        .filter((action) => RetroManager.isCarriedOver(retro, action))
         .map(RetroManager.toActionModel),
       columns: RetroManager.buildColumns(columns, notes, clusters, votes, retro.phase, userId),
       createdAt: retro.createdAt,
@@ -167,12 +175,65 @@ export class RetroManager {
       myNotesRevealed: notes.some((note) => note.authorId === userId && Boolean(note.revealed)),
       myVotesLeft: Math.max(0, retro.maxVotes - myVotes.reduce((total, {count}) => total + count, 0)),
       phase: retro.phase,
+      review: {
+        enabled: true,
+        focusActionId: null,
+        items: RetroManager.buildReviewItems(retro, actions, actionReviews),
+      },
       teamId: retro.teamId,
       timer: RetroManager.toTimerModel(retro),
       title: retro.title,
       voteProgress: retro.phase === 'VOTE' ? RetroManager.countVotesByUser(votes) : {},
       votesRevealed: VOTES_REVEALED_PHASES.includes(retro.phase),
     };
+  }
+
+  /**
+   * What this retro reviews: the actions it carries over, plus those it already reviewed
+   * whatever their status now, or an action marked done would vanish on the next broadcast.
+   * Oldest first, then by id, so everyone sees the same order. Identical for every reader.
+   */
+  public static buildReviewItems(
+    retro: RetroRow,
+    actions: ActionRow[],
+    reviews: ActionReviewRow[],
+  ): ReviewItemModel[] {
+    const byAction = new Map(reviews.map((review) => [review.actionId, review]));
+
+    return actions
+      .filter((action) => byAction.has(action.id) || RetroManager.isCarriedOver(retro, action))
+      .sort(
+        (left, right) =>
+          left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
+      )
+      .map((action) => {
+        const review = byAction.get(action.id);
+
+        return {
+          action: RetroManager.toActionModel(action),
+          ...(review
+            ? {
+                ...(review.comment ? {comment: review.comment} : {}),
+                outcome: review.outcome,
+                reviewedAt: review.reviewedAt,
+                ...(review.reviewedBy && review.reviewerName
+                  ? {
+                      reviewedBy: {
+                        id: review.reviewedBy,
+                        name: review.reviewerName,
+                        ...(review.reviewerPictureUrl ? {pictureUrl: review.reviewerPictureUrl} : {}),
+                      },
+                    }
+                  : {}),
+              }
+            : {}),
+        };
+      });
+  }
+
+  /** Still open, from another retro, and decided before this one: the existing carry-over rule. */
+  public static isCarriedOver(retro: RetroRow, action: ActionRow): boolean {
+    return action.retroId !== retro.id && action.status === 'OPEN' && action.createdAt < retro.createdAt;
   }
 
   /** How many votes each person spent, never on what: the room can see who is done voting. */
@@ -548,6 +609,7 @@ export class RetroManager {
       ...(action.assigneeId && action.assigneeName
         ? {assignee: {id: action.assigneeId, name: action.assigneeName}}
         : {}),
+      closedAt: action.closedAt,
       createdAt: action.createdAt,
       id: action.id,
       ...(action.retroId ? {retroId: action.retroId} : {}),

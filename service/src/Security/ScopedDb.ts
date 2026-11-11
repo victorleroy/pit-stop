@@ -31,6 +31,10 @@ export class ScopedDb {
     return this.db.selectFrom('actions').where('actions.orgId', '=', this.orgId);
   }
 
+  public actionReviews() {
+    return this.db.selectFrom('actionReviews').where('actionReviews.orgId', '=', this.orgId);
+  }
+
   public orgMembers() {
     return this.db.selectFrom('orgMembers').where('orgMembers.orgId', '=', this.orgId);
   }

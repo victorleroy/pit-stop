@@ -97,6 +97,16 @@ export const teamRoutes = (c: Container) => {
     ),
   );
 
+  app.get('/teams/:teamId/actions/stats', async (context) =>
+    context.json(
+      await c.reviewManager.getStats(
+        context.get('auth'),
+        context.req.param('teamId'),
+        context.req.query('retroId') || undefined,
+      ),
+    ),
+  );
+
   app.patch('/teams/:teamId/actions/:actionId', async (context) => {
     const body = await validateBody(context, UpdateActionDto);
 

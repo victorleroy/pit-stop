@@ -1,5 +1,5 @@
 import type {RetroPhase} from '~/Db/schema';
-import type {ActionModel} from '~/Model/ActionModel';
+import type {ActionModel, ReviewModel} from '~/Model/ActionModel';
 import type {TimerModel} from '~/Model/TimerModel';
 
 export interface NoteAuthorModel {
@@ -61,6 +61,8 @@ export interface BoardModel extends RetroSummaryModel {
   /** Whether the caller has shared the text of their notes. */
   myNotesRevealed: boolean;
   myVotesLeft: number;
+  /** The actions to review in this retro: carried over, or already reviewed here. */
+  review: ReviewModel;
   teamId: string;
   timer: TimerModel;
   /** Votes spent per userId, only during VOTE (empty otherwise). Never what they went to. */

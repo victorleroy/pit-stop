@@ -17,6 +17,7 @@ import {useNavigate, useParams} from 'react-router-dom';
 import {
   addColumn,
   castVote,
+  clearReviewOutcome,
   createAction,
   createNote,
   fetchBoard,
@@ -32,6 +33,7 @@ import {
   reorderColumns,
   revealMyNotes,
   setNoteRevealed,
+  recordReviewOutcome,
   ungroupNote,
   updateAction,
   updateNote,
@@ -324,6 +326,20 @@ export const RetroPage = () => {
       void queryClient.invalidateQueries({queryKey: ['teams', variables.teamId, 'actions']});
     },
   });
+  // Closing a carried-over action from here records it as reviewed by this retro; reopening
+  // it undoes that outcome.
+  const reviewMutation = useMutation({
+    mutationFn: async ({actionId, status}: {actionId: string; status: ActionStatus}) => {
+      await (status === 'OPEN'
+        ? clearReviewOutcome(retroId as string, actionId)
+        : recordReviewOutcome(retroId as string, actionId, status));
+    },
+    onError: (cause: Error) => toast.error(cause.message),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({queryKey});
+      void queryClient.invalidateQueries({queryKey: ['teams', board?.teamId, 'actions']});
+    },
+  });
   const voteMutation = useMutation({
     mutationFn: ({delta, targetId}: {delta: 1 | -1; targetId: string}) =>
       castVote(retroId as string, targetId, delta),
@@ -352,6 +368,7 @@ export const RetroPage = () => {
     voteMutation,
     createActionMutation,
     updateActionMutation,
+    reviewMutation,
   ];
   const isBusy = mutations.some(({isPending}) => isPending);
 
@@ -601,14 +618,15 @@ export const RetroPage = () => {
             title="Actions from this retro"
           />
 
-          {board.carriedOverActions.length > 0 ? (
+          {board.review.items.length > 0 ? (
             <ActionList
-              actions={board.carriedOverActions}
+              actions={board.review.items.map(({action}) => action)}
+              canComplete={board.phase !== 'ARCHIVED'}
               canCreate={false}
               emptyLabel=""
               isBusy={isBusy}
               members={members ?? []}
-              onStatusChange={onStatusChange}
+              onStatusChange={(actionId, status) => reviewMutation.mutate({actionId, status})}
               onTextChange={onTextChange}
               title="Actions from previous retros"
             />

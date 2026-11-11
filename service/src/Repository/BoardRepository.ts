@@ -1,5 +1,5 @@
 import type {Db} from '~/Db/connection';
-import type {ActionStatus, RetroPhase} from '~/Db/schema';
+import type {ActionReviewOutcome, ActionStatus, RetroPhase} from '~/Db/schema';
 
 export interface RetroRow {
   createdAt: string;
@@ -51,6 +51,7 @@ export interface VoteRow {
 export interface ActionRow {
   assigneeId: string | null;
   assigneeName: string | null;
+  closedAt: string | null;
   createdAt: string;
   id: string;
   retroId: string | null;
@@ -59,11 +60,24 @@ export interface ActionRow {
   text: string;
 }
 
+/** A review outcome recorded in this retro; the reviewer's name is joined, never stored. */
+export interface ActionReviewRow {
+  actionId: string;
+  comment: string | null;
+  outcome: ActionReviewOutcome;
+  reviewedAt: string;
+  reviewedBy: string | null;
+  reviewerName: string | null;
+  reviewerPictureUrl: string | null;
+}
+
 /**
  * Everything the board projection needs, in one place: four small indexed reads that SQLite
  * answers from the same page cache, rather than a query per card.
  */
 export interface BoardData {
+  /** The review outcomes recorded in this retro only. */
+  actionReviews: ActionReviewRow[];
   actions: ActionRow[];
   clusters: ClusterRow[];
   columns: ColumnRow[];
@@ -80,7 +94,7 @@ export class BoardRepository {
    * rely on the retro having been resolved through the scoped accessor (ADR-001 D6).
    */
   public async loadBoard(retro: RetroRow): Promise<BoardData> {
-    const [columns, notes, clusters, votes, actions] = await Promise.all([
+    const [columns, notes, clusters, votes, actions, actionReviews] = await Promise.all([
       this.db
         .selectFrom('columns')
         .select(['id', 'title', 'position'])
@@ -119,9 +133,24 @@ export class BoardRepository {
         .execute(),
 
       this.findTeamActions(retro.teamId),
+
+      this.db
+        .selectFrom('actionReviews')
+        .leftJoin('users', 'users.id', 'actionReviews.reviewedBy')
+        .select([
+          'actionReviews.actionId',
+          'actionReviews.comment',
+          'actionReviews.outcome',
+          'actionReviews.reviewedAt',
+          'actionReviews.reviewedBy',
+          'users.name as reviewerName',
+          'users.pictureUrl as reviewerPictureUrl',
+        ])
+        .where('actionReviews.retroId', '=', retro.id)
+        .execute(),
     ]);
 
-    return {actions, clusters, columns, notes, retro, votes};
+    return {actionReviews, actions, clusters, columns, notes, retro, votes};
   }
 
   public async findTeamActions(teamId: string): Promise<ActionRow[]> {
@@ -133,6 +162,7 @@ export class BoardRepository {
         'actions.id',
         'actions.assigneeId',
         'users.name as assigneeName',
+        'actions.closedAt',
         'actions.createdAt',
         'actions.retroId',
         'retros.title as retroTitle',

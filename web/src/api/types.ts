@@ -96,6 +96,8 @@ export type ActionStatus = 'OPEN' | 'DONE' | 'DROPPED';
 
 export interface Action {
   assignee?: {id: string; name: string};
+  /** When it was last closed; null while open, and for actions closed before it was recorded. */
+  closedAt: string | null;
   createdAt?: string;
   id: string;
   /** Both absent once the originating retro is deleted: actions outlive their retro. */
@@ -103,6 +105,42 @@ export interface Action {
   retroTitle?: string;
   status: ActionStatus;
   text: string;
+}
+
+export type ReviewOutcome = 'DONE' | 'DROPPED' | 'KEPT';
+
+/** An action this retro reviews, with the outcome recorded in this retro if any. */
+export interface ReviewItem {
+  action: Action;
+  comment?: string;
+  outcome?: ReviewOutcome;
+  reviewedAt?: string;
+  reviewedBy?: {id: string; name: string; pictureUrl?: string};
+}
+
+export interface Review {
+  enabled: boolean;
+  focusActionId: string | null;
+  items: ReviewItem[];
+}
+
+export interface TrendPoint {
+  createdAt: string;
+  current: boolean;
+  done: number;
+  dropped: number;
+  kept: number;
+  rate: number | null;
+  retroId: string;
+  retroTitle: string;
+}
+
+export interface ActionStats {
+  /** At most six points, oldest first. */
+  completionTrend: TrendPoint[];
+  doneSinceLastRetro: number;
+  droppedSinceLastRetro: number;
+  openCount: number;
 }
 
 export type TimerState = 'IDLE' | 'RUNNING' | 'PAUSED';
@@ -130,6 +168,8 @@ export interface Board extends RetroSummary {
   maxVotes: number;
   myNotesRevealed: boolean;
   myVotesLeft: number;
+  /** Carried-over actions, plus those already reviewed in this retro. */
+  review: Review;
   teamId: string;
   timer: Timer;
   voteProgress: Record<string, number>;

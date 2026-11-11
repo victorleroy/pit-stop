@@ -14,11 +14,13 @@ import {PasswordResetManager} from '~/Manager/PasswordResetManager';
 import {PlatformManager} from '~/Manager/PlatformManager';
 import {ProfileManager} from '~/Manager/ProfileManager';
 import {RetroManager} from '~/Manager/RetroManager';
+import {ReviewManager} from '~/Manager/ReviewManager';
 import {SetupManager} from '~/Manager/SetupManager';
 import {TeamManager} from '~/Manager/TeamManager';
 import {VoteManager} from '~/Manager/VoteManager';
 import {SessionHub} from '~/Realtime/SessionHub';
 import {ActionRepository} from '~/Repository/ActionRepository';
+import {ActionReviewRepository} from '~/Repository/ActionReviewRepository';
 import {BoardRepository} from '~/Repository/BoardRepository';
 import {ClusterRepository} from '~/Repository/ClusterRepository';
 import {ColumnRepository} from '~/Repository/ColumnRepository';
@@ -49,6 +51,7 @@ export interface Container {
   platformManager: PlatformManager;
   profileManager: ProfileManager;
   retroManager: RetroManager;
+  reviewManager: ReviewManager;
   setupManager: SetupManager;
   teamManager: TeamManager;
   voteManager: VoteManager;
@@ -58,6 +61,7 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
   const db = createDb(databaseFile);
 
   const actionRepository = new ActionRepository(db);
+  const actionReviewRepository = new ActionReviewRepository(db);
   const boardRepository = new BoardRepository(db);
   const clusterRepository = new ClusterRepository(db);
   const columnRepository = new ColumnRepository(db);
@@ -163,6 +167,13 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
     platformManager: new PlatformManager(db, orgRepository, sessionRepository, invitationManager),
     profileManager,
     retroManager,
+    reviewManager: new ReviewManager(
+      actionRepository,
+      actionReviewRepository,
+      boardRepository,
+      retroRepository,
+      accessChecker,
+    ),
     setupManager: new SetupManager(db, orgRepository, userRepository, authManager),
     teamManager: new TeamManager(teamRepository, membershipRepository, roleChecker),
     voteManager: new VoteManager(voteRepository, boardRepository, accessChecker, retroManager),

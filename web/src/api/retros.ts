@@ -1,11 +1,14 @@
 import {request} from '@/api/client';
 import type {
   Action,
+  ActionStats,
   ActionStatus,
   Board,
   DieRoll,
   RetroPhase,
   RetroSummary,
+  ReviewItem,
+  ReviewOutcome,
   TeamRetroSummary,
   TimerAction,
 } from '@/api/types';
@@ -102,6 +105,25 @@ export const updateAction = (
   actionId: string,
   changes: {assigneeId?: string | null; status?: ActionStatus; text?: string},
 ) => request<Action>(`/teams/${teamId}/actions/${actionId}`, {body: changes, method: 'PATCH'});
+
+export const recordReviewOutcome = (
+  retroId: string,
+  actionId: string,
+  outcome: ReviewOutcome,
+  comment?: string | null,
+) =>
+  request<ReviewItem>(`/retros/${retroId}/review/actions/${actionId}`, {
+    body: {comment, outcome},
+    method: 'PUT',
+  });
+
+export const clearReviewOutcome = (retroId: string, actionId: string) =>
+  request<void>(`/retros/${retroId}/review/actions/${actionId}`, {method: 'DELETE'});
+
+export const fetchActionStats = (teamId: string, retroId?: string) =>
+  request<ActionStats>(
+    `/teams/${teamId}/actions/stats${retroId ? `?retroId=${encodeURIComponent(retroId)}` : ''}`,
+  );
 
 export const removeRetro = (retroId: string) =>
   request<void>(`/retros/${retroId}`, {method: 'DELETE'});

@@ -22,7 +22,8 @@ describe('action broadcasts', () => {
     teamId = await harness.createTeam(owner);
     previousRetroId = (await harness.container.retroManager.create(owner, teamId, 'Sprint 41')).id;
     await harness.container.retroManager.updateRetro(owner, previousRetroId, {phase: 'DISCUSS'});
-    actionId = (await harness.container.actionManager.create(owner, previousRetroId, 'Fix the CI')).id;
+    actionId = (await harness.container.actionManager.create(owner, previousRetroId, 'Fix the CI'))
+      .id;
     // Carry-over compares creation times: the next retro has to be strictly later.
     await new Promise((resolve) => setTimeout(resolve, 5));
   });
@@ -45,11 +46,21 @@ describe('action broadcasts', () => {
   /** A live board, as a connected participant sees it. */
   const watch = async (auth: AuthContext, retroId: string) => {
     const sent: string[] = [];
-    const socket = {close: jest.fn(), OPEN: 1, readyState: 1, send: (raw: string) => sent.push(raw)};
+    const socket = {
+      close: jest.fn(),
+      OPEN: 1,
+      readyState: 1,
+      send: (raw: string) => sent.push(raw),
+    };
 
     harness.container.hub
       .acquire(retroId)
-      .add({name: 'Victor', socket: socket as never, token: await sessionToken(auth), userId: auth.userId});
+      .add({
+        name: 'Victor',
+        socket: socket as never,
+        token: await sessionToken(auth),
+        userId: auth.userId,
+      });
 
     return () =>
       sent
@@ -114,5 +125,33 @@ describe('action broadcasts', () => {
     expect(first()).toHaveLength(1);
     expect(second()).toHaveLength(1);
     expect(elsewhere()).toHaveLength(0);
+  });
+
+  it('records when an action was closed, clears it on reopen, and keeps it on the same status', async () => {
+    const closedAt = async () =>
+      (
+        await harness.container.db
+          .selectFrom('actions')
+          .select('closedAt')
+          .where('id', '=', actionId)
+          .executeTakeFirstOrThrow()
+      ).closedAt;
+    const update = (status: 'OPEN' | 'DONE' | 'DROPPED') =>
+      harness.container.actionManager.update(owner, teamId, actionId, {status});
+
+    expect(await closedAt()).toBeNull();
+
+    const done = await update('DONE');
+
+    expect(done.closedAt).toEqual(expect.any(String));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await update('DONE');
+    expect(await closedAt()).toBe(done.closedAt);
+
+    await update('DROPPED');
+    expect(await closedAt()).not.toBe(done.closedAt);
+
+    await update('OPEN');
+    expect(await closedAt()).toBeNull();
   });
 });
