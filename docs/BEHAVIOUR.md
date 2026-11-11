@@ -553,7 +553,9 @@ A team is the confidentiality boundary around a board. It is private to its memb
   `maxVotes`, never its notes, and no timer. A board with more than 8 columns or two columns
   of the same title is refused (`409`): rename or remove first. The board's dialog prefills
   the name with the retro's template name, or its title, suffixed `(copy)`, `(copy 2)`... when
-  the team already has a template of that name.
+  the team already has a template of that name. The board shows the button only in `DISCUSS`,
+  the last working phase, to a team admin who is a member; the API stays permissive. A retro
+  does not show which template it came from.
 - **Team default** (`PUT /teams/{teamId}/default-template`, `{templateId | null}`): a built-in
   or a template of this team (`404` otherwise); `null` goes back to Start / Stop / Continue.
   The effective default is never null.

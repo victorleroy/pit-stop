@@ -91,27 +91,34 @@ describe('BoardToolbar save as template', () => {
   });
 
   it('is offered to an admin who is a member of the team', async () => {
-    renderToolbar([team(true, true)]);
+    renderToolbar([team(true, true)], [], {phase: 'DISCUSS'});
     expect(await screen.findByRole('button', {name: 'Save as template'})).toBeTruthy();
   });
 
-  it('is hidden from a member who is not an admin', async () => {
-    renderToolbar([team(false, true)]);
+  it.each(['LOBBY', 'BRAINSTORM', 'SHARE', 'VOTE', 'ARCHIVED'] as const)('is hidden in the %s phase', async (phase) => {
+    renderToolbar([team(true, true)], [], {phase});
     await waitFor(() => expect(fetchTeams).toHaveBeenCalled());
-    await screen.findByText(/votes? left/);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByRole('button', {name: 'Save as template'})).toBeNull();
+  });
+
+  it('is hidden from a member who is not an admin', async () => {
+    renderToolbar([team(false, true)], [], {phase: 'DISCUSS'});
+    await waitFor(() => expect(fetchTeams).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 20));
     expect(screen.queryByRole('button', {name: 'Save as template'})).toBeNull();
   });
 
   it('is hidden from an organisation admin who is not a member', async () => {
-    renderToolbar([team(true, false)]);
+    renderToolbar([team(true, false)], [], {phase: 'DISCUSS'});
     await waitFor(() => expect(fetchTeams).toHaveBeenCalled());
-    await screen.findByText(/votes? left/);
+    await new Promise((resolve) => setTimeout(resolve, 20));
     expect(screen.queryByRole('button', {name: 'Save as template'})).toBeNull();
   });
 
   it('prefills the name with the template the retro came from and saves it', async () => {
     vi.mocked(saveRetroAsTemplate).mockResolvedValue({} as Awaited<ReturnType<typeof saveRetroAsTemplate>>);
-    renderToolbar([team(true, true)]);
+    renderToolbar([team(true, true)], [], {phase: 'DISCUSS'});
 
     fireEvent.click(await screen.findByRole('button', {name: 'Save as template'}));
     expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Sprint review');
@@ -129,7 +136,7 @@ describe('BoardToolbar save as template', () => {
   });
 
   it('suffixes the prefilled name when the team already has a template with it', async () => {
-    renderToolbar([team(true, true)], ['Sprint review', 'sprint review (copy)']);
+    renderToolbar([team(true, true)], ['Sprint review', 'sprint review (copy)'], {phase: 'DISCUSS'});
 
     fireEvent.click(await screen.findByRole('button', {name: 'Save as template'}));
 
@@ -144,7 +151,7 @@ describe('BoardToolbar save as template', () => {
     vi.mocked(saveRetroAsTemplate).mockRejectedValue(
       new ApiError(409, 'A template with this name already exists'),
     );
-    renderToolbar([team(true, true)]);
+    renderToolbar([team(true, true)], [], {phase: 'DISCUSS'});
 
     fireEvent.click(await screen.findByRole('button', {name: 'Save as template'}));
     fireEvent.click(screen.getByRole('button', {name: 'Save'}));

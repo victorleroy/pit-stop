@@ -108,7 +108,7 @@ export const BoardToolbar = ({
   // not a member of the team is admin without being a member, and cannot save its templates.
   const {data: teams} = useQuery({queryFn: fetchTeams, queryKey: ['teams']});
   const myTeam = teams?.find(({id}) => id === board.teamId);
-  const canSaveAsTemplate = Boolean(myTeam?.isAdmin && myTeam.isMember);
+  const canSaveAsTemplate = board.phase === 'DISCUSS' && Boolean(myTeam?.isAdmin && myTeam.isMember);
   const columnInputRef = useAutoFocus(isAddingColumn);
 
   const closeColumnDialog = () => {

@@ -504,7 +504,6 @@ export const RetroPage = () => {
           />
         }
         teamId={board.teamId}
-        templateName={board.template?.name}
         title={board.title}
         zoom={zoom}
       />
