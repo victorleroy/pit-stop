@@ -167,24 +167,30 @@ export const CardStack = ({
       }}
       sx={{
         bgcolor: isCluster ? 'rgba(15, 23, 42, 0.03)' : 'transparent',
-        borderColor: isRefused
-          ? 'error.main'
-          : isOver
-            ? 'primary.main'
-            : isCluster
-              ? 'divider'
-              : 'transparent',
+        // Painted above the notes so an indigo edge on a note cannot swallow the left side.
+        '&::after': {
+          border: 2,
+          borderColor: isRefused ? 'error.main' : 'primary.main',
+          borderRadius: 'inherit',
+          content: '""',
+          inset: -1,
+          opacity: isOver || isRefused ? 1 : 0,
+          pointerEvents: 'none',
+          position: 'absolute',
+          transition: 'opacity 120ms ease',
+          zIndex: 1,
+        },
+        borderColor: isCluster ? 'divider' : 'transparent',
         // The Card theme's shadow would paint a second, square layer behind a lone note.
         borderRadius: isCluster ? '14px' : '10px',
         borderStyle: 'solid',
-        borderWidth: isOver || isRefused ? 2 : 1,
+        borderWidth: 1,
         // The vote badge straddles the corner, and Paper clips its overflow by default.
         boxShadow: 'none',
         overflow: 'visible',
         p: isCluster ? 1.5 : 0,
         position: 'relative',
-        transition: 'border-color 120ms ease',
-      }}
+              }}
     >
       {showTotals ? (
         <Tooltip
