@@ -184,11 +184,14 @@ export const RetroPage = () => {
 
   const onBoard = (next: Board) => queryClient.setQueryData(queryKey, next);
 
-  const {cursors, hideCursor, isConnected, participants, rolls, sendCursor} = useBoardSocket({
+  const {cursors, hideCursor, isConnected, isDiceSnapshot, participants, rolls, sendCursor} = useBoardSocket({
     onBoard,
     retroId,
   });
-  const dice = useDiceSpin(rolls, {reducedMotion: useMediaQuery('(prefers-reduced-motion: reduce)')});
+  const dice = useDiceSpin(rolls, {
+    isSnapshot: isDiceSnapshot,
+    reducedMotion: useMediaQuery('(prefers-reduced-motion: reduce)'),
+  });
 
   // While the socket is up it already carries the board this command produced, and possibly
   // a newer one: the HTTP response, arriving later, would only roll the board back.

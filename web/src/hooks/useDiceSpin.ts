@@ -5,21 +5,29 @@ export const SPIN_MS = 3000;
 
 /**
  * The service's roll is final the moment it lands, but each face stays hidden while its die
- * spins, for the roller and everybody watching alike. A batch of several new rolls is the
- * snapshot sent to whoever joins late: those dice landed long ago and show at once.
+ * spins, for the roller and everybody watching alike. The snapshot sent to whoever joins late
+ * holds dice that landed long ago: they show at once. My own die keeps rolling until my roll
+ * lands, and shows at once if it lands after its spin.
  */
-export const useDiceSpin = (rolls: DieRoll[], {reducedMotion}: {reducedMotion: boolean}) => {
+export const useDiceSpin = (
+  rolls: DieRoll[],
+  {isSnapshot, reducedMotion}: {isSnapshot: boolean; reducedMotion: boolean},
+) => {
   const [spinning, setSpinning] = useState<Record<string, number>>({});
+  const [mine, setMine] = useState<string>();
   const [seen, setSeen] = useState(rolls);
 
   if (rolls !== seen) {
     setSeen(rolls);
     const known = new Set(seen.map(({userId}) => userId));
-    const landed = rolls.filter(({userId}) => !known.has(userId));
+    const landed = rolls.filter(({userId}) => !known.has(userId) && !spinning[userId] && userId !== mine);
+
+    if (mine && (!rolls.length || rolls.some(({userId}) => userId === mine))) setMine(undefined);
 
     if (!rolls.length) setSpinning({});
-    else if (!reducedMotion && landed.length === 1 && !spinning[landed[0].userId]) {
-      setSpinning({...spinning, [landed[0].userId]: Date.now() + SPIN_MS});
+    else if (!reducedMotion && !isSnapshot && landed.length) {
+      const until = Date.now() + SPIN_MS;
+      setSpinning({...spinning, ...Object.fromEntries(landed.map(({userId}) => [userId, until]))});
     }
   }
 
@@ -40,25 +48,26 @@ export const useDiceSpin = (rolls: DieRoll[], {reducedMotion}: {reducedMotion: b
 
   const spin = useCallback(
     (userId: string) => {
-      if (!reducedMotion) setSpinning((current) => ({...current, [userId]: Date.now() + SPIN_MS}));
+      if (reducedMotion) return;
+
+      setMine(userId);
+      setSpinning((current) => ({...current, [userId]: Date.now() + SPIN_MS}));
     },
     [reducedMotion],
   );
 
-  const stop = useCallback(
-    (userId: string) =>
-      setSpinning((current) => {
-        const {[userId]: _stopped, ...rest} = current;
-        return rest;
-      }),
-    [],
-  );
+  const stop = useCallback((userId: string) => {
+    setMine(undefined);
+    setSpinning((current) => {
+      const {[userId]: _stopped, ...rest} = current;
+      return rest;
+    });
+  }, []);
 
   return {
-    isSpinning: (userId?: string) => Boolean(userId && spinning[userId]),
     settled: rolls.filter(({userId}) => !spinning[userId]),
     spin,
-    spinningIds: Object.keys(spinning),
+    spinningIds: mine && !spinning[mine] ? [...Object.keys(spinning), mine] : Object.keys(spinning),
     stop,
   };
 };

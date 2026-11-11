@@ -193,7 +193,7 @@ export class RetroSession {
   /** Somebody joining after the first roll sees the dice too. */
   public sendDice(connection: Connection): void {
     if (this.dice.size) {
-      this.send(connection, {rolls: this.rolls(), type: 'dice.updated'});
+      this.send(connection, {rolls: this.rolls(), snapshot: true, type: 'dice.updated'});
     }
   }
 

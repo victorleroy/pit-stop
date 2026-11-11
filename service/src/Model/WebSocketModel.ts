@@ -24,5 +24,5 @@ export type WebSocketEvent =
   | {cursor: CursorModel; type: 'cursor.moved'}
   | {participants: PresenceParticipant[]; type: 'presence.updated'}
   | {message: string; type: 'error'}
-  | {rolls: DieRoll[]; type: 'dice.updated'}
+  | {rolls: DieRoll[]; snapshot?: boolean; type: 'dice.updated'}
   | {type: 'cursor.left'; userId: string};

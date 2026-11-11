@@ -343,6 +343,8 @@ describe('live retros', () => {
       const lateTab = await connect(member);
 
       expect(dice(lateTab).at(-1).rolls).toHaveLength(2);
+      expect(dice(lateTab).at(-1).snapshot).toBe(true);
+      expect(dice(facilitator).at(-1).snapshot).toBeUndefined();
     });
 
     it('refuses a roll from somebody not in the room', async () => {

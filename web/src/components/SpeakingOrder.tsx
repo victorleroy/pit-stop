@@ -137,7 +137,7 @@ export const SpeakingOrder = ({
         anchorEl={anchor}
         anchorOrigin={{horizontal: 'left', vertical: 'bottom'}}
         onClose={() => setAnchor(null)}
-        open={Boolean(anchor)}
+        open={Boolean(anchor) && hiddenCount > 0}
       >
         <Stack spacing={1} sx={{maxWidth: 280, px: 2, py: 1.5}}>
           <Typography variant="headingS">Speaking order</Typography>

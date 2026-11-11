@@ -206,7 +206,7 @@ export type ServerEvent =
   | {cursor: Cursor; type: 'cursor.moved'}
   | {message: string; type: 'error'}
   | {participants: Participant[]; type: 'presence.updated'}
-  | {rolls: DieRoll[]; type: 'dice.updated'}
+  | {rolls: DieRoll[]; snapshot?: boolean; type: 'dice.updated'}
   | {type: 'cursor.left'; userId: string};
 
 export interface OrgMemberTeam {

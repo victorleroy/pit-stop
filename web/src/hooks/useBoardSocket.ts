@@ -42,6 +42,7 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [cursors, setCursors] = useState<TimestampedCursor[]>([]);
   const [rolls, setRolls] = useState<DieRoll[]>([]);
+  const [isDiceSnapshot, setIsDiceSnapshot] = useState(false);
   const onBoardRef = useRef(onBoard);
   onBoardRef.current = onBoard;
 
@@ -123,7 +124,10 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
           setCursors((current) => current.filter(({userId}) => present.has(userId)));
         }
 
-        if (payload.type === 'dice.updated') setRolls(payload.rolls);
+        if (payload.type === 'dice.updated') {
+          setRolls(payload.rolls);
+          setIsDiceSnapshot(Boolean(payload.snapshot));
+        }
 
         if (payload.type === 'cursor.moved') {
           const {cursor} = payload;
@@ -179,5 +183,5 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
     };
   }, [retroId]);
 
-  return {cursors, hideCursor, isConnected, participants, rolls, sendCursor};
+  return {cursors, hideCursor, isConnected, isDiceSnapshot, participants, rolls, sendCursor};
 };

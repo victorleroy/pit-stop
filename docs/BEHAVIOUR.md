@@ -411,8 +411,9 @@ one compact row:
   tumbles through random faces and its button is disabled; the value the service sent is kept
   hidden until the 3 seconds are over, then the die settles on it and the order updates.
   Everybody else sees the roller's die spin for the same 3 seconds when `dice.updated` brings
-  the new roll. Dice already rolled when somebody joins (the snapshot sent on subscribe) show
-  at once. With `prefers-reduced-motion`, there is no spin: the result shows directly.
+  the new roll. Dice already rolled when somebody joins (the snapshot sent on subscribe, marked
+  `snapshot: true`) show at once. With `prefers-reduced-motion`, there is no spin: the result
+  shows directly.
 - **The order**: small numbered chips (`1. Name`), mine highlighted, the face in a tooltip.
   Only the first 3 show; the rest is behind a `+n` chip opening the full order and who is still
   to roll.
@@ -667,7 +668,7 @@ Six outbound events, to keep identical:
 { type: 'presence.updated', participants: [{userId, name, pictureUrl?}] }
 { type: 'cursor.moved',     cursor: {userId, name, x, y} }
 { type: 'cursor.left',      userId }
-{ type: 'dice.updated',     rolls: [{userId, name, pictureUrl?, value}] }
+{ type: 'dice.updated',     rolls: [{userId, name, pictureUrl?, value}], snapshot? }
 { type: 'error',            message }
 ```
 
