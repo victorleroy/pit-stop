@@ -150,6 +150,7 @@ export type ServerEvent =
   | {cursor: Cursor; type: 'cursor.moved'}
   | {message: string; type: 'error'}
   | {participants: Participant[]; type: 'presence.updated'}
+  | {order: Participant[]; type: 'speakingOrder.drawn'}
   | {type: 'cursor.left'; userId: string};
 
 export interface OrgMemberTeam {

@@ -3,6 +3,7 @@ import type {
   Action,
   ActionStatus,
   Board,
+  Participant,
   RetroPhase,
   RetroSummary,
   TeamRetroSummary,
@@ -104,6 +105,9 @@ export const removeRetro = (retroId: string) =>
 
 export const takeFacilitation = (retroId: string) =>
   request<void>(`/retros/${retroId}/facilitator`, {method: 'POST'});
+
+export const drawSpeakingOrder = (retroId: string) =>
+  request<{order: Participant[]}>(`/retros/${retroId}/speaking-order`, {method: 'POST'});
 
 export const handOverFacilitation = (retroId: string, userId: string) =>
   request<void>(`/retros/${retroId}/facilitator`, {body: {userId}, method: 'PUT'});

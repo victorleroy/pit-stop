@@ -18,6 +18,7 @@ import {
   castVote,
   createAction,
   createNote,
+  drawSpeakingOrder,
   fetchBoard,
   groupNote,
   hideMyNotes,
@@ -44,6 +45,7 @@ import {EmptyState} from '@/components/EmptyState';
 import {useToast} from '@/contexts/ToastContext';
 import {BoardToolbar} from '@/components/BoardToolbar';
 import {PresenceBar} from '@/components/PresenceBar';
+import {SpeakingOrder} from '@/components/SpeakingOrder';
 import {useBoardSocket} from '@/hooks/useBoardSocket';
 import {SLIPSTREAM} from '@/ui/theme';
 import {readZoom, saveZoom, stepZoom} from '@/utils/boardZoom';
@@ -170,7 +172,7 @@ export const RetroPage = () => {
 
   const onBoard = (next: Board) => queryClient.setQueryData(queryKey, next);
 
-  const {cursors, hideCursor, isConnected, participants, sendCursor} = useBoardSocket({
+  const {cursors, hideCursor, isConnected, participants, sendCursor, speakingOrder} = useBoardSocket({
     onBoard,
     retroId,
   });
@@ -209,6 +211,10 @@ export const RetroPage = () => {
     mutationFn: () => takeFacilitation(retroId as string),
     onError: (cause: Error) => toast.error(cause.message),
     onSuccess: () => queryClient.invalidateQueries({queryKey}),
+  });
+  const speakingOrderMutation = useMutation({
+    mutationFn: () => drawSpeakingOrder(retroId as string),
+    onError: (cause: Error) => toast.error(cause.message),
   });
   const timerMutation = useMutation({
     mutationFn: ({action, seconds}: {action: TimerAction; seconds?: number}) =>
@@ -412,6 +418,12 @@ export const RetroPage = () => {
             <PresenceBar board={board} isConnected={isConnected} participants={participants} />
           </Stack>
         </Stack>
+        <SpeakingOrder
+          canDraw={board.isFacilitator && isConnected}
+          isBusy={speakingOrderMutation.isPending}
+          onDraw={() => speakingOrderMutation.mutate()}
+          order={speakingOrder}
+        />
         <Link
           style={{color: 'inherit', textDecoration: 'none', width: 'fit-content'}}
           to={`/teams/${board.teamId}`}

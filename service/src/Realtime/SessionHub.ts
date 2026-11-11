@@ -2,6 +2,7 @@ import type {Db} from '~/Db/connection';
 import type {PresenceReader} from '~/Manager/AdminManager';
 import type {BoardRepository, RetroRow} from '~/Repository/BoardRepository';
 import {logger} from '~/logger';
+import type {PresenceParticipant} from '~/Model/WebSocketModel';
 import type {Authorizer, Connection} from '~/Realtime/RetroSession';
 import {RetroSession} from '~/Realtime/RetroSession';
 
@@ -129,6 +130,11 @@ export class SessionHub implements PresenceReader {
     } catch (error: unknown) {
       logger.error({err: error, retroId}, 'Board broadcast failed');
     }
+  }
+
+  /** Nobody connected, nobody to order: the draw needs the live session. */
+  public drawSpeakingOrder(retroId: string): PresenceParticipant[] {
+    return this.sessions.get(retroId)?.drawSpeakingOrder() ?? [];
   }
 
   /** Backs the facilitation takeover rule without any storage (BEHAVIOUR.md section 5). */

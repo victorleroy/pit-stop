@@ -19,4 +19,5 @@ export type WebSocketEvent =
   | {cursor: CursorModel; type: 'cursor.moved'}
   | {participants: PresenceParticipant[]; type: 'presence.updated'}
   | {message: string; type: 'error'}
+  | {order: PresenceParticipant[]; type: 'speakingOrder.drawn'}
   | {type: 'cursor.left'; userId: string};

@@ -172,6 +172,10 @@ export class RetroManager {
     return used;
   }
 
+  public async checkFacilitator(auth: AuthContext, retroId: string): Promise<void> {
+    await this.accessChecker.checkFacilitatorAccess(auth, retroId);
+  }
+
   public async updateRetro(
     auth: AuthContext,
     retroId: string,

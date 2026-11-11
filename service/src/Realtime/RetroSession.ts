@@ -34,6 +34,9 @@ export class RetroSession {
 
   private phase: RetroPhase | undefined;
 
+  /** Drawn by the facilitator; held here only, so it ends with the session. */
+  private speakingOrder: PresenceParticipant[] | undefined;
+
   public constructor(
     public readonly retroId: string,
     private readonly boardRepository: BoardRepository,
@@ -113,21 +116,36 @@ export class RetroSession {
   }
 
   public broadcastPresence(): void {
-    const participants = [
-      ...new Map<string, PresenceParticipant>(
-        [...this.connections].map((connection) => [
-          connection.userId,
-          {
-            name: connection.name,
-            ...(connection.pictureUrl ? {pictureUrl: connection.pictureUrl} : {}),
-            userId: connection.userId,
-          },
-        ]),
-      ).values(),
-    ].sort((left, right) => left.name.localeCompare(right.name));
+    const participants = this.participants();
 
     for (const connection of [...this.connections]) {
       this.send(connection, {participants, type: 'presence.updated'});
+    }
+  }
+
+  /** A random order of the people connected right now, sent to every one of them. */
+  public drawSpeakingOrder(random: () => number = Math.random): PresenceParticipant[] {
+    const order = this.participants();
+
+    for (let index = order.length - 1; index > 0; index -= 1) {
+      const other = Math.floor(random() * (index + 1));
+
+      [order[index], order[other]] = [order[other]!, order[index]!];
+    }
+
+    this.speakingOrder = order;
+
+    for (const connection of [...this.connections]) {
+      this.send(connection, {order, type: 'speakingOrder.drawn'});
+    }
+
+    return order;
+  }
+
+  /** Somebody joining after the draw sees it too. */
+  public sendSpeakingOrder(connection: Connection): void {
+    if (this.speakingOrder) {
+      this.send(connection, {order: this.speakingOrder, type: 'speakingOrder.drawn'});
     }
   }
 
@@ -154,6 +172,21 @@ export class RetroSession {
 
   public sendTo(connection: Connection, event: WebSocketEvent): void {
     this.send(connection, event);
+  }
+
+  private participants(): PresenceParticipant[] {
+    return [
+      ...new Map<string, PresenceParticipant>(
+        [...this.connections].map((connection) => [
+          connection.userId,
+          {
+            name: connection.name,
+            ...(connection.pictureUrl ? {pictureUrl: connection.pictureUrl} : {}),
+            userId: connection.userId,
+          },
+        ]),
+      ).values(),
+    ].sort((left, right) => left.name.localeCompare(right.name));
   }
 
   private send(connection: Connection, event: WebSocketEvent): void {

@@ -304,6 +304,16 @@ number of minutes. The picker remembers the last duration chosen.
 `seconds` is bounded to `[5, 3600]`. Extending an already-overdue timer never yields a
 negative duration.
 
+### Speaking order
+
+The facilitator can draw a random speaking order (a die button under the title), in any
+phase. The draw shuffles the people connected to the retro at that moment (deduplicated by
+`userId`, like presence) and sends `speakingOrder.drawn` to every connection; everyone sees the
+same numbered list. Drawing again replaces it. The order is held in memory by the
+`RetroSession` actor only: nothing is stored, somebody subscribing later receives the current
+order, and it ends with the session (last participant leaving, or a restart). It reveals
+nothing presence does not already show. Nobody connected means an empty order.
+
 ### Teams
 
 A team is the confidentiality boundary around a board. It is private to its members.
@@ -401,6 +411,7 @@ Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `429`.
 | POST | `/retros/{retroId}/votes` | `200` `Board` |
 | POST | `/retros/{retroId}/facilitator` | `204` |
 | PUT | `/retros/{retroId}/facilitator` | `204` |
+| POST | `/retros/{retroId}/speaking-order` | `200` `{order: [{userId, name, pictureUrl?}]}` — facilitator only |
 | GET | `/teams/{teamId}/actions` | `200` `Action[]`, most recent first |
 | POST | `/retros/{retroId}/actions` | `201` `Action` |
 | PATCH | `/teams/{teamId}/actions/{actionId}` | `200` `Action` |
@@ -451,13 +462,14 @@ Board           { id, title, phase, teamId, createdBy, createdAt?, isFacilitator
 
 ## 8. WebSocket contract
 
-Five outbound events, to keep identical:
+Six outbound events, to keep identical:
 
 ```ts
 { type: 'board.updated',    board: Board }                    // projected per recipient
 { type: 'presence.updated', participants: [{userId, name, pictureUrl?}] }
 { type: 'cursor.moved',     cursor: {userId, name, x, y} }
 { type: 'cursor.left',      userId }
+{ type: 'speakingOrder.drawn', order: [{userId, name, pictureUrl?}] }
 { type: 'error',            message }
 ```
 
@@ -475,7 +487,8 @@ Inbound actions: `subscribe`, `cursor`.
 - Cursor coordinates are **board-relative**, as a fraction of the box the columns take, zoom
   included: every screen and every zoom level differs, the same fraction lands on the same note.
 - `presence.updated` deduplicates by `userId` (several tabs are one person) and sorts by name.
-- On subscribe: access check, then `broadcastBoard` **and** `broadcastPresence`.
+- On subscribe: access check, then `broadcastBoard` **and** `broadcastPresence`, then the
+  current speaking order to the new connection when one was drawn.
 - Access refused on subscribe sends `{type: 'error'}` without closing the socket.
 - A dead connection is pruned on the first failed send.
 
@@ -490,7 +503,7 @@ Inbound actions: `subscribe`, `cursor`.
 - **Reconnection backoff: 1s, 2s, 5s, 10s**, then stays at 10s. The attempt counter resets on
   a successful open.
 - On open, the client sends `{action: 'subscribe', retroId}`.
-- On close, participants and cursors are cleared.
+- On close, participants, cursors and the speaking order are cleared.
 - **Cursors are throttled to one message every 120 ms** (about 8 per second); interpolation on
   arrival already looks continuous.
 - A cursor with no update for **8 s** is considered gone; a sweep runs every 2 s.

@@ -1,6 +1,7 @@
 import {EventEmitter} from 'node:events';
 import {Hono} from 'hono';
 import {Harness} from '../helpers/harness';
+import {errorHandler} from '~/Http/errorHandler';
 import type {Variables} from '~/Http/middleware/auth';
 import {retroRoutes} from '~/Http/routes/retros';
 import {teamRoutes} from '~/Http/routes/teams';
@@ -263,5 +264,57 @@ describe('live retros', () => {
     expect(hidden.status).toBe(200);
     expect((await harness.container.retroManager.getBoard(owner, retroId)).columns[0]!.cards[0]!
       .notes[0]!.text).toBe('');
+  });
+
+  it('lets the facilitator alone draw a speaking order, sent to everyone and to late joiners', async () => {
+    const connect = async (auth: AuthContext) => {
+      const socket = Object.assign(new EventEmitter(), {
+        close: jest.fn(),
+        OPEN: 1,
+        readyState: 1,
+        sent: [] as string[],
+        send(payload: string) {
+          this.sent.push(payload);
+        },
+      });
+
+      await createSocketAttacher(harness.container)(socket as never, await sessionToken(auth));
+      socket.emit('message', JSON.stringify({action: 'subscribe', retroId}));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      return socket;
+    };
+    const orders = (socket: {sent: string[]}) =>
+      socket.sent.map((raw) => JSON.parse(raw)).filter((event) => event.type === 'speakingOrder.drawn');
+    const request = (auth: AuthContext) => {
+      const app = new Hono<{Variables: Variables}>();
+
+      app.use('*', async (context, next) => {
+        context.set('auth', auth);
+        await next();
+      });
+      app.route('/', retroRoutes(harness.container));
+      app.onError(errorHandler);
+
+      return app.request(`/retros/${retroId}/speaking-order`, {method: 'POST'});
+    };
+
+    const facilitator = await connect(owner);
+    const participant = await connect(member);
+
+    expect((await request(member)).status).toBe(403);
+    expect(orders(participant)).toHaveLength(0);
+
+    const response = await request(owner);
+    const {order} = (await response.json()) as {order: {userId: string}[]};
+
+    expect(response.status).toBe(200);
+    expect(order.map(({userId}) => userId).sort()).toEqual([member.userId, owner.userId].sort());
+    expect(orders(facilitator).at(-1).order).toEqual(order);
+    expect(orders(participant).at(-1).order).toEqual(order);
+
+    const lateTab = await connect(member);
+
+    expect(orders(lateTab).at(-1).order).toEqual(order);
   });
 });

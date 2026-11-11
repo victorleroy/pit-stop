@@ -88,6 +88,7 @@ export const createSocketAttacher =
       session.add(connection);
       await session.broadcastBoard();
       session.broadcastPresence();
+      session.sendSpeakingOrder(connection);
     };
 
     socket.on('message', (raw) => {

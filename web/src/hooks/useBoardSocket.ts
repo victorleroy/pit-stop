@@ -41,6 +41,7 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
   const [isConnected, setIsConnected] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [cursors, setCursors] = useState<TimestampedCursor[]>([]);
+  const [speakingOrder, setSpeakingOrder] = useState<Participant[]>([]);
   const onBoardRef = useRef(onBoard);
   onBoardRef.current = onBoard;
 
@@ -122,6 +123,8 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
           setCursors((current) => current.filter(({userId}) => present.has(userId)));
         }
 
+        if (payload.type === 'speakingOrder.drawn') setSpeakingOrder(payload.order);
+
         if (payload.type === 'cursor.moved') {
           const {cursor} = payload;
 
@@ -143,6 +146,7 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
         setIsConnected(false);
         setParticipants([]);
         setCursors([]);
+        setSpeakingOrder([]);
 
         if (refused) return;
 
@@ -175,5 +179,5 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
     };
   }, [retroId]);
 
-  return {cursors, hideCursor, isConnected, participants, sendCursor};
+  return {cursors, hideCursor, isConnected, participants, sendCursor, speakingOrder};
 };

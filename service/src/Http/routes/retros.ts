@@ -261,6 +261,14 @@ export const retroRoutes = (c: Container) => {
     return context.body(null, 204);
   });
 
+  app.post('/retros/:retroId/speaking-order', async (context) => {
+    const retroId = context.req.param('retroId');
+
+    await c.retroManager.checkFacilitator(context.get('auth'), retroId);
+
+    return context.json({order: c.hub.drawSpeakingOrder(retroId)});
+  });
+
   // ------------------------------------------------------------------ actions
 
   app.post('/retros/:retroId/actions', async (context) => {
