@@ -840,7 +840,7 @@ epoch milliseconds; `points` in `game.hit` is the player's total, not a delta.
 | `/reset-password/:token` | ResetPasswordPage | public |
 | `/verify-email/:token` | VerifyEmailPage | public |
 | `/teams` | TeamsPage | authenticated |
-| `/profile` | ProfilePage | authenticated: own name and avatar; reached from the header avatar |
+| `/profile` | ProfilePage | authenticated: own name and avatar; reached from the header avatar (the only identity shown in the header; the full name is its tooltip) |
 | `/retros` | MyRetrosPage | authenticated |
 | `/admin` | AdminPage | authenticated, org admin content: people, invitations, teams |
 | `/paddock` | PaddockPage | authenticated, platform admin only |

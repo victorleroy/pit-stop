@@ -5,6 +5,7 @@ import {
   Container,
   Stack,
   Toolbar,
+  Tooltip,
   Typography,
 } from '@/ui';
 import {Link, NavLink, Outlet, useMatch} from 'react-router-dom';
@@ -96,27 +97,25 @@ export const AppLayout = () => {
               </NavLink>
             ) : null}
 
-            {/* On a phone the avatar alone says who is signed in, and is the whole target. */}
-            <Stack
-              aria-label="My profile"
-              component={Link}
-              direction="row"
-              spacing={1}
-              sx={{
-                alignItems: 'center',
-                color: 'inherit',
-                justifyContent: 'center',
-                minHeight: 44,
-                minWidth: 44,
-                textDecoration: 'none',
-              }}
-              to="/profile"
-            >
-              {user ? <UserAvatar {...user} decorative /> : null}
-              <Typography sx={{display: {xs: 'none', md: 'block'}}} variant="textS">
-                {user?.name}
-              </Typography>
-            </Stack>
+            {/* The avatar alone says who is signed in; the full name waits in its tooltip. */}
+            <Tooltip title={user?.name ?? ''}>
+              <Stack
+                aria-label="My profile"
+                component={Link}
+                sx={{
+                  alignItems: 'center',
+                  borderRadius: '50%',
+                  color: 'inherit',
+                  justifyContent: 'center',
+                  minHeight: 44,
+                  minWidth: 44,
+                  textDecoration: 'none',
+                }}
+                to="/profile"
+              >
+                {user ? <UserAvatar {...user} decorative /> : null}
+              </Stack>
+            </Tooltip>
             <Button onClick={logout} size="small" variant="text">
               Sign out
             </Button>
