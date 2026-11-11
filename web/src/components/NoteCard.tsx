@@ -82,11 +82,11 @@ export const NoteCard = ({
         boxShadow: isWithheld ? 'none' : PAPER_SHADOW,
         color: isWithheld ? SLIPSTREAM.inkMuted : ink,
         cursor: canHandle && !isEditing ? 'grab' : 'default',
-        p: 2,
+        p: 1.25,
         transition: 'transform 140ms ease, box-shadow 140ms ease',
       }}
     >
-      <Stack spacing={1}>
+      <Stack spacing={0.75}>
         {isEditing ? (
           <TextField
             fullWidth
@@ -120,12 +120,15 @@ export const NoteCard = ({
             />
           </Stack>
         ) : (
-          <Typography sx={{color: 'inherit', whiteSpace: 'pre-wrap'}} variant="textM">
+          <Typography
+            sx={{color: 'inherit', fontSize: '0.875rem', lineHeight: 1.4, whiteSpace: 'pre-wrap'}}
+            variant="textM"
+          >
             {note.text}
           </Typography>
         )}
 
-        <Stack direction="row" spacing={1} sx={{alignItems: 'center', minHeight: 24}}>
+        <Stack direction="row" spacing={1} sx={{alignItems: 'center', minHeight: 20}}>
           <Avatar
             size="small"
             src={note.author.pictureUrl}
