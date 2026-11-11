@@ -461,7 +461,7 @@ disabled.
 
 ### Waiting room game
 
-Wheel Gun, played by whoever wants while the retro is in `LOBBY`. Nothing of it is stored: it
+Wheel Gun, played by everybody in the waiting room while the retro is in `LOBBY`. Nothing of it is stored: it
 lives in the retro's `RetroSession` and ends with it (ADR-006).
 
 - Cars cross a pit lane of width 1 on 3 lanes, left to right. A car is `0.12` long and enters
@@ -840,26 +840,32 @@ epoch milliseconds; `points` in `game.hit` is the player's total, not a delta.
   cannot leave a pointer behind.
 - The board is pushed by the service on every change; the page only falls back to fetching
   while the socket is down.
-- **Waiting room** (`LOBBY`): instead of the board, a welcome (`Welcome to the pit stop`,
-  retro title and team), the Prime Directive with its attribution, and who is here among the
-  team's members (`x/y joined`, present first, then absent as "not here yet"; `Everyone is
-  here` once complete). Presence is shown only while the socket is connected, `Reconnecting…`
-  otherwise, so `0/y` never shows. When the facilitator is not connected, the others read
-  `Waiting for {name} to start. You can take over from the toolbar.`: the takeover stays the
-  toolbar's. The facilitator starts with `Start the retro` (never conditioned on presence),
-  whose target is `nextOpeningPhase(board)`, and has a second tab, `Board setup`, with the
-  column controls. `LOBBY` is not in the phase stepper, and no cursor is sent.
-- **Wheel Gun**, beside the welcome: on by default, off by default when the system asks for
-  reduced motion and no choice is stored; the choice is kept in `localStorage` under
-  `pit-stop.lobby-game` (`on`/`off`). On joins the game (again after every reconnection), off
-  leaves it. Positions use `offset = serverNow − Date.now()` from the last game event. A tap
-  plays at once; the wheel turns to the winner's colour if someone else got it, and frees
-  itself locally after 1 s without an answer. Keys `1`, `2`, `3` fit the most advanced free
-  wheel inside the pit box (`x ∈ [0.35, 0.65]`) of that lane; touch targets are at least
-  44 px. Reduced motion: no particles or outline. The impact sound obeys
-  `pit-stop.timer-muted`, shown as `Sounds` in the waiting room, and only plays for one's own
-  taps. The scoreboard appears with the first point: top 5, then one's own row, then
-  `+n others`. On `game.ended` with points, a 6 s toast gives the record and the winner.
+- **Waiting room** (`LOBBY`): a dialog over the board that nobody dismisses (no close button,
+  backdrop or `Escape`), gone for everybody once the retro leaves `LOBBY`. It holds a welcome
+  (`Welcome to the pit stop`, retro title and team), the icebreaker preview for the
+  facilitator only when the retro has one, then who is here among the team's members
+  (`x/y joined`, present first with their avatar and first name, popping in as they join
+  (no animation with reduced motion), then absent as "not here yet"; `Everyone is here` once
+  complete), then the game. Presence is shown only while the socket is connected,
+  `Reconnecting…` otherwise, so `0/y` never shows. The others read
+  `Waiting for {name} to start the retro`; when the facilitator is not connected they also get
+  `Take over facilitation`, since the toolbar is under the dialog. The facilitator starts with
+  `Start the retro` (never conditioned on presence), whose target is `nextOpeningPhase(board)`,
+  and can step out with `Set up the board`: the dialog closes for them only, the board and its
+  column controls show, with `Back to the waiting room` to reopen it; the toolbar still offers
+  the start. `LOBBY` is not in the phase stepper, and no cursor is sent.
+- **Wheel Gun**, in the dialog below the people, always on: it is played while the dialog is
+  open (the facilitator setting up the board leaves it). Positions use
+  `offset = serverNow − Date.now()` from the last game event. A tap plays at once; the wheel
+  turns to the winner's colour if someone else got it, and frees itself locally after 1 s
+  without an answer. Keys `1`, `2`, `3` fit the most advanced free wheel of that lane among
+  those on screen; touch targets are at least 44 px. Reduced motion: no particles or outline.
+  Every colour of the track comes from the theme (`palette.track`): a pale lane with subtle
+  separators, liveries from the wash. The impact sound obeys the global mute
+  (`pit-stop.timer-muted`, set with the timer) and only plays for one's own taps. The team's
+  `Pit stops: n` sits above the track. The scoreboard appears with the first point: top 5,
+  then one's own row, then `+n others`. On `game.ended` with points, a 6 s toast gives the
+  record and the winner.
 - The retro's actions (this retro's and those carried over) live in a panel on the right,
   opened from the toolbar's `Actions · n` button, `n` being the open actions. On a wide screen
   the panel sits beside the board, which narrows; on a phone it slides over it. Turning a card

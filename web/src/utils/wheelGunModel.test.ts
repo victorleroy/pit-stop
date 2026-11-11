@@ -74,12 +74,28 @@ describe('hitTest', () => {
 describe('pickKeyboardTarget', () => {
   const free = () => true;
 
-  it('picks the most advanced free wheel inside the pit box of the lane', () => {
+  it('picks the most advanced free wheel of the lane anywhere on the track', () => {
     const behind = car({id: 1, spawnAt: 10_000});
     const ahead = car({id: 2, spawnAt: 9_500});
     const at = 10_000 + ((0.5 + CAR_LENGTH - 0.095) / 0.2) * 1000;
 
     expect(pickKeyboardTarget({at, cars: [behind, ahead], isFree: free, lane: 1})).toEqual({carId: 2, wheel: 'front'});
+  });
+
+  it('reaches a wheel near either end of the track', () => {
+    const c = car();
+    const entering = 10_000 + ((0.05 + CAR_LENGTH - 0.095) / 0.2) * 1000;
+    const leaving = 10_000 + ((0.95 + CAR_LENGTH - 0.095) / 0.2) * 1000;
+
+    expect(pickKeyboardTarget({at: entering, cars: [c], isFree: free, lane: 1})).toEqual({carId: 1, wheel: 'front'});
+    expect(pickKeyboardTarget({at: leaving, cars: [c], isFree: free, lane: 1})).toEqual({carId: 1, wheel: 'front'});
+  });
+
+  it('passes over a wheel that already left the track', () => {
+    const c = car();
+    const at = 10_000 + ((1.02 + CAR_LENGTH - 0.095) / 0.2) * 1000;
+
+    expect(pickKeyboardTarget({at, cars: [c], isFree: free, lane: 1})).toEqual({carId: 1, wheel: 'rear'});
   });
 
   it('skips taken wheels and other lanes', () => {
@@ -90,7 +106,7 @@ describe('pickKeyboardTarget', () => {
     expect(pickKeyboardTarget({at, cars: [c], isFree: free, lane: 0})).toBeUndefined();
   });
 
-  it('returns nothing when no wheel is inside the pit box', () => {
+  it('returns nothing before any wheel of the lane is on screen', () => {
     expect(pickKeyboardTarget({at: 10_000, cars: [car()], isFree: free, lane: 1})).toBeUndefined();
   });
 });

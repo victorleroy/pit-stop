@@ -1,6 +1,5 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import type {GameCar, GameEvent, GameScore, GameWheel} from '@/api/types';
-import {readLobbyGamePref, saveLobbyGamePref} from '@/utils/lobbyGamePref';
 import {CAR_LENGTH} from '@/utils/wheelGunModel';
 
 /** A tap nobody confirmed within this delay is given up on locally. */
@@ -44,7 +43,6 @@ export const podiumMessage = (scores: GameScore[], teamStops: number) =>
   `Pit stop record: ${teamStops} ${teamStops === 1 ? 'stop' : 'stops'} · 1st ${scores[0].name} ${scores[0].points}`;
 
 interface Options {
-  enabled: boolean;
   isActive: boolean;
   isConnected: boolean;
   onEnded?: (podium: {scores: GameScore[]; teamStops: number}) => void;
@@ -57,7 +55,7 @@ interface Options {
  * moving parts (cars, who fitted which wheel) live in a ref the canvas reads every frame; only
  * what the page prints is React state.
  */
-export const useLobbyGame = ({enabled, isActive, isConnected, onEnded, send, userId}: Options) => {
+export const useLobbyGame = ({isActive, isConnected, onEnded, send, userId}: Options) => {
   const [scores, setScores] = useState<GameScore[]>([]);
   const [teamStops, setTeamStops] = useState(0);
   const model = useRef<GameModel>(emptyModel());
@@ -204,7 +202,7 @@ export const useLobbyGame = ({enabled, isActive, isConnected, onEnded, send, use
     [emit, isFree],
   );
 
-  const isPlaying = enabled && isActive && isConnected;
+  const isPlaying = isActive && isConnected;
 
   useEffect(() => {
     if (!isPlaying) return undefined;
@@ -220,15 +218,4 @@ export const useLobbyGame = ({enabled, isActive, isConnected, onEnded, send, use
   useEffect(() => reset, [reset]);
 
   return {addEffectListener, handleEvent, isFree, model, now, scores, tap, teamStops};
-};
-
-export const useLobbyGamePref = () => {
-  const [isOn, setIsOn] = useState(() => readLobbyGamePref() === 'on');
-
-  const set = useCallback((next: boolean) => {
-    saveLobbyGamePref(next ? 'on' : 'off');
-    setIsOn(next);
-  }, []);
-
-  return [isOn, set] as const;
 };

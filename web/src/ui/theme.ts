@@ -72,7 +72,38 @@ const SCALE = {
   textXs: {fontSize: '0.75rem', fontWeight: 400, lineHeight: 1.45},
 } as const;
 
+/** Wheel Gun's pit lane: a pale lane on the paper, single-seaters in the wash. */
+export interface TrackPalette {
+  free: string;
+  lane: string;
+  liveries: readonly string[];
+  rim: string;
+  stripe: string;
+  surface: string;
+  text: string;
+  tyre: string;
+}
+
+const TRACK: TrackPalette = {
+  free: SLIPSTREAM.surface,
+  lane: SLIPSTREAM.line,
+  liveries: SLIPSTREAM.wash.slice(0, 4),
+  rim: SLIPSTREAM.inkMuted,
+  stripe: SLIPSTREAM.surface,
+  surface: SLIPSTREAM.ground,
+  text: SLIPSTREAM.inkMuted,
+  tyre: SLIPSTREAM.ink,
+};
+
 declare module '@mui/material/styles' {
+  interface Palette {
+    track: TrackPalette;
+  }
+
+  interface PaletteOptions {
+    track?: TrackPalette;
+  }
+
   interface TypographyVariants {
     displayS: React.CSSProperties;
     headingL: React.CSSProperties;
@@ -178,6 +209,7 @@ export const theme = createTheme({
     secondary: {main: SLIPSTREAM.ink},
     success: {main: SLIPSTREAM.success},
     text: {primary: SLIPSTREAM.ink, secondary: SLIPSTREAM.inkSecondary},
+    track: TRACK,
     warning: {main: SLIPSTREAM.warning},
   },
   shape: {borderRadius: 12},

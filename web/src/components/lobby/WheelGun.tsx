@@ -1,5 +1,3 @@
-import FormControlLabel from '@mui/material/FormControlLabel';
-import Switch from '@mui/material/Switch';
 import {useTheme} from '@mui/material/styles';
 import type {Theme} from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -9,15 +7,14 @@ import type {Participant} from '@/api/types';
 import {GameScoreboard} from '@/components/lobby/GameScoreboard';
 import type {GameEffect, useLobbyGame} from '@/hooks/useLobbyGame';
 import {wheelKey} from '@/hooks/useLobbyGame';
-import {Box, Button, Stack, Typography} from '@/ui';
-import {isReducedMotion} from '@/utils/lobbyGamePref';
-import {playWrenchClack, readTimerMuted, saveTimerMuted, unlockTimerSound} from '@/utils/timerSound';
-import {USER_PALETTE, userColour} from '@/utils/userColour';
+import {Box, Stack, Typography} from '@/ui';
+import type {TrackPalette} from '@/ui/theme';
+import {playWrenchClack, readTimerMuted, unlockTimerSound} from '@/utils/timerSound';
+import {userColour} from '@/utils/userColour';
 import type {Arena} from '@/utils/wheelGunModel';
 import {
   CAR_LENGTH,
   LANES,
-  PIT_BOX,
   WHEEL_OFFSETS,
   carX,
   hitTest,
@@ -38,72 +35,48 @@ const ARIA_LABEL = 'Wheel Gun game, press 1, 2 or 3 to fit the nearest wheel in 
 
 type Game = ReturnType<typeof useLobbyGame>;
 
-interface Palette {
-  asphalt: string;
-  free: string;
-  line: string;
+/** Everything the canvas paints with, read from the theme: no colour is decided here. */
+export interface Palette extends TrackPalette {
+  font: string;
   success: string;
-  text: string;
-  tyre: string;
 }
 
 const paletteOf = (theme: Theme): Palette => ({
-  asphalt: theme.palette.mode === 'dark' ? theme.palette.grey[900] : theme.palette.grey[400],
-  free: theme.palette.grey[300],
-  line: '#FFFFFF',
+  ...theme.palette.track,
+  font: theme.typography.fontFamily ?? 'sans-serif',
   success: theme.palette.success.main,
-  text: theme.palette.text.primary,
-  tyre: '#14161C',
 });
+
+const prefersReducedMotion = () => {
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+};
 
 const drawTrack = (ctx: CanvasRenderingContext2D, arena: Arena, palette: Palette) => {
   const {height, width} = arena;
   const lane = laneHeight(arena);
 
-  ctx.fillStyle = palette.asphalt;
+  ctx.fillStyle = palette.surface;
   ctx.fillRect(0, 0, width, height);
 
-  // Pit box: the zone the keyboard aims at.
-  ctx.fillStyle = 'rgba(255,255,255,0.18)';
-  ctx.fillRect(PIT_BOX.from * width, 0, (PIT_BOX.to - PIT_BOX.from) * width, height);
-  ctx.strokeStyle = palette.line;
-  ctx.lineWidth = 2;
-  ctx.setLineDash([8, 6]);
-  ctx.strokeRect(PIT_BOX.from * width, 1, (PIT_BOX.to - PIT_BOX.from) * width, height - 2);
-
-  // Pit lane edge (continuous) and speed-limit line (dashed).
-  ctx.setLineDash([]);
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(0, 3);
-  ctx.lineTo(width, 3);
-  ctx.stroke();
-  ctx.setLineDash([14, 10]);
-  ctx.beginPath();
-  ctx.moveTo(0, height - 3);
-  ctx.lineTo(width, height - 3);
-  ctx.stroke();
-
-  ctx.setLineDash([3, 9]);
+  ctx.strokeStyle = palette.lane;
   ctx.lineWidth = 1;
-  ctx.globalAlpha = 0.6;
+  ctx.setLineDash([10, 8]);
   [1, 2].forEach((boundary) => {
     ctx.beginPath();
-    ctx.moveTo(0, boundary * lane);
-    ctx.lineTo(width, boundary * lane);
+    ctx.moveTo(0, Math.round(boundary * lane) + 0.5);
+    ctx.lineTo(width, Math.round(boundary * lane) + 0.5);
     ctx.stroke();
   });
-  ctx.globalAlpha = 1;
   ctx.setLineDash([]);
 
   ctx.fillStyle = palette.text;
-  ctx.font = '700 12px sans-serif';
+  ctx.font = `600 12px ${palette.font}`;
   ctx.textBaseline = 'middle';
-  LANES.forEach((index) => ctx.fillText(String(index + 1), 8, (index + 0.5) * lane - lane * 0.28));
-  ctx.font = '600 11px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('PIT BOX', ((PIT_BOX.from + PIT_BOX.to) / 2) * width, 14);
-  ctx.textAlign = 'start';
+  LANES.forEach((index) => ctx.fillText(String(index + 1), 10, (index + 0.5) * lane - lane * 0.28));
 };
 
 const drawCar = (
@@ -141,11 +114,11 @@ const drawCar = (
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.fillStyle = palette.stripe;
   ctx.fillRect(18, -17, 70, 3);
 
   // Driver's helmet and visor.
-  ctx.fillStyle = '#FFFFFF';
+  ctx.fillStyle = palette.stripe;
   ctx.beginPath();
   ctx.arc(64, -29, 6, 0, Math.PI * 2);
   ctx.fill();
@@ -167,7 +140,7 @@ const drawWheel = (
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = '#9AA3B2';
+  ctx.strokeStyle = palette.rim;
   ctx.lineWidth = Math.max(1, radius * 0.14);
   ctx.beginPath();
   ctx.arc(x, y, radius * 0.7, 0, Math.PI * 2);
@@ -220,7 +193,7 @@ const drawFrame = ({
 
     const {y} = wheelPoint(car, 'rear', at, arena);
 
-    drawCar(ctx, left, y, carPx, USER_PALETTE[car.livery % USER_PALETTE.length], palette);
+    drawCar(ctx, left, y, carPx, palette.liveries[car.livery % palette.liveries.length], palette);
 
     (['rear', 'front'] as const).forEach((wheel) => {
       const key = wheelKey(car.id, wheel);
@@ -271,15 +244,11 @@ const drawFrame = ({
 export const WheelGun = ({
   game,
   isConnected,
-  isOn,
-  onToggle,
   participants,
   userId,
 }: {
   game: Game;
   isConnected: boolean;
-  isOn: boolean;
-  onToggle: (isOn: boolean) => void;
   participants: Participant[];
   userId?: string;
 }) => {
@@ -292,7 +261,6 @@ export const WheelGun = ({
   const arena = useRef<Arena>({height, width: 300});
   const palette = useRef(paletteOf(theme));
   palette.current = paletteOf(theme);
-  const [isMuted, setIsMuted] = useState(readTimerMuted);
   const [plusOne, setPlusOne] = useState(0);
 
   const gameRef = useRef(game);
@@ -313,13 +281,11 @@ export const WheelGun = ({
     [addEffectListener],
   );
 
-  const isShown = isOn;
-
   useEffect(() => {
     const canvas = canvasRef.current;
     const wrapper = wrapperRef.current;
 
-    if (!isShown || !canvas || !wrapper) return undefined;
+    if (!canvas || !wrapper) return undefined;
 
     const ratio = window.devicePixelRatio || 1;
     let frame = 0;
@@ -343,7 +309,7 @@ export const WheelGun = ({
           effects: effects.current,
           game: gameRef.current,
           palette: palette.current,
-          reduced: isReducedMotion(),
+          reduced: prefersReducedMotion(),
           userId,
         });
       }
@@ -366,7 +332,7 @@ export const WheelGun = ({
       observer?.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [height, isShown, userId]);
+  }, [height, userId]);
 
   const fitted = (target: {carId: number; wheel: 'front' | 'rear'} | undefined) => {
     if (!target || !isConnected) return;
@@ -417,89 +383,51 @@ export const WheelGun = ({
   return (
     <Stack spacing={1.5}>
       <Box sx={{alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'space-between'}}>
-        <FormControlLabel
-          control={<Switch checked={isOn} onChange={(_event, checked) => onToggle(checked)} />}
-          label={`Wheel Gun · ${isOn ? 'On' : 'Off'}`}
-        />
+        <Typography component="h3" variant="headingS">
+          Wheel Gun
+        </Typography>
 
-        <Box sx={{alignItems: 'center', display: 'flex', gap: 2}}>
-          {isOn ? (
-            <Box sx={{position: 'relative'}}>
-              <Typography variant="textS">Pit stops: {game.teamStops}</Typography>
-              {plusOne ? (
-                <Typography
-                  aria-hidden
-                  sx={{color: 'success.main', fontWeight: 700, left: '50%', position: 'absolute', top: -18, transform: 'translateX(-50%)'}}
-                  variant="textS"
-                >
-                  +1
-                </Typography>
-              ) : null}
-            </Box>
+        <Box sx={{position: 'relative'}}>
+          <Typography sx={{fontVariantNumeric: 'tabular-nums'}} variant="textS">
+            Pit stops: {game.teamStops}
+          </Typography>
+          {plusOne ? (
+            <Typography
+              aria-hidden
+              sx={{color: 'success.main', fontWeight: 700, left: '50%', position: 'absolute', top: -18, transform: 'translateX(-50%)'}}
+              variant="textS"
+            >
+              +1
+            </Typography>
           ) : null}
-
-          <FormControlLabel
-            control={
-              <Switch
-                checked={!isMuted}
-                onChange={(_event, checked) => {
-                  unlockTimerSound();
-                  saveTimerMuted(!checked);
-                  setIsMuted(!checked);
-                }}
-                size="small"
-              />
-            }
-            label="Sounds"
-          />
         </Box>
       </Box>
 
-      {isOn ? (
-        <Box
-          ref={wrapperRef}
-          sx={{
-            borderRadius: 2,
-            filter: isConnected ? 'none' : 'grayscale(1)',
-            height,
-            opacity: isConnected ? 1 : 0.55,
-            overflow: 'hidden',
-            width: '100%',
-          }}
-        >
-          <canvas
-            aria-label={ARIA_LABEL}
-            onKeyDown={onKeyDown}
-            onPointerDown={onPointerDown}
-            ref={canvasRef}
-            role="img"
-            style={{display: 'block', height, touchAction: 'manipulation', width: '100%'}}
-            tabIndex={0}
-          />
-        </Box>
-      ) : (
-        <Stack
-          spacing={1.5}
-          sx={{
-            alignItems: 'center',
-            border: '1px dashed',
-            borderColor: 'divider',
-            borderRadius: 2,
-            justifyContent: 'center',
-            minHeight: height,
-            p: 2,
-          }}
-        >
-          <Typography color="textSecondary" variant="textM">
-            Wheel Gun is off for you
-          </Typography>
-          <Button onClick={() => onToggle(true)} variant="outlined">
-            Turn on
-          </Button>
-        </Stack>
-      )}
+      <Box
+        ref={wrapperRef}
+        sx={{
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 2,
+          filter: isConnected ? 'none' : 'grayscale(1)',
+          height,
+          opacity: isConnected ? 1 : 0.55,
+          overflow: 'hidden',
+          width: '100%',
+        }}
+      >
+        <canvas
+          aria-label={ARIA_LABEL}
+          onKeyDown={onKeyDown}
+          onPointerDown={onPointerDown}
+          ref={canvasRef}
+          role="img"
+          style={{display: 'block', height, touchAction: 'manipulation', width: '100%'}}
+          tabIndex={0}
+        />
+      </Box>
 
-      {isOn && !game.scores.some(({points}) => points > 0) ? (
+      {!game.scores.some(({points}) => points > 0) ? (
         <Typography color="textSecondary" variant="textS">
           Tap a wheel to fit it. Finish both wheels for a full pit stop.
         </Typography>

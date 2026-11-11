@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import {cleanup, fireEvent, render, screen} from '@testing-library/react';
+import {cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {MemoryRouter, Route, Routes} from 'react-router-dom';
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {fetchBoard} from '@/api/retros';
+import {fetchBoard, updateRetro} from '@/api/retros';
 import {fetchTeamMembers, fetchTeams} from '@/api/teams';
 import type {Board} from '@/api/types';
 import {ToastProvider} from '@/contexts/ToastContext';
@@ -37,6 +37,7 @@ vi.mock('@/api/teams', () => ({fetchTeamMembers: vi.fn(), fetchTeams: vi.fn()}))
 vi.mock('@/api/retros', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/retros')>()),
   fetchBoard: vi.fn(),
+  updateRetro: vi.fn(),
 }));
 
 const board = (isFacilitator: boolean) =>
@@ -90,34 +91,44 @@ describe('RetroPage in the waiting room', () => {
 
   const gameActions = () => send.mock.calls.map(([payload]) => payload.action);
 
-  it('shows a participant the waiting room only, without cursors or columns', async () => {
+  it('shows a participant the waiting room over the board, without cursors or a way out', async () => {
     renderPage(board(false));
 
-    expect(await screen.findByText('Welcome to the pit stop')).toBeTruthy();
-    expect(screen.queryByRole('tab')).toBeNull();
-    expect(screen.queryByText('Start', {selector: 'h3, h2, p, span'})).toBeNull();
+    expect(await screen.findByRole('dialog', {name: 'Welcome to the pit stop'})).toBeTruthy();
+    expect(await screen.findByText('Waiting for Fay to start the retro')).toBeTruthy();
+    expect(screen.queryByRole('button', {name: /Start the retro|Set up the board/})).toBeNull();
     expect(screen.queryByTestId('cursors')).toBeNull();
   });
 
-  it('gives the facilitator a board setup tab where the columns can be edited', async () => {
-    renderPage(board(true));
-
-    fireEvent.click(await screen.findByRole('tab', {name: 'Board setup'}));
+  it('closes the waiting room for everybody once the retro has started', async () => {
+    renderPage({...board(false), phase: 'BRAINSTORM'} as Board);
 
     expect(await screen.findByText('Start')).toBeTruthy();
-    expect(screen.getByRole('button', {name: /rename/i})).toBeTruthy();
-    expect(screen.queryByText('Welcome to the pit stop')).toBeNull();
-    expect(screen.queryByTestId('cursors')).toBeNull();
-    expect(sendCursor).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('opens the board setup when the facilitator adds a column from the waiting room', async () => {
+  it('starts the retro from the dialog for the facilitator', async () => {
+    vi.mocked(updateRetro).mockResolvedValue({...board(true), phase: 'BRAINSTORM'} as Board);
     renderPage(board(true));
 
-    fireEvent.click(await screen.findByRole('button', {name: 'Add a column'}));
+    fireEvent.click(await screen.findByRole('button', {name: 'Start the retro'}));
 
-    expect(screen.getByRole('tab', {hidden: true, name: 'Board setup'}).getAttribute('aria-selected')).toBe('true');
-    expect(screen.queryByText('Welcome to the pit stop')).toBeNull();
+    await waitFor(() => expect(updateRetro).toHaveBeenCalledWith('r1', {phase: 'BRAINSTORM'}));
+  });
+
+  it('lets the facilitator step out to set up the board, and come back', async () => {
+    renderPage(board(true));
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Set up the board'}));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByRole('button', {name: /rename/i})).toBeTruthy();
+    expect(screen.queryByTestId('cursors')).toBeNull();
+    expect(sendCursor).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', {name: 'Back to the waiting room'}));
+
+    expect(await screen.findByRole('dialog', {name: 'Welcome to the pit stop'})).toBeTruthy();
   });
 
   it('joins the game only once the service has confirmed the subscription', async () => {
@@ -128,13 +139,13 @@ describe('RetroPage in the waiting room', () => {
     expect(gameActions()).not.toContain('game.join');
   });
 
-  it('leaves the game while the facilitator is on the board setup tab', async () => {
+  it('leaves the game while the facilitator sets the board up', async () => {
     renderPage(board(true));
 
     await screen.findByText('Welcome to the pit stop');
     expect(gameActions()).toEqual(['game.join']);
 
-    fireEvent.click(screen.getByRole('tab', {name: 'Board setup'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Set up the board'}));
 
     expect(gameActions()).toEqual(['game.join', 'game.leave']);
   });
@@ -243,7 +254,7 @@ describe('RetroPage icebreaker preview in the waiting room', () => {
 
     renderPage(withQuestion(true));
     expect(await screen.findByText('Best lunch this week?')).toBeTruthy();
-    expect(screen.getAllByRole('button', {name: 'Start with the icebreaker'})).toHaveLength(2);
+    expect(screen.getAllByRole('button', {hidden: true, name: 'Start with the icebreaker'})).toHaveLength(2);
 
     cleanup();
     renderPage(withQuestion(false));

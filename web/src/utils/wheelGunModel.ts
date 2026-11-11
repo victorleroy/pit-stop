@@ -7,8 +7,6 @@ export const WHEEL_OFFSETS: Record<GameWheel, number> = {front: 0.095, rear: 0.0
 /** Same tolerance as the service: a hit is accepted this long around the visible window. */
 export const HIT_TOLERANCE_MS = 300;
 
-export const PIT_BOX = {from: 0.35, to: 0.65};
-
 export const MIN_TOUCH_PX = 44;
 
 export const LANES = [0, 1, 2] as const;
@@ -93,7 +91,7 @@ export const hitTest = ({
   return best ? {carId: best.carId, wheel: best.wheel} : undefined;
 };
 
-/** The free wheel of that lane furthest along inside the pit box, if any. */
+/** The free wheel of that lane furthest along the track, among those on screen, if any. */
 export const pickKeyboardTarget = ({
   at,
   cars,
@@ -113,7 +111,7 @@ export const pickKeyboardTarget = ({
     for (const wheel of ['front', 'rear'] as const) {
       const x = wheelX(car, wheel, at);
 
-      if (x < PIT_BOX.from || x > PIT_BOX.to || !isFree(car.id, wheel)) continue;
+      if (!isWheelVisible(car, wheel, at) || !isFree(car.id, wheel)) continue;
       if (!best || x > best.x) best = {carId: car.id, wheel, x};
     }
   }

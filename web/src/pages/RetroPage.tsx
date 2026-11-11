@@ -1,12 +1,11 @@
 import CloseIcon from '@mui/icons-material/Close';
 import Divider from '@mui/material/Divider';
 import Drawer from '@mui/material/Drawer';
-import Tab from '@mui/material/Tab';
-import Tabs from '@mui/material/Tabs';
 import {useTheme} from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import {
   Box,
+  Button,
   IconButton,
   Loader,
   Stack,
@@ -72,7 +71,7 @@ import {RetroHeader} from '@/components/RetroHeader';
 import {SpeakingOrder} from '@/components/SpeakingOrder';
 import {useBoardSocket} from '@/hooks/useBoardSocket';
 import {useDiceSpin} from '@/hooks/useDiceSpin';
-import {podiumMessage, useLobbyGame, useLobbyGamePref} from '@/hooks/useLobbyGame';
+import {podiumMessage, useLobbyGame} from '@/hooks/useLobbyGame';
 import {SLIPSTREAM} from '@/ui/theme';
 import {readZoom, saveZoom, stepZoom} from '@/utils/boardZoom';
 import {boardAuthors} from '@/utils/authorFilter';
@@ -233,12 +232,9 @@ export const RetroPage = () => {
     refetchInterval: isConnected ? false : FALLBACK_POLL_INTERVAL_MS,
   });
 
-  const [isGameOn, setIsGameOn] = useLobbyGamePref();
-
   // Held here, not in the lobby: the podium of a game ended by "Start the retro" must outlive
   // the lobby view it came from.
   const game = useLobbyGame({
-    enabled: isGameOn,
     isActive: board?.phase === 'LOBBY' && !(board.isFacilitator && lobbyTab === 'setup'),
     isConnected: isSubscribed,
     onEnded: ({scores, teamStops}) => toast.info(podiumMessage(scores, teamStops)),
@@ -579,31 +575,19 @@ export const RetroPage = () => {
         receivedAt={dataUpdatedAt}
       />
 
-      {isLobby && board.isFacilitator ? (
-        <Tabs onChange={(_event, value) => setLobbyTab(value)} value={lobbyTab}>
-          <Tab label="Waiting room" value="waiting" />
-          <Tab label="Board setup" value="setup" />
-        </Tabs>
-      ) : null}
-
-      {isLobby && !isSettingUp ? (
+      {isLobby ? (
         <LobbyView
           facilitatorId={board.facilitatorId}
-          game={
-            <WheelGun
-              game={game}
-              isConnected={isConnected}
-              isOn={isGameOn}
-              onToggle={setIsGameOn}
-              participants={participants}
-              userId={user?.id}
-            />
-          }
+          game={<WheelGun game={game} isConnected={isConnected} participants={participants} userId={user?.id} />}
           isConnected={isConnected}
           isFacilitator={board.isFacilitator}
           isStarting={phaseMutation.isPending}
+          isTakingOver={takeFacilitationMutation.isPending}
           members={members}
+          onSetUpBoard={() => setLobbyTab('setup')}
           onStart={() => phaseMutation.mutate(nextOpeningPhase(board) as RetroPhase)}
+          onTakeOver={() => takeFacilitationMutation.mutate()}
+          open={!isSettingUp}
           participants={participants}
           preview={
             board.isFacilitator ? (
@@ -622,7 +606,21 @@ export const RetroPage = () => {
           }
           teamName={teams?.find(({id}) => id === board.teamId)?.name}
         />
-      ) : board.phase === 'ICEBREAKER' && board.icebreaker ? (
+      ) : null}
+
+      {isSettingUp ? (
+        // The facilitator stepped out of the waiting room to set the board up: one click back.
+        <Stack direction="row" sx={{alignItems: 'center', flexWrap: 'wrap', gap: 1.5}}>
+          <Typography color="textSecondary" variant="textS">
+            The team is in the waiting room.
+          </Typography>
+          <Button onClick={() => setLobbyTab('waiting')} size="small" variant="outlined">
+            Back to the waiting room
+          </Button>
+        </Stack>
+      ) : null}
+
+      {board.phase === 'ICEBREAKER' && board.icebreaker ? (
         // Before everything else: the phase has no columns, and a blank board must not hide it.
         <IcebreakerStage
           icebreaker={board.icebreaker}

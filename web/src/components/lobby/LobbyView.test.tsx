@@ -3,7 +3,6 @@ import {cleanup, fireEvent, render, screen} from '@testing-library/react';
 import type {ComponentProps} from 'react';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import type {Participant, TeamMember} from '@/api/types';
-import {PRIME_DIRECTIVE} from '@/components/lobby/lobbyCopy';
 import {LobbyView} from '@/components/lobby/LobbyView';
 
 const member = (userId: string): TeamMember => ({
@@ -35,11 +34,28 @@ const renderLobby = (props: Partial<ComponentProps<typeof LobbyView>> = {}) =>
 describe('LobbyView', () => {
   afterEach(cleanup);
 
-  it('welcomes the team with the retro and team names', () => {
+  it('welcomes the team in a dialog with the retro and team names', () => {
     renderLobby();
 
-    expect(screen.getByRole('heading', {name: 'Welcome to the pit stop'})).toBeTruthy();
+    expect(screen.getByRole('dialog', {name: 'Welcome to the pit stop'})).toBeTruthy();
     expect(screen.getByText('Sprint 12 · Core')).toBeTruthy();
+  });
+
+  it('cannot be dismissed with Escape or the backdrop', () => {
+    renderLobby();
+    const dialog = screen.getByRole('dialog');
+
+    fireEvent.keyDown(dialog, {key: 'Escape'});
+    const backdrop = document.querySelector('.MuiBackdrop-root');
+    if (backdrop) fireEvent.click(backdrop);
+
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('shows nothing once closed', () => {
+    renderLobby({open: false});
+
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('counts the present team members and ignores anybody else', () => {
@@ -80,57 +96,61 @@ describe('LobbyView', () => {
     expect(screen.getByText('+14')).toBeTruthy();
   });
 
-  it('offers the start to the facilitator only, whatever the presence', () => {
+  it('offers the start and the board setup to the facilitator only, whatever the presence', () => {
     const onStart = vi.fn();
-    const {unmount} = renderLobby({isFacilitator: true, onStart, participants: []});
+    const onSetUpBoard = vi.fn();
+    const {unmount} = renderLobby({isFacilitator: true, onSetUpBoard, onStart, participants: []});
 
     fireEvent.click(screen.getByRole('button', {name: 'Start the retro'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Set up the board'}));
 
     expect(onStart).toHaveBeenCalledTimes(1);
-    expect((screen.getByRole('button', {name: 'Start the retro'}) as HTMLButtonElement).disabled).toBe(false);
+    expect(onSetUpBoard).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/Waiting for/)).toBeNull();
 
     unmount();
-    renderLobby();
+    renderLobby({onSetUpBoard});
 
-    expect(screen.queryByRole('button', {name: /Start/})).toBeNull();
+    expect(screen.queryByRole('button', {name: /Start|Set up/})).toBeNull();
   });
 
-  it('tells a participant to take over when the facilitator is away, without a second button', () => {
-    renderLobby({participants: [present('b')]});
+  it('tells a participant who will start the retro', () => {
+    renderLobby({onTakeOver: vi.fn()});
 
-    expect(
-      screen.getByText('Waiting for A to start. You can take over from the toolbar.'),
-    ).toBeTruthy();
-    expect(screen.queryByRole('button', {name: /take over|start/i})).toBeNull();
+    expect(screen.getByText('Waiting for A to start the retro')).toBeTruthy();
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
-  it('says nothing about the facilitator while they are here', () => {
-    renderLobby();
+  it('lets a participant take over from the dialog when the facilitator is away', () => {
+    const onTakeOver = vi.fn();
+    renderLobby({onTakeOver, participants: [present('b')]});
 
-    expect(screen.queryByText(/Waiting for/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', {name: 'Take over facilitation'}));
+
+    expect(onTakeOver).toHaveBeenCalledTimes(1);
   });
 
   it('only says reconnecting when the socket is down', () => {
-    renderLobby({isConnected: false, participants: []});
+    renderLobby({isConnected: false, onTakeOver: vi.fn(), participants: []});
 
     expect(screen.getByText('Reconnecting…')).toBeTruthy();
     expect(screen.queryByText(/joined/)).toBeNull();
-    expect(screen.queryByText(/Waiting for/)).toBeNull();
+    expect(screen.queryByRole('button', {name: 'Take over facilitation'})).toBeNull();
     expect(screen.queryAllByRole('img')).toHaveLength(0);
   });
 
   it('shows no count and no absent facilitator before the first presence arrives', () => {
-    renderLobby({participants: []});
+    renderLobby({onTakeOver: vi.fn(), participants: []});
 
     expect(screen.queryByText(/joined/)).toBeNull();
-    expect(screen.queryByText(/Waiting for/)).toBeNull();
+    expect(screen.queryByRole('button', {name: 'Take over facilitation'})).toBeNull();
   });
 
-  it('shows the Prime Directive with its attribution', () => {
+  it('no longer carries the Prime Directive', () => {
     renderLobby();
 
-    expect(screen.getByText(PRIME_DIRECTIVE.text)).toBeTruthy();
-    expect(screen.getByText(PRIME_DIRECTIVE.attribution as string)).toBeTruthy();
+    expect(screen.queryByText(/Prime Directive/)).toBeNull();
+    expect(screen.queryByText(/everyone did the best job they could/)).toBeNull();
   });
 
   it('mounts the game where it is given', () => {

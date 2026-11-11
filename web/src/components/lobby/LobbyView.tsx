@@ -1,20 +1,28 @@
-import {useTheme} from '@mui/material/styles';
-import useMediaQuery from '@mui/material/useMediaQuery';
+import Dialog from '@mui/material/Dialog';
+import DialogContent from '@mui/material/DialogContent';
+import Divider from '@mui/material/Divider';
 import type {ReactNode} from 'react';
 import type {Participant, TeamMember} from '@/api/types';
 import {LOBBY_TITLE} from '@/components/lobby/lobbyCopy';
 import {LobbyPresence} from '@/components/lobby/LobbyPresence';
-import {PrimeDirective} from '@/components/lobby/PrimeDirective';
 import {Box, Button, Stack, Typography} from '@/ui';
 
+/**
+ * The waiting room, over the board. Nobody closes it: it goes away for everybody when the
+ * retro starts. Only the facilitator can step out of it, to set the board up.
+ */
 export const LobbyView = ({
   facilitatorId,
   game,
   isConnected,
   isFacilitator,
   isStarting = false,
+  isTakingOver = false,
   members,
+  onSetUpBoard,
   onStart,
+  onTakeOver,
+  open = true,
   participants,
   preview,
   retroTitle,
@@ -22,13 +30,18 @@ export const LobbyView = ({
   teamName,
 }: {
   facilitatorId: string;
-  /** Where the shared game mounts: right column on a wide screen, after the presence on a phone. */
+  /** Mounted below the people, inside the dialog. */
   game?: ReactNode;
   isConnected: boolean;
   isFacilitator: boolean;
   isStarting?: boolean;
+  isTakingOver?: boolean;
   members: TeamMember[] | undefined;
+  onSetUpBoard?: () => void;
   onStart: () => void;
+  /** The toolbar is under the dialog: taking over an absent facilitator happens here. */
+  onTakeOver?: () => void;
+  open?: boolean;
   participants: Participant[];
   /** The facilitator's own card, under the welcome: nothing for everyone else. */
   preview?: ReactNode;
@@ -36,62 +49,67 @@ export const LobbyView = ({
   startLabel?: string;
   teamName?: string;
 }) => {
-  const hasPreview = Boolean(preview);
-  const isWide = useMediaQuery(useTheme().breakpoints.up('md'));
-  const facilitatorName = members?.find(({userId}) => userId === facilitatorId)?.name;
+  const facilitatorName = members?.find(({userId}) => userId === facilitatorId)?.name ?? 'the facilitator';
   // The socket opens before the first presence arrives, and a subscriber always counts itself.
   const isPresenceKnown = isConnected && participants.length > 0;
   const isFacilitatorAbsent =
     isPresenceKnown && !participants.some(({userId}) => userId === facilitatorId);
 
   return (
-    <Box
-      sx={{
-        display: 'grid',
-        gap: 3,
-        gridTemplateAreas: {
-          md: hasPreview
-            ? '"welcome game" "preview game" "prime game" "presence game"'
-            : '"welcome game" "prime game" "presence game"',
-          xs: hasPreview
-            ? '"welcome" "preview" "presence" "game" "prime"'
-            : '"welcome" "presence" "game" "prime"',
-        },
-        gridTemplateColumns: {md: '2fr 3fr', xs: 'minmax(0, 1fr)'},
-        gridTemplateRows: {md: hasPreview ? 'auto auto auto 1fr' : 'auto auto 1fr'},
-        minWidth: 0,
-      }}
+    <Dialog
+      aria-labelledby="waiting-room-title"
+      fullWidth
+      maxWidth="sm"
+      open={open}
+      slotProps={{paper: {sx: {m: 2, maxHeight: 'calc(100% - 32px)', width: 'calc(100% - 32px)'}}}}
     >
-      <Stack component="section" spacing={0.5} sx={{gridArea: 'welcome', minWidth: 0}}>
-        <Typography component="h2" variant="headingL">
-          {LOBBY_TITLE}
-        </Typography>
-        <Typography color="textSecondary" sx={{overflowWrap: 'anywhere'}} variant="textS">
-          {[retroTitle, teamName].filter(Boolean).join(' · ')}
-        </Typography>
-      </Stack>
+      <DialogContent sx={{p: {sm: 4, xs: 2.5}}}>
+        <Stack spacing={3}>
+          <Stack spacing={0.5}>
+            <Typography component="h2" id="waiting-room-title" variant="headingL">
+              {LOBBY_TITLE}
+            </Typography>
+            <Typography color="textSecondary" sx={{overflowWrap: 'anywhere'}} variant="textS">
+              {[retroTitle, teamName].filter(Boolean).join(' · ')}
+            </Typography>
+          </Stack>
 
-      {preview ? <Box sx={{gridArea: 'preview', minWidth: 0}}>{preview}</Box> : null}
+          {preview ? <Box sx={{minWidth: 0}}>{preview}</Box> : null}
 
-      <Box sx={{gridArea: 'prime', minWidth: 0}}>
-        <PrimeDirective isCollapsible={!isWide} />
-      </Box>
+          <LobbyPresence isConnected={isPresenceKnown} members={members} participants={participants} />
 
-      <Stack component="section" spacing={2} sx={{alignItems: 'flex-start', gridArea: 'presence', minWidth: 0}}>
-        <LobbyPresence isConnected={isPresenceKnown} members={members} participants={participants} />
+          {isFacilitator ? (
+            <Stack direction={{sm: 'row', xs: 'column'}} spacing={1.5} sx={{alignItems: {sm: 'center', xs: 'stretch'}}}>
+              <Button disabled={isStarting} onClick={onStart} size="large" variant="contained">
+                {startLabel}
+              </Button>
+              {onSetUpBoard ? (
+                <Button onClick={onSetUpBoard} variant="text">
+                  Set up the board
+                </Button>
+              ) : null}
+            </Stack>
+          ) : (
+            <Box sx={{alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: 1}}>
+              <Typography role="status" variant="textM">
+                Waiting for {facilitatorName} to start the retro
+              </Typography>
+              {isFacilitatorAbsent && onTakeOver ? (
+                <Button disabled={isTakingOver} onClick={onTakeOver} size="small" variant="outlined">
+                  Take over facilitation
+                </Button>
+              ) : null}
+            </Box>
+          )}
 
-        {isFacilitator ? (
-          <Button disabled={isStarting} onClick={onStart} variant="contained">
-            {startLabel}
-          </Button>
-        ) : isFacilitatorAbsent ? (
-          <Typography role="status" variant="textM">
-            Waiting for {facilitatorName ?? 'the facilitator'} to start. You can take over from the toolbar.
-          </Typography>
-        ) : null}
-      </Stack>
-
-      <Box sx={{gridArea: 'game', minWidth: 0}}>{game}</Box>
-    </Box>
+          {game ? (
+            <>
+              <Divider />
+              <Box sx={{minWidth: 0}}>{game}</Box>
+            </>
+          ) : null}
+        </Stack>
+      </DialogContent>
+    </Dialog>
   );
 };

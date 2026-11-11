@@ -1,3 +1,4 @@
+import {keyframes} from '@mui/material/styles';
 import type {Participant, TeamMember} from '@/api/types';
 import {UserAvatar} from '@/components/UserAvatar';
 import {Box, Stack, Tooltip, Typography} from '@/ui';
@@ -13,6 +14,12 @@ export const lobbyPresence = (members: TeamMember[], participants: Participant[]
   return {absent, here, present};
 };
 
+// Somebody joining pops in where they land; with reduced motion they simply appear.
+const arrive = keyframes`
+  from { opacity: 0; transform: translateY(6px) scale(0.85); }
+  to { opacity: 1; transform: none; }
+`;
+
 const Avatars = ({
   isPresent,
   label,
@@ -25,25 +32,54 @@ const Avatars = ({
   <Box
     aria-label={label}
     component="ul"
-    sx={{display: 'flex', flexWrap: 'wrap', gap: 0.75, listStyle: 'none', m: 0, p: 0}}
+    sx={{display: 'flex', flexWrap: 'wrap', gap: isPresent ? 1.5 : 0.75, listStyle: 'none', m: 0, p: 0}}
   >
     {members.map((member) => (
-      <li key={member.userId}>
+      <Box
+        component="li"
+        key={member.userId}
+        sx={
+          isPresent
+            ? {
+                animation: `${arrive} 260ms ease-out both`,
+                '@media (prefers-reduced-motion: reduce)': {animation: 'none'},
+              }
+            : undefined
+        }
+      >
         <Tooltip title={member.name}>
           <Box
             aria-label={`${member.name}, ${isPresent ? 'here' : 'not here yet'}`}
             role="img"
-            sx={{display: 'flex', filter: isPresent ? 'none' : 'grayscale(1)', opacity: isPresent ? 1 : 0.5}}
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              filter: isPresent ? 'none' : 'grayscale(1)',
+              flexDirection: 'column',
+              gap: 0.5,
+              opacity: isPresent ? 1 : 0.5,
+              width: isPresent ? 64 : 'auto',
+            }}
           >
             <UserAvatar
+              decorative
               name={member.name}
               pictureUrl={member.pictureUrl}
-              size="medium"
+              size={isPresent ? 'medium' : 'small'}
               userId={member.userId}
             />
+            {isPresent ? (
+              <Typography
+                aria-hidden
+                sx={{maxWidth: '100%', overflow: 'hidden', textAlign: 'center', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}
+                variant="textXs"
+              >
+                {member.name.split(' ')[0]}
+              </Typography>
+            ) : null}
           </Box>
         </Tooltip>
-      </li>
+      </Box>
     ))}
   </Box>
 );
@@ -75,7 +111,7 @@ export const LobbyPresence = ({
 
   return (
     <Stack spacing={1.5}>
-      <Typography component="h2" variant="headingS">
+      <Typography component="h3" variant="headingS">
         {present.length}/{members.length} joined
       </Typography>
 

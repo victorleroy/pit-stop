@@ -32,7 +32,6 @@ const setup = (options: Partial<Parameters<typeof useLobbyGame>[0]> = {}) => {
   const send = vi.fn();
   const onEnded = vi.fn();
   const initialProps: Parameters<typeof useLobbyGame>[0] = {
-    enabled: true,
     isActive: true,
     isConnected: true,
     onEnded,
@@ -49,25 +48,25 @@ describe('useLobbyGame', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('joins when the socket is open and the game is on, and leaves when it is turned off', () => {
+  it('joins when the socket is open in the waiting room, and leaves when it is no longer shown', () => {
     const {rerender, send} = setup();
 
     expect(send).toHaveBeenCalledWith({action: 'game.join'});
 
-    rerender({enabled: false, isActive: true, isConnected: true, send, userId: 'me'});
+    rerender({isActive: false, isConnected: true, send, userId: 'me'});
 
     expect(send).toHaveBeenLastCalledWith({action: 'game.leave'});
   });
 
-  it('does not join while the game is off, and joins again after a reconnection', () => {
-    const {rerender, send} = setup({enabled: false});
+  it('does not join while the game is not shown, and joins again after a reconnection', () => {
+    const {rerender, send} = setup({isActive: false});
     expect(send).not.toHaveBeenCalled();
 
-    rerender({enabled: true, isActive: true, isConnected: true, send, userId: 'me'});
+    rerender({isActive: true, isConnected: true, send, userId: 'me'});
     expect(send).toHaveBeenCalledTimes(1);
 
-    rerender({enabled: true, isActive: true, isConnected: false, send, userId: 'me'});
-    rerender({enabled: true, isActive: true, isConnected: true, send, userId: 'me'});
+    rerender({isActive: true, isConnected: false, send, userId: 'me'});
+    rerender({isActive: true, isConnected: true, send, userId: 'me'});
 
     expect(send.mock.calls.filter(([payload]) => payload.action === 'game.join')).toHaveLength(2);
   });
