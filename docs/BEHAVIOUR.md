@@ -529,11 +529,11 @@ Inbound actions: `subscribe`, `cursor`.
   the panel sits beside the board, which narrows; on a phone it slides over it. Turning a card
   into an action opens the panel. A carried-over action can be closed (**Drop** or **Done**)
   from the panel, without going to the team page.
-- The board can be **zoomed out from 100% down to 50%**, by steps of 10%, from the toolbar
+- The board can be **zoomed from 50% to 150%**, by steps of 10%, from the toolbar
   (zoom out, reset by clicking the percentage, zoom in) or with Ctrl+wheel / a trackpad pinch
   over the board. Only the columns scale; the toolbar and the cursors of others keep their size.
   The zoom is per viewer, kept in `localStorage` under `pit-stop.board-zoom`, and falls back to
-  100% when storage is unavailable.
+  100% when storage is unavailable; a stored value outside the range is clamped to it.
 - **Filter by person**: once at least two people wrote on the board, the toolbar offers a
   `Everyone` select listing the note authors, which every card already names (section 4), so
   the filter tells nothing the board does not. Picking one or several fades every other note,
