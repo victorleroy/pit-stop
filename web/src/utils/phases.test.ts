@@ -16,13 +16,18 @@ describe('nextOpeningPhase', () => {
   });
 
   it('starts with the review when there is no icebreaker', () => {
-    expect(nextOpeningPhase({icebreaker: null, phase: 'LOBBY', review})).toBe('REVIEW');
+    expect(nextOpeningPhase({icebreaker: null, phase: 'LOBBY', review}, true)).toBe('REVIEW');
   });
 
   it('skips the icebreaker once past it', () => {
-    expect(nextOpeningPhase({icebreaker: {}, phase: 'ICEBREAKER', review})).toBe('REVIEW');
-    expect(nextOpeningPhase({icebreaker: {}, phase: 'ICEBREAKER'})).toBe('BRAINSTORM');
-    expect(nextOpeningPhase({icebreaker: {}, phase: 'REVIEW', review})).toBe('BRAINSTORM');
+    expect(nextOpeningPhase({icebreaker: {}, phase: 'ICEBREAKER', review}, true)).toBe('REVIEW');
+    expect(nextOpeningPhase({icebreaker: {}, phase: 'ICEBREAKER'}, true)).toBe('BRAINSTORM');
+    expect(nextOpeningPhase({icebreaker: {}, phase: 'REVIEW', review}, true)).toBe('BRAINSTORM');
+  });
+
+  it('never goes to the review while the service does not accept that phase', () => {
+    expect(nextOpeningPhase({icebreaker: null, phase: 'LOBBY', review})).toBe('BRAINSTORM');
+    expect(nextOpeningPhase({icebreaker: {}, phase: 'ICEBREAKER', review})).toBe('BRAINSTORM');
   });
 });
 

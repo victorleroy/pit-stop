@@ -13,10 +13,16 @@ type OpeningBoard = {
   review?: {enabled: boolean; items: unknown[]};
 };
 
+/** False until the service accepts the REVIEW phase (lot R3). */
+export const IS_REVIEW_PHASE_AVAILABLE = false;
+
 /** From LOBBY: ICEBREAKER, then REVIEW, then BRAINSTORM; from ICEBREAKER: REVIEW, then BRAINSTORM. */
-export const nextOpeningPhase = (board: OpeningBoard): NextOpeningPhase => {
+export const nextOpeningPhase = (
+  board: OpeningBoard,
+  isReviewAvailable: boolean = IS_REVIEW_PHASE_AVAILABLE,
+): NextOpeningPhase => {
   const hasIcebreaker = board.icebreaker !== undefined && board.icebreaker !== null;
-  const hasReview = Boolean(board.review?.enabled && board.review.items.length > 0);
+  const hasReview = isReviewAvailable && Boolean(board.review?.enabled && board.review.items.length > 0);
 
   if (board.phase === 'LOBBY' && hasIcebreaker) return 'ICEBREAKER';
   if ((board.phase === 'LOBBY' || board.phase === 'ICEBREAKER') && hasReview) return 'REVIEW';
