@@ -54,6 +54,7 @@ import {PresenceBar} from '@/components/PresenceBar';
 import {RetroHeader} from '@/components/RetroHeader';
 import {SpeakingOrder} from '@/components/SpeakingOrder';
 import {useBoardSocket} from '@/hooks/useBoardSocket';
+import {useDiceSpin} from '@/hooks/useDiceSpin';
 import {SLIPSTREAM} from '@/ui/theme';
 import {readZoom, saveZoom, stepZoom} from '@/utils/boardZoom';
 import {boardAuthors} from '@/utils/authorFilter';
@@ -187,6 +188,7 @@ export const RetroPage = () => {
     onBoard,
     retroId,
   });
+  const dice = useDiceSpin(rolls, {reducedMotion: useMediaQuery('(prefers-reduced-motion: reduce)')});
 
   // While the socket is up it already carries the board this command produced, and possibly
   // a newer one: the HTTP response, arriving later, would only roll the board back.
@@ -225,7 +227,13 @@ export const RetroPage = () => {
   });
   const rollDieMutation = useMutation({
     mutationFn: () => rollDie(retroId as string),
-    onError: (cause: Error) => toast.error(cause.message),
+    onError: (cause: Error) => {
+      if (user) dice.stop(user.id);
+      toast.error(cause.message);
+    },
+    onMutate: () => {
+      if (user) dice.spin(user.id);
+    },
   });
   const resetDiceMutation = useMutation({
     mutationFn: () => resetDice(retroId as string),
@@ -442,28 +450,29 @@ export const RetroPage = () => {
     >
       <ConfirmDialog onClose={() => setConfirmRequest(undefined)} request={confirmRequest} />
 
-      <Stack spacing={1}>
-        <RetroHeader
-          canZoom={board.columns.length > 0}
-          onZoomChange={setZoom}
-          presence={<PresenceBar board={board} isConnected={isConnected} participants={participants} />}
-          teamId={board.teamId}
-          templateName={board.template?.name}
-          title={board.title}
-          zoom={zoom}
-        />
-        {board.phase === 'DISCUSS' && isConnected ? (
-          <SpeakingOrder
-            isBusy={rollDieMutation.isPending || resetDiceMutation.isPending}
-            isFacilitator={board.isFacilitator}
-            myUserId={user?.id}
-            onReset={() => resetDiceMutation.mutate()}
-            onRoll={() => rollDieMutation.mutate()}
-            participants={participants}
-            rolls={rolls}
-          />
-        ) : null}
-      </Stack>
+      <RetroHeader
+        canZoom={board.columns.length > 0}
+        dice={
+          board.phase === 'DISCUSS' && isConnected ? (
+            <SpeakingOrder
+              isBusy={rollDieMutation.isPending || resetDiceMutation.isPending}
+              isFacilitator={board.isFacilitator}
+              myUserId={user?.id}
+              onReset={() => resetDiceMutation.mutate()}
+              onRoll={() => rollDieMutation.mutate()}
+              participants={participants}
+              rolls={dice.settled}
+              spinningIds={dice.spinningIds}
+            />
+          ) : null
+        }
+        onZoomChange={setZoom}
+        presence={<PresenceBar board={board} isConnected={isConnected} participants={participants} />}
+        teamId={board.teamId}
+        templateName={board.template?.name}
+        title={board.title}
+        zoom={zoom}
+      />
 
       <BoardToolbar
         authorFilter={authorFilter}

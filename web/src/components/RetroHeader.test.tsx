@@ -6,14 +6,16 @@ import {RetroHeader} from '@/components/RetroHeader';
 
 const renderHeader = ({
   canZoom = true,
+  dice,
   templateName,
   zoom = 1,
-}: {canZoom?: boolean; templateName?: string; zoom?: number} = {}) => {
+}: {canZoom?: boolean; dice?: React.ReactNode; templateName?: string; zoom?: number} = {}) => {
   const onZoomChange = vi.fn();
   render(
     <MemoryRouter>
       <RetroHeader
         canZoom={canZoom}
+        dice={dice}
         onZoomChange={onZoomChange}
         presence={<span>Live</span>}
         teamId="team-1"
@@ -41,6 +43,20 @@ describe('RetroHeader', () => {
     for (const element of [back, title, zoom]) expect(band.contains(element)).toBe(true);
     expect(back.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(title.compareDocumentPosition(zoom) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('carries the dice between the title and the zoom', () => {
+    renderHeader({dice: <div aria-label="Speaking order" role="group" />});
+
+    const dice = screen.getByRole('group', {name: 'Speaking order'});
+
+    expect(screen.getByRole('banner').contains(dice)).toBe(true);
+    expect(
+      screen.getByRole('heading', {name: 'Sprint 42'}).compareDocumentPosition(dice) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      dice.compareDocumentPosition(screen.getByRole('group', {name: 'Zoom'})) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('steps and resets the zoom', () => {

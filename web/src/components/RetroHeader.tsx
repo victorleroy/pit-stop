@@ -6,9 +6,9 @@ import type {ReactNode} from 'react';
 import {Link} from 'react-router-dom';
 import {DEFAULT_ZOOM, ZOOM_LEVELS, stepZoom} from '@/utils/boardZoom';
 
-const CONTROL_HEIGHT = 34;
+export const CONTROL_HEIGHT = 34;
 
-const outlined = {
+export const outlined = {
   bgcolor: 'background.paper',
   border: '1px solid',
   borderColor: 'divider',
@@ -16,11 +16,13 @@ const outlined = {
 } as const;
 
 /**
- * The retro's single band: the way back, the title, and the zoom on the far right. A long
- * title is cut with an ellipsis rather than wrapped, so the band keeps one line on a phone.
+ * The retro's single band: the way back, the title, the presence and the dice, and the zoom
+ * on the far right. A long title is cut with an ellipsis rather than wrapped, so the band
+ * keeps one line on a phone, where the presence and the dice go to the line under it.
  */
 export const RetroHeader = ({
   canZoom,
+  dice,
   onZoomChange,
   presence,
   teamId,
@@ -30,6 +32,7 @@ export const RetroHeader = ({
 }: {
   /** Nothing to scale on a board without columns. */
   canZoom: boolean;
+  dice?: ReactNode;
   onZoomChange: (zoom: number) => void;
   presence: ReactNode;
   teamId: string;
@@ -78,9 +81,22 @@ export const RetroHeader = ({
     ) : null}
 
     {/* Beside the title when there is room; on a phone it takes the line under the band. */}
-    <Box sx={{flexBasis: {xs: '100%', md: 'auto'}, flexShrink: 0, order: {xs: 1, md: 0}}}>
-      {presence}
-    </Box>
+    <Stack
+      direction="row"
+      sx={{
+        alignItems: 'center',
+        columnGap: 1.5,
+        flexBasis: {xs: '100%', md: 'auto'},
+        flexShrink: {xs: 0, md: 1},
+        flexWrap: 'wrap',
+        minWidth: 0,
+        order: {xs: 1, md: 0},
+        rowGap: 1,
+      }}
+    >
+      <Box sx={{flexShrink: 0}}>{presence}</Box>
+      {dice}
+    </Stack>
 
     {canZoom ? (
       <Stack
