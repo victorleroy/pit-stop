@@ -43,6 +43,8 @@ const VOTING_PHASES: RetroPhase[] = ['VOTE', 'DISCUSS', 'ARCHIVED'];
 /** Totals stay hidden while people are still voting, so nobody follows the crowd. */
 const VOTES_REVEALED_PHASES: RetroPhase[] = ['DISCUSS', 'ARCHIVED'];
 
+export const DICE_PHASE: RetroPhase = 'DISCUSS';
+
 export class RetroManager {
   public constructor(
     private readonly retroRepository: RetroRepository,
@@ -190,7 +192,7 @@ export class RetroManager {
       ? await this.accessChecker.checkFacilitatorAccess(auth, retroId)
       : await this.accessChecker.checkRetroAccess(auth, retroId);
 
-    RetroAccessChecker.checkPhaseAllows(retro.phase, ['DISCUSS']);
+    RetroAccessChecker.checkPhaseAllows(retro.phase, [DICE_PHASE]);
   }
 
   public async updateRetro(

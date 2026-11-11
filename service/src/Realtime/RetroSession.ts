@@ -1,13 +1,11 @@
 import type {WebSocket} from 'ws';
-import {RetroManager} from '~/Manager/RetroManager';
+import {DICE_PHASE, RetroManager} from '~/Manager/RetroManager';
 import type {DieRoll, PresenceParticipant, WebSocketEvent} from '~/Model/WebSocketModel';
 import type {BoardRepository, RetroRow} from '~/Repository/BoardRepository';
 import {logger} from '~/logger';
 import type {RetroPhase} from '~/Db/schema';
 
 const CURSOR_HIDDEN_PHASES: RetroPhase[] = ['BRAINSTORM', 'VOTE'];
-
-export const DICE_PHASE: RetroPhase = 'DISCUSS';
 
 export type RollOutcome = 'absent' | 'already-rolled' | 'closed' | 'rolled';
 
@@ -100,7 +98,7 @@ export class RetroSession {
     const allowed = await Promise.all(
       recipients.map((connection) => this.authorize(connection.token, this.retroId)),
     );
-    let evicted = false;
+    const evicted = new Set<string>();
 
     recipients.forEach((connection, index) => {
       if (!allowed[index]) {
@@ -108,7 +106,7 @@ export class RetroSession {
         this.send(connection, {message: 'Retro not accessible', type: 'error'});
         this.connections.delete(connection);
         connection.socket.close();
-        evicted = true;
+        evicted.add(connection.userId);
         return;
       }
 
@@ -118,8 +116,14 @@ export class RetroSession {
       });
     });
 
-    if (evicted) {
+    if (evicted.size) {
       this.broadcastPresence();
+
+      const dropped = [...evicted].filter((userId) => !this.isWatching(userId) && this.dice.delete(userId));
+
+      if (dropped.length) {
+        this.broadcastDice();
+      }
     }
   }
 

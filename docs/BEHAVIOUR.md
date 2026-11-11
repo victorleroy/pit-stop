@@ -315,7 +315,7 @@ During DISCUSS only, everybody connected gets a die under the title and rolls th
 faces are settled by a tie-breaker drawn with the roll and never sent. Every roll sends
 `dice.updated` with the ranked list to every connection. The facilitator can reset every die
 (`DELETE /retros/{retroId}/dice`). Rolling needs a live connection to the retro (`409`
-otherwise), and outside DISCUSS both calls answer `403`. The dice are held in memory by the
+otherwise), and outside DISCUSS both calls answer `403` (`409` on an archived retro). The dice are held in memory by the
 `RetroSession` actor only: nothing is stored, somebody subscribing later receives the current
 dice, and they are cleared when the retro leaves DISCUSS or the session ends. They reveal
 nothing presence does not already show.

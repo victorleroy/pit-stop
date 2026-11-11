@@ -190,7 +190,7 @@ export const CardStack = ({
         overflow: 'visible',
         p: isCluster ? 1.5 : 0,
         position: 'relative',
-              }}
+      }}
     >
       {showTotals ? (
         <Tooltip
