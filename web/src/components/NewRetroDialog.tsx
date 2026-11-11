@@ -141,7 +141,7 @@ export const NewRetroDialog = ({
         <Stack component="ul" spacing={0.25} sx={{m: 0, pl: 2.5}}>
           {selected.columns.map((column) => (
             <Typography component="li" key={column.title} variant="textXs">
-              {column.prompt ? `${column.title} — ${column.prompt}` : column.title}
+              {column.prompt ? `${column.title}: ${column.prompt}` : column.title}
             </Typography>
           ))}
         </Stack>

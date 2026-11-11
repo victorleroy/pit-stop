@@ -90,7 +90,7 @@ describe('NewRetroDialog', () => {
     renderDialog();
 
     await screen.findByText('About Start / Stop / Continue');
-    expect(screen.getByText('Start — What should we begin?')).toBeTruthy();
+    expect(screen.getByText('Start: What should we begin?')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('radio', {name: /Blank/}));
 
