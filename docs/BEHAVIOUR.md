@@ -464,6 +464,10 @@ Inbound actions: `subscribe`, `cursor`.
   cannot leave a pointer behind.
 - The board is pushed by the service on every change; the page only falls back to fetching
   while the socket is down.
+- The retro's actions (this retro's and those carried over) live in a panel on the right,
+  opened from the toolbar's `Actions · n` button, `n` being the open actions. On a wide screen
+  the panel sits beside the board, which narrows; on a phone it slides over it. Turning a card
+  into an action opens the panel.
 
 ### Routes
 

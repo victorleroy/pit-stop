@@ -1,5 +1,10 @@
+import CloseIcon from '@mui/icons-material/Close';
+import Drawer from '@mui/material/Drawer';
+import {useTheme} from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import {
   Box,
+  IconButton,
   Loader,
   Stack,
   Typography,
@@ -40,11 +45,14 @@ import {BoardToolbar} from '@/components/BoardToolbar';
 import {PresenceBar} from '@/components/PresenceBar';
 import {useBoardSocket} from '@/hooks/useBoardSocket';
 import {SLIPSTREAM} from '@/ui/theme';
+import {countOpenActions} from '@/utils/openActions';
 
 // Only used while the websocket is down.
 const FALLBACK_POLL_INTERVAL_MS = 5_000;
 
 const FADE_WIDTH = 56;
+
+const ACTIONS_WIDTH = 440;
 
 const fade = (side: 'left' | 'right', isShown: boolean) => ({
   backgroundImage: `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, ${SLIPSTREAM.ground}, ${SLIPSTREAM.ground}00)`,
@@ -118,6 +126,9 @@ export const RetroPage = () => {
   const queryClient = useQueryClient();
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | undefined>(undefined);
   const [isAddingColumn, setIsAddingColumn] = useState(false);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
+  // Beside the board on a wide screen, so cards stay at hand; over it on a phone.
+  const isWide = useMediaQuery(useTheme().breakpoints.up('md'));
   const [actionDraft, setActionDraft] = useState<{nonce: number; text: string} | undefined>(
     undefined,
   );
@@ -339,7 +350,11 @@ export const RetroPage = () => {
     updateActionMutation.mutate({actionId, status, teamId: board.teamId});
 
   return (
-    <Stack spacing={3}>
+    // The open panel takes the board's right edge, so the columns narrow instead of hiding under it.
+    <Stack
+      spacing={3}
+      sx={{pr: isWide && isActionsOpen ? `${ACTIONS_WIDTH}px` : 0, transition: 'padding 225ms ease'}}
+    >
       <ConfirmDialog onClose={() => setConfirmRequest(undefined)} request={confirmRequest} />
 
       <Stack spacing={1}>
@@ -375,25 +390,14 @@ export const RetroPage = () => {
         onAddingColumnChange={setIsAddingColumn}
         onHide={() => hideMutation.mutate()}
         onMaxVotesChange={(maxVotes) => maxVotesMutation.mutate(maxVotes)}
+        onOpenActions={() => setIsActionsOpen((isOpen) => !isOpen)}
         onPhaseChange={(phase) => phaseMutation.mutate(phase)}
         onReveal={() => revealMutation.mutate()}
         onTakeFacilitation={() => takeFacilitationMutation.mutate()}
         onTimer={(action, seconds) => timerMutation.mutate({action, seconds})}
+        openActionCount={countOpenActions(board)}
         receivedAt={dataUpdatedAt}
       />
-
-      {board.carriedOverActions.length > 0 ? (
-        <ActionList
-          actions={board.carriedOverActions}
-          canComplete={false}
-          canCreate={false}
-          emptyLabel=""
-          isBusy={isBusy}
-          members={members ?? []}
-          onStatusChange={onStatusChange}
-          title="Actions from previous retros"
-        />
-      ) : null}
 
       {board.columns.length === 0 ? (
         // A blank board: nobody can write until there is somewhere to write.
@@ -465,7 +469,10 @@ export const RetroPage = () => {
                     renameClusterMutation.mutate({clusterId, title})
                   }
                   onRenameColumn={(title) => renameColumnMutation.mutate({columnId: column.id, title})}
-                  onTurnIntoAction={(text) => setActionDraft({nonce: Date.now(), text})}
+                  onTurnIntoAction={(text) => {
+                    setActionDraft({nonce: Date.now(), text});
+                    setIsActionsOpen(true);
+                  }}
                   onUngroupNote={(noteId) => ungroupMutation.mutate(noteId)}
                   onUpdateNote={(noteId, text) => updateNoteMutation.mutate({noteId, text})}
                   onVote={(targetId, delta) => voteMutation.mutate({delta, targetId})}
@@ -479,21 +486,50 @@ export const RetroPage = () => {
         </SideScroll>
       )}
 
-      {canDecide || board.actions.length > 0 ? (
-        <ActionList
-          actions={board.actions}
-          canComplete={false}
-          canCreate={canDecide}
-          draft={actionDraft}
-          emptyLabel="No action decided yet."
-          isBusy={isBusy}
-          members={members ?? []}
-          onCreate={(text, assigneeId) => createActionMutation.mutate({assigneeId, text})}
-          onDraftApplied={() => setActionDraft(undefined)}
-          onStatusChange={onStatusChange}
-          title="Actions from this retro"
-        />
-      ) : null}
+      <Drawer
+        anchor="right"
+        ModalProps={{keepMounted: true}}
+        onClose={() => setIsActionsOpen(false)}
+        open={isActionsOpen}
+        slotProps={{paper: {sx: {bgcolor: SLIPSTREAM.ground, width: {xs: '100%', sm: ACTIONS_WIDTH}}}}}
+        variant={isWide ? 'persistent' : 'temporary'}
+      >
+        <Stack spacing={2} sx={{p: 2}}>
+          <Stack direction="row" sx={{alignItems: 'center', justifyContent: 'space-between'}}>
+            <Typography variant="headingS">Actions</Typography>
+            <IconButton aria-label="Close the actions" onClick={() => setIsActionsOpen(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+
+          <ActionList
+            actions={board.actions}
+            canComplete={false}
+            canCreate={canDecide}
+            draft={actionDraft}
+            emptyLabel="No action decided yet."
+            isBusy={isBusy}
+            members={members ?? []}
+            onCreate={(text, assigneeId) => createActionMutation.mutate({assigneeId, text})}
+            onDraftApplied={() => setActionDraft(undefined)}
+            onStatusChange={onStatusChange}
+            title="Actions from this retro"
+          />
+
+          {board.carriedOverActions.length > 0 ? (
+            <ActionList
+              actions={board.carriedOverActions}
+              canComplete={false}
+              canCreate={false}
+              emptyLabel=""
+              isBusy={isBusy}
+              members={members ?? []}
+              onStatusChange={onStatusChange}
+              title="Actions from previous retros"
+            />
+          ) : null}
+        </Stack>
+      </Drawer>
 
     </Stack>
   );

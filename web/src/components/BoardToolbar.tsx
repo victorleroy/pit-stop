@@ -1,3 +1,4 @@
+import ChecklistOutlinedIcon from '@mui/icons-material/ChecklistOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import DialogActions from '@mui/material/DialogActions';
@@ -58,10 +59,12 @@ export const BoardToolbar = ({
   onAddingColumnChange,
   onHide,
   onMaxVotesChange,
+  onOpenActions,
   onPhaseChange,
   onReveal,
   onTakeFacilitation,
   onTimer,
+  openActionCount,
   receivedAt,
 }: {
   board: Board;
@@ -74,6 +77,8 @@ export const BoardToolbar = ({
   onAddingColumnChange: (isAdding: boolean) => void;
   onHide: () => void;
   onMaxVotesChange: (maxVotes: number) => void;
+  onOpenActions: () => void;
+  openActionCount: number;
   onPhaseChange: (phase: RetroPhase) => void;
   onReveal: () => void;
   onTakeFacilitation: () => void;
@@ -247,7 +252,19 @@ export const BoardToolbar = ({
     </>
   );
 
-  const blocks = [timerBlock, myBlock, facilitatorBlock].filter(Boolean);
+  const actionsBlock = (
+    <Button
+      onClick={onOpenActions}
+      size="small"
+      startIcon={<ChecklistOutlinedIcon />}
+      sx={{fontVariantNumeric: 'tabular-nums'}}
+      variant="outlined"
+    >
+      Actions · {openActionCount}
+    </Button>
+  );
+
+  const blocks = [timerBlock, myBlock, actionsBlock, facilitatorBlock].filter(Boolean);
 
   return (
     <Card elevation={0} sx={{overflow: 'hidden'}}>
