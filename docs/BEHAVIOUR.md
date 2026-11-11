@@ -258,6 +258,8 @@ member.
 ### Actions
 
 - Creation: only in `DISCUSS`, from a retro.
+- **Wording**: an open action is closed with **Drop** (red, tooltip "Abandon this action, keep it in history") or **Done** (tooltip "Mark as done", the validating button, on the right). Both stay listed with their status and can be reopened. **Delete** is reserved for permanent removal (note, column, retro, team) and says so in its tooltip or confirmation.
+- Cards show the author name and avatar only, never a "wrote this" sentence; an avatar without picture shows the person's initials.
 - **Editing: at any time, independent of the phase.** Reviewing an action happens whenever
   the team wants.
 - The assignee must be a **team member** (`409`).

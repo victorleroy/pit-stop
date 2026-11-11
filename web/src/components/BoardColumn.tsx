@@ -163,7 +163,7 @@ export const BoardColumn = ({
                 </span>
               </Tooltip>
               {canRemove ? (
-                <Tooltip title="Delete the column">
+                <Tooltip title="Permanently delete this column">
                   <span>
                     <IconButton
                       aria-label="Delete column"

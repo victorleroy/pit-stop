@@ -137,7 +137,7 @@ export const NoteCard = ({
             title={note.author.name}
             variant="textXs"
           >
-            {note.isMine ? `${note.author.name} (you)` : `${note.author.name} wrote this`}
+            {note.isMine ? `${note.author.name} (you)` : note.author.name}
           </Typography>
 
           {isWithheld ? (
@@ -194,15 +194,19 @@ export const NoteCard = ({
             ) : null}
 
             {canRemove && mine && !isEditing ? (
-              <IconButton
-                aria-label="Delete the note"
-                disabled={isBusy}
-                onClick={onRemove}
-                size="small"
-                sx={{color: 'inherit', opacity: 0.6}}
-              >
-                <CloseRoundedIcon fontSize="inherit" />
-              </IconButton>
+              <Tooltip title="Permanently delete this note">
+                <span>
+                  <IconButton
+                    aria-label="Delete the note"
+                    disabled={isBusy}
+                    onClick={onRemove}
+                    size="small"
+                    sx={{color: 'inherit', opacity: 0.6}}
+                  >
+                    <CloseRoundedIcon fontSize="inherit" />
+                  </IconButton>
+                </span>
+              </Tooltip>
             ) : null}
           </Stack>
         </Stack>

@@ -5,6 +5,7 @@ import {
   Select,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@/ui';
 import MenuItem from '@mui/material/MenuItem';
@@ -44,17 +45,26 @@ const ActionRow = ({
 
     {!canComplete ? null : action.status === 'OPEN' ? (
       <Stack direction="row" spacing={1}>
-        <Button disabled={isBusy} onClick={() => onStatusChange('DONE')} size="small">
-          Done
-        </Button>
-        <Button
-          disabled={isBusy}
-          onClick={() => onStatusChange('DROPPED')}
-          size="small"
-          variant="text"
-        >
-          Drop
-        </Button>
+        <Tooltip title="Abandon this action, keep it in history">
+          <span>
+            <Button
+              color="error"
+              disabled={isBusy}
+              onClick={() => onStatusChange('DROPPED')}
+              size="small"
+              variant="text"
+            >
+              Drop
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip title="Mark as done">
+          <span>
+            <Button disabled={isBusy} onClick={() => onStatusChange('DONE')} size="small">
+              Done
+            </Button>
+          </span>
+        </Tooltip>
       </Stack>
     ) : (
       <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
