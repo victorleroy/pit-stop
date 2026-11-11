@@ -1,6 +1,5 @@
 import {
   Button,
-  Card,
   Chip,
   IconButton,
   Select,
@@ -190,35 +189,35 @@ export const ActionList = ({
   };
 
   return (
-    <Card sx={{p: 3}}>
-      <Stack spacing={2}>
-        <Typography variant="headingS">{title}</Typography>
+    <Stack spacing={2}>
+      <Typography variant="headingS">{title}</Typography>
 
-        {actions.length === 0 ? (
-          <Typography color="textSecondary" variant="textS">
-            {emptyLabel}
-          </Typography>
-        ) : null}
+      {actions.length === 0 ? (
+        <Typography color="textSecondary" variant="textS">
+          {emptyLabel}
+        </Typography>
+      ) : null}
 
-        {section('Left to do', open)}
-        {section('Done', closed)}
+      {section('Left to do', open)}
+      {section('Done', closed)}
 
-        {canCreate && onCreate ? (
-          <Stack direction="row" spacing={2} sx={{alignItems: 'flex-end', flexWrap: 'wrap'}}>
-            <TextField
-              inputRef={inputRef}
-              label="New action"
-              onChange={(event) => setText(event.target.value)}
-              placeholder="Split the CI into two jobs"
-              size="small"
-              sx={{flexGrow: 1, minWidth: 240}}
-              value={text}
-            />
+      {canCreate && onCreate ? (
+        <Stack spacing={1.5}>
+          <TextField
+            fullWidth
+            inputRef={inputRef}
+            label="New action"
+            onChange={(event) => setText(event.target.value)}
+            placeholder="Split the CI into two jobs"
+            size="small"
+            value={text}
+          />
+          <Stack direction="row" spacing={1.5}>
             <Select
               displayEmpty
               onChange={(event) => setAssigneeId(event.target.value as string)}
               size="small"
-              sx={{minWidth: 160}}
+              sx={{flexGrow: 1, minWidth: 0}}
               value={assigneeId}
             >
               <MenuItem value="">Nobody</MenuItem>
@@ -228,12 +227,17 @@ export const ActionList = ({
                 </MenuItem>
               ))}
             </Select>
-            <Button disabled={!text.trim() || isBusy} onClick={submit} variant="contained">
+            <Button
+              disabled={!text.trim() || isBusy}
+              onClick={submit}
+              sx={{flexShrink: 0, height: 40}}
+              variant="contained"
+            >
               Add
             </Button>
           </Stack>
-        ) : null}
-      </Stack>
-    </Card>
+        </Stack>
+      ) : null}
+    </Stack>
   );
 };

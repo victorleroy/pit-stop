@@ -9,6 +9,7 @@ import MenuItem from '@mui/material/MenuItem';
 import {
   Avatar,
   Button,
+  Card,
   Chip,
   Dialog,
   IconButton,
@@ -586,16 +587,18 @@ export const TeamPage = () => {
         ) : null}
       </Stack>
 
-      <ActionList
-        actions={actions ?? []}
-        canCreate={false}
-        emptyLabel="No action yet. They get decided during the discussion phase."
-        isBusy={updateActionMutation.isPending}
-        members={members ?? []}
-        onStatusChange={(actionId, status) => updateActionMutation.mutate({actionId, status})}
-        onTextChange={(actionId, text) => updateActionMutation.mutate({actionId, text})}
-        title="Actions"
-      />
+      <Card sx={{p: 3}}>
+        <ActionList
+          actions={actions ?? []}
+          canCreate={false}
+          emptyLabel="No action yet. They get decided during the discussion phase."
+          isBusy={updateActionMutation.isPending}
+          members={members ?? []}
+          onStatusChange={(actionId, status) => updateActionMutation.mutate({actionId, status})}
+          onTextChange={(actionId, text) => updateActionMutation.mutate({actionId, text})}
+          title="Actions"
+        />
+      </Card>
 
       <Stack spacing={1} sx={{...SURFACE, px: 3, py: 2.5}}>
         <Stack

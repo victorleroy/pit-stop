@@ -1,4 +1,5 @@
 import CloseIcon from '@mui/icons-material/Close';
+import Divider from '@mui/material/Divider';
 import Drawer from '@mui/material/Drawer';
 import {useTheme} from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -576,12 +577,12 @@ export const RetroPage = () => {
         ModalProps={{keepMounted: true}}
         onClose={() => setIsActionsOpen(false)}
         open={isActionsOpen}
-        slotProps={{paper: {sx: {bgcolor: SLIPSTREAM.ground, width: {xs: '100%', sm: ACTIONS_WIDTH}}}}}
+        slotProps={{paper: {sx: {bgcolor: SLIPSTREAM.surface, width: {xs: '100%', sm: ACTIONS_WIDTH}}}}}
         variant={isWide ? 'persistent' : 'temporary'}
       >
-        <Stack spacing={2} sx={{p: 2}}>
+        <Stack divider={<Divider />} spacing={3} sx={{p: 3}}>
           <Stack direction="row" sx={{alignItems: 'center', justifyContent: 'space-between'}}>
-            <Typography variant="headingS">Actions</Typography>
+            <Typography variant="headingL">Actions</Typography>
             <IconButton aria-label="Close the actions" onClick={() => setIsActionsOpen(false)}>
               <CloseIcon />
             </IconButton>
