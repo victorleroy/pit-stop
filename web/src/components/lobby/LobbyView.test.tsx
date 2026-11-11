@@ -154,6 +154,52 @@ describe('LobbyView', () => {
     expect(screen.queryByText(/everyone did the best job they could/)).toBeNull();
   });
 
+  it('offers the icebreaker or skipping it when the retro has one', () => {
+    const onStart = vi.fn();
+    const onSkipIcebreaker = vi.fn();
+    renderLobby({isFacilitator: true, onSkipIcebreaker, onStart, startLabel: 'Start with the icebreaker'});
+
+    fireEvent.click(screen.getByRole('button', {name: 'Start with the icebreaker'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Start without icebreaker'}));
+
+    expect(onStart).toHaveBeenCalledTimes(1);
+    expect(onSkipIcebreaker).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('or')).toBeTruthy();
+  });
+
+  it('shows the icebreaker step in the same dialog, without the waiting room or the game', () => {
+    const onStart = vi.fn();
+    renderLobby({
+      game: <p>the game</p>,
+      icebreaker: <h2 id="icebreaker-title">Best lunch?</h2>,
+      isFacilitator: true,
+      onSetUpBoard: vi.fn(),
+      onSkipIcebreaker: vi.fn(),
+      onStart,
+      startLabel: 'Move on to Brainstorm',
+    });
+
+    expect(screen.getByRole('dialog', {name: 'Best lunch?'})).toBeTruthy();
+    expect(screen.queryByText('the game')).toBeNull();
+    expect(screen.queryByText('Welcome to the pit stop')).toBeNull();
+    expect(screen.queryByRole('button', {name: /Set up the board|without icebreaker/})).toBeNull();
+    expect(screen.queryByRole('button', {name: 'Close'})).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', {name: 'Move on to Brainstorm'}));
+
+    expect(onStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells a participant who will move on from the icebreaker, with a takeover when away', () => {
+    const onTakeOver = vi.fn();
+    renderLobby({icebreaker: <h2 id="icebreaker-title">Best lunch?</h2>, onTakeOver, participants: [present('b')]});
+
+    expect(screen.getByText('Waiting for A to move on')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', {name: 'Take over facilitation'}));
+
+    expect(onTakeOver).toHaveBeenCalledTimes(1);
+  });
+
   it('mounts the game where it is given', () => {
     renderLobby({game: <p>the game</p>});
 

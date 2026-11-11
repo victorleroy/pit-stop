@@ -24,9 +24,7 @@ const RETRO_COLUMNS = [
   'templateName',
   'defaultTimerSeconds',
   'icebreakerQuestionId',
-  'icebreakerCustomText',
   'icebreakerAskedAt',
-  'icebreakerAnswersRevealed',
   'actionReview',
   'reviewFocusActionId',
 ] as const;

@@ -386,42 +386,36 @@ describe('anonymity', () => {
     const enter = (phase: 'ICEBREAKER' | 'BRAINSTORM' | 'SHARE' | 'VOTE' | 'DISCUSS' | 'ARCHIVED') =>
       harness.container.retroManager.updateRetro(author, icebreakerRetroId, {phase});
 
-    it('shows the question in the waiting room to the facilitator alone', async () => {
-      expect((await icebreakerFor(author))?.question).not.toBeNull();
+    it('shows the question to nobody in the waiting room, the facilitator included', async () => {
+      expect((await icebreakerFor(author))?.question).toBeNull();
       expect((await icebreakerFor(other))?.question).toBeNull();
     });
 
-    it('hides the text of an answer from everyone but its author until revealed, in every phase', async () => {
+    it('hides the text of an unshared answer from everyone but its author, in every phase', async () => {
       await enter('ICEBREAKER');
       await harness.container.icebreakerManager.answer(other, icebreakerRetroId, 'Tea');
 
-      const hidden = {author: {id: other.userId, name: 'Alice'}, mine: false, text: ''};
+      const hidden = {author: {id: other.userId, name: 'Alice'}, mine: false, revealed: false, text: ''};
 
       for (const phase of ['ICEBREAKER', 'BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS', 'ARCHIVED'] as const) {
         await enter(phase);
 
-        // The facilitator does not read ahead either.
+        // The facilitator does not read it either.
         expect((await icebreakerFor(author))?.answers).toEqual([hidden]);
         expect((await icebreakerFor(other))?.answers).toEqual([{...hidden, mine: true, text: 'Tea'}]);
       }
     });
 
-    it('shows every answer once revealed, in every phase after', async () => {
+    it('shows a shared answer to everyone, in every phase after', async () => {
       await enter('ICEBREAKER');
       await harness.container.icebreakerManager.answer(other, icebreakerRetroId, 'Tea');
-      await harness.container.icebreakerManager.command(author, icebreakerRetroId, 'revealAnswers');
+      await harness.container.icebreakerManager.setRevealed(other, icebreakerRetroId, true);
 
       for (const phase of ['ICEBREAKER', 'BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS', 'ARCHIVED'] as const) {
         await enter(phase);
 
         expect((await icebreakerFor(author))?.answers[0]?.text).toBe('Tea');
       }
-
-      await enter('DISCUSS');
-      await enter('ICEBREAKER');
-      await harness.container.icebreakerManager.command(author, icebreakerRetroId, 'hideAnswers');
-
-      expect((await icebreakerFor(author))?.answers[0]?.text).toBe('');
     });
   });
 });

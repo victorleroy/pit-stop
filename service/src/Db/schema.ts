@@ -162,9 +162,7 @@ interface RetrosTable {
   templateName: string | null;
   defaultTimerSeconds: number | null;
   icebreakerQuestionId: string | null;
-  icebreakerCustomText: string | null;
   icebreakerAskedAt: string | null;
-  icebreakerAnswersRevealed: Generated<number>;
   actionReview: Generated<number>;
   reviewFocusActionId: string | null;
 }
@@ -173,6 +171,7 @@ interface IcebreakerAnswersTable {
   retroId: string;
   userId: string;
   text: string;
+  revealed: Generated<number>;
   createdAt: string;
   updatedAt: string;
 }

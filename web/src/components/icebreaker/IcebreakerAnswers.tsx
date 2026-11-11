@@ -1,69 +1,123 @@
+import {useState} from 'react';
 import type {IcebreakerAnswer} from '@/api/types';
-import {UserAvatar} from '@/components/UserAvatar';
-import {Card, Stack, Typography} from '@/ui';
+import {ANSWER_MAX, IcebreakerPostIt} from '@/components/icebreaker/IcebreakerPostIt';
+import {InlineEditor} from '@/components/InlineEditor';
+import {Box, Button, Stack, Typography} from '@/ui';
+import {SLIPSTREAM} from '@/ui/theme';
+import {noteSurfaceSx} from '@/theme/texture';
 
-/**
- * Until the reveal, the grid says who answered and nothing more: your own answer is already
- * in front of you, so only the others get a card.
- */
+/** One zone, like a column of the board: a click in its empty part writes (or edits) your post-it. */
 export const IcebreakerAnswers = ({
   answers,
-  areRevealed,
+  expected,
+  isBusy,
+  onAnswer,
+  onHide,
+  onRemove,
+  onReveal,
 }: {
   answers: IcebreakerAnswer[];
-  areRevealed: boolean;
+  expected: number;
+  isBusy: boolean;
+  onAnswer: (text: string) => void;
+  onHide: () => void;
+  onRemove: () => void;
+  onReveal: () => void;
 }) => {
-  if (answers.length === 0) {
-    return (
-      <Typography color="textSecondary" role="status" variant="textM">
-        No answers yet. Answering out loud works too.
-      </Typography>
-    );
-  }
+  const [isEditing, setIsEditing] = useState(false);
+  const mine = answers.find((answer) => answer.mine);
 
-  const shown = areRevealed ? answers : answers.filter(({mine}) => !mine);
-
-  if (shown.length === 0) return null;
+  const save = (text: string) => {
+    if (text) onAnswer(text);
+    else if (mine) onRemove();
+  };
 
   return (
-    <Stack
-      component="ul"
-      sx={{
-        display: 'grid',
-        gap: 1.5,
-        gridTemplateColumns: {md: 'repeat(3, minmax(0, 1fr))', sm: 'repeat(2, minmax(0, 1fr))', xs: 'minmax(0, 1fr)'},
-        listStyle: 'none',
-        m: 0,
-        p: 0,
-      }}
-    >
-      {shown.map(({author, text}) => (
-        <Card
-          aria-label={areRevealed ? undefined : `${author.name} answered`}
-          component="li"
-          elevation={0}
-          key={author.id}
-          sx={{minWidth: 0, p: 2}}
-        >
-          <Stack spacing={1}>
-            <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
-              <UserAvatar {...author} decorative size="small" />
-              <Typography sx={{overflowWrap: 'anywhere'}} variant="textM">
-                {author.name}
-              </Typography>
-            </Stack>
-            {areRevealed ? (
-              <Typography sx={{overflowWrap: 'anywhere'}} variant="textL">
-                {text}
-              </Typography>
-            ) : (
-              <Typography color="textSecondary" variant="textS">
-                Answered
-              </Typography>
-            )}
-          </Stack>
-        </Card>
-      ))}
+    <Stack spacing={1}>
+      <Typography aria-live="polite" color="textSecondary" variant="textS">
+        {`${answers.length} of ${expected} answered`}
+      </Typography>
+
+      <Box
+        aria-label="Answers"
+        onClick={(event) => {
+          if (isEditing) event.currentTarget.querySelector('textarea')?.focus();
+          else setIsEditing(true);
+        }}
+        onMouseDown={(event) => {
+          if (isEditing && !(event.target instanceof HTMLTextAreaElement)) event.preventDefault();
+        }}
+        role="group"
+        sx={{
+          bgcolor: SLIPSTREAM.ground,
+          border: `1px dashed ${SLIPSTREAM.line}`,
+          borderRadius: 3,
+          cursor: 'text',
+          minHeight: 180,
+          p: 2,
+        }}
+      >
+        <Stack spacing={2}>
+          {!mine && !isEditing ? (
+            <Button
+              onClick={() => setIsEditing(true)}
+              sx={{justifyContent: 'flex-start', textAlign: 'left'}}
+              variant="text"
+            >
+              Click here to add your answer. It stays hidden until you share it. Answering out loud works too.
+            </Button>
+          ) : null}
+
+          {answers.length > 0 || isEditing ? (
+            <Box
+              component="ul"
+              sx={{
+                display: 'grid',
+                gap: 1.5,
+                gridTemplateColumns: {
+                  md: 'repeat(3, minmax(0, 1fr))',
+                  sm: 'repeat(2, minmax(0, 1fr))',
+                  xs: 'minmax(0, 1fr)',
+                },
+                m: 0,
+                p: 0,
+              }}
+            >
+              {answers.map((answer, index) => (
+                <IcebreakerPostIt
+                  answer={answer}
+                  columnIndex={index}
+                  isBusy={isBusy}
+                  isEditing={answer.mine && isEditing}
+                  key={answer.author.id}
+                  onClose={() => setIsEditing(false)}
+                  onEdit={() => setIsEditing(true)}
+                  onSave={save}
+                  onToggle={answer.revealed ? onHide : onReveal}
+                />
+              ))}
+              {!mine && isEditing ? (
+                <Box
+                  component="li"
+                  sx={{...noteSurfaceSx(answers.length, {isMine: true, isWithheld: false}), listStyle: 'none', p: 1.25}}
+                >
+                  <InlineEditor
+                    allowEmpty
+                    label="Your answer"
+                    maxLength={ANSWER_MAX}
+                    multiline
+                    onClose={() => setIsEditing(false)}
+                    onSave={save}
+                    showCount
+                    sx={{'& .MuiInputBase-root': {bgcolor: 'rgba(255, 255, 255, 0.7)'}}}
+                    value=""
+                  />
+                </Box>
+              ) : null}
+            </Box>
+          ) : null}
+        </Stack>
+      </Box>
     </Stack>
   );
 };

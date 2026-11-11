@@ -171,19 +171,18 @@ export interface TeamRetroSummary extends RetroSummary {
   teamName: string;
 }
 
-/** One category today: the bank is light questions only, to set a good mood. */
-export type IcebreakerCategory = 'FUN';
-
-/** A bank question comes in both languages; the reader's browser picks one. */
-export type IcebreakerQuestion =
-  | {category: IcebreakerCategory; id: string; source: 'BANK'; text: {en: string; fr: string}}
-  | {source: 'CUSTOM'; text: string};
+export interface IcebreakerQuestion {
+  id: string;
+  text: string;
+}
 
 export interface IcebreakerAnswer {
   /** Always present: answers are signed. */
   author: NoteAuthor;
   mine: boolean;
-  /** Empty until the answers are revealed, except for your own. */
+  /** A new post-it starts hidden: its author shares it. */
+  revealed: boolean;
+  /** Empty for others until the author reveals it. */
   text: string;
 }
 
@@ -191,18 +190,10 @@ export interface Icebreaker {
   answeredCount: number;
   /** Oldest first. */
   answers: IcebreakerAnswer[];
-  answersRevealed: boolean;
-  /** Null for everyone but the facilitator until the question is asked. */
   question: IcebreakerQuestion | null;
-  /** WAITING exists in LOBBY only: drawn, not asked yet. */
+  /** WAITING exists in LOBBY only: not asked yet. */
   state: 'ASKED' | 'WAITING';
 }
-
-export type IcebreakerCommand =
-  | {action: 'draw'}
-  | {action: 'custom'; text: string}
-  | {action: 'revealAnswers'}
-  | {action: 'hideAnswers'};
 
 export interface Board extends RetroSummary {
   actions: Action[];

@@ -16,8 +16,8 @@ this page is the bug.
 | **Team** | A group of people inside an organization. Owns retros and actions. |
 | **Retro** | A session. Moves through 7 phases. Holds columns, notes, clusters and votes. |
 | **Waiting room** | The `LOBBY` phase: where a retro waits for its people before it starts. Every new retro opens there. |
-| **Icebreaker** | One light question at the start of a retro, the same for everyone, answered in one line or out loud. Drawn from a bank, or written by the facilitator. |
-| **Asked** | An icebreaker question is asked when the retro enters `ICEBREAKER`; before that, in the waiting room, it is the facilitator's preview. |
+| **Icebreaker** | One light question at the start of a retro, the same for everyone, answered on a post-it or out loud. Drawn from a bank of fun questions, in English. |
+| **Asked** | An icebreaker question is asked when the retro enters `ICEBREAKER`; until then it is a surprise for everyone, the facilitator included. |
 | **Note** | A sticky. Has an author, a text, a column and a `revealed` flag. |
 | **Cluster** | A grouping of at least 2 notes inside a single column. |
 | **Card** | The unit of display and the target of a vote: either a standalone note or a cluster. |
@@ -55,7 +55,7 @@ retros         (id, team_id, org_id, title, phase DEFAULT 'LOBBY', created_by, f
                 created_at, template_id NULL, template_name NULL,
                 default_timer_seconds NULL, icebreaker_*, action_review,
                 review_focus_action_id NULL)
-icebreaker_answers (retro_id, user_id, text, created_at, updated_at)
+icebreaker_answers (retro_id, user_id, text, revealed DEFAULT 0, created_at, updated_at)
                    PRIMARY KEY (retro_id, user_id)
 columns        (id, retro_id, title, position, prompt NULL)
 notes          (id, retro_id, column_id, cluster_id NULL, author_id,
@@ -84,9 +84,9 @@ The review lives in two columns of `retros`: `action_review` (0/1, default 1), w
 retro opens with a review, and `review_focus_action_id` (`ON DELETE SET NULL`), the action the
 facilitator is reviewing, set in `REVIEW` only.
 
-The icebreaker lives in four columns of `retros`: `icebreaker_question_id` (a bank id) or
-`icebreaker_custom_text` (the facilitator's own question), never both; `icebreaker_asked_at`,
-set on entering `ICEBREAKER`; `icebreaker_answers_revealed`. Which questions a team was asked
+The icebreaker lives in two columns of `retros`: `icebreaker_question_id` (a bank id) and
+`icebreaker_asked_at`, set on entering `ICEBREAKER`. `icebreaker_custom_text` and
+`icebreaker_answers_revealed` exist but nothing uses them any more. Which questions a team was asked
 is **derived** from its retros (`asked_at` set, with that question id), never stored apart:
 deleting a retro takes its question out of the history.
 Other enumerations:
@@ -144,8 +144,7 @@ The facilitator alone changes the phase. No transition is constrained, **except 
 | Record or undo a review outcome | | | yes | yes | yes | yes | yes | |
 | Move the review focus (facilitator) | | | yes | | | | | |
 | Turn the review on or off (facilitator) | yes | | | | | | | |
-| Change the icebreaker question (facilitator) | yes | yes | | | | | | |
-| Answer the icebreaker, reveal or hide the answers | | yes | | | | | | |
+| Answer the icebreaker, show or hide **own** answer | | yes | | | | | | |
 
 An operation refused because of the phase answers `403`, except in `ARCHIVED` (`409`).
 
@@ -196,10 +195,9 @@ This is the product's central promise. It lives in **one pure function**,
 | **Vote totals** | Everybody | Only in `DISCUSS` and `ARCHIVED` |
 | **Own votes** | Self | Only in `VOTE`, `DISCUSS`, `ARCHIVED`; otherwise `myVotes: 0` |
 | **Votes spent per person** | Everybody | Only in `VOTE`: `voteProgress[userId]` = how many votes they cast, never on which card; `{}` in every other phase |
-| **Icebreaker question** | Facilitator | In `LOBBY`, before it is asked: the preview is theirs alone, `question: null` for everybody else |
-| | Everybody | Once asked. A question never asked disappears for everyone once the retro left `LOBBY` (`icebreaker: null`) |
+| **Icebreaker question** | Everybody | Once asked; `question: null` for everyone in `LOBBY`. A question never asked disappears for everyone once the retro left `LOBBY` (`icebreaker: null`): starting without the icebreaker skips it for good |
 | **Icebreaker answer** | Everybody, always | `author` is always present: answers are signed |
-| | Its author, always | `text` is returned when `answersRevealed` **or** the caller is the author, `''` otherwise, the facilitator included |
+| | Its author, always | `text` is returned when the answer is `revealed` **or** the caller is the author, `''` otherwise, the facilitator included. An answer is hidden when written, like a brainstorm note; its author alone shares it or hides it again |
 
 > **The product protects the content, not the presence.** Everyone sees that Victor wrote
 > three notes; nobody reads them until he shares them.
@@ -265,9 +263,6 @@ Three rules exist so that nobody can ever be locked out:
 3. You cannot demote yourself as team admin, unless you are an org admin (`409`).
 
 ### Facilitation takeover
-
-Taking the facilitation over in `LOBBY` also takes the icebreaker preview: the new facilitator
-sees the question, the former one no longer does.
 
 A subtle case. `takeFacilitation` allows the takeover when:
 
@@ -456,24 +451,21 @@ disabled.
 
 - `icebreaker` at creation is `body.icebreaker ?? false`: without it the retro has none. With
   it, a question is drawn at creation and asked on entering `ICEBREAKER`.
-- The bank (`service/src/Icebreaker/questions.ts`, CC0-1.0) holds 60 bilingual questions
-  (`en`, `fr`), all light and playful (`FUN`): the icebreaker sets a good mood, it does not
-  check on the team or the sprint. Ids are
+- The bank (`service/src/Icebreaker/questions.ts`, CC0-1.0) holds 60 questions in English,
+  all light and playful: the icebreaker sets a good mood, it does not check on the team or the
+  sprint. Ids are
   never reused; a question is retired with `active: false` and still shows in old retros.
 - **A draw** picks uniformly among the active questions the team was never asked, leaving out
-  those held by the team's other waiting rooms (`LOBBY`, not asked yet) and the current one.
-  When none is left, a new cycle starts: everything but the reserved and the current question,
-  then everything but the current one, then the whole bank. A question discarded by a new draw
-  is not "asked".
-- The facilitator draws another question (`draw`) or writes their own (`custom`, 1 to 200
-  characters after trimming, never part of the history), in `LOBBY` and `ICEBREAKER`. `draw`
-  on a retro without a question adds an icebreaker. Changing the question once asked
-  **deletes every answer** and hides the answers again.
-- Every member answers once, 1 to 140 characters after trimming, in `ICEBREAKER` only; a second
-  answer replaces the first, and removing it is idempotent. Answering is optional, and nothing
-  tells "did not answer" from "answered out loud".
-- The facilitator reveals or hides the answers (`revealAnswers`, `hideAnswers`) in
-  `ICEBREAKER` only. Neither the timer nor anything else reveals them, nor changes the phase.
+  those held by the team's other waiting rooms (`LOBBY`, not asked yet). When none is left, a
+  new cycle starts: everything but the reserved questions, then the whole bank. Nobody picks
+  another question or writes one: the draw is the question.
+- Every member answers on one post-it, 1 to 140 characters after trimming, in `ICEBREAKER`
+  only; a second answer replaces the text and keeps the post-it's place and visibility, and
+  removing it is idempotent. Answering is optional, and nothing tells "did not answer" from
+  "answered out loud".
+- A post-it is **hidden when written**, like a brainstorm note. Its author alone shares it or
+  hides it again (`404` without an answer), in `ICEBREAKER` only; nothing else reveals or hides
+  answers, and a new text keeps the post-it shared or hidden as it was.
 - Editorial guardrails of the bank: nothing about family, health, religion, politics or money;
   answerable in one sentence; reviewed in the pull request (CONTRIBUTING.md).
 
@@ -686,9 +678,10 @@ Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `413`, `
 | POST | `/teams/{teamId}/retros` | `201` `Board` — `icebreaker?: boolean`, default `false` |
 | GET | `/retros/{retroId}` | `200` `Board` |
 | PATCH | `/retros/{retroId}` | `200` `Board` — `409` on a `phase: 'LOBBY'` once started |
-| PATCH | `/retros/{retroId}/icebreaker` | `200` `Board` — facilitator, `{action: 'draw' \| 'custom' \| 'revealAnswers' \| 'hideAnswers', text?}` |
 | PUT | `/retros/{retroId}/icebreaker/answer` | `200` `Board` — own answer `{text}` |
 | DELETE | `/retros/{retroId}/icebreaker/answer` | `200` `Board` — own answer, idempotent |
+| POST | `/retros/{retroId}/icebreaker/answer/reveal` | `200` `Board` — share own answer, `404` without one |
+| DELETE | `/retros/{retroId}/icebreaker/answer/reveal` | `200` `Board` — hide own answer, `404` without one |
 | DELETE | `/retros/{retroId}` | `204` |
 | POST | `/retros/{retroId}/columns` | `201` `Board` |
 | PUT | `/retros/{retroId}/columns/order` | `200` `Board` |
@@ -768,10 +761,9 @@ Board           { id, title, phase, teamId, createdBy, createdAt?, facilitatorId
                   review: {enabled, focusActionId, items: ReviewItem[]},
                   template: {id, name} | null, defaultTimerSeconds: number | null,
                   icebreaker: Icebreaker | null }
-Icebreaker      { state: 'WAITING'|'ASKED', answersRevealed, answeredCount,
-                  question: null | {source: 'BANK', id, category, text: {en, fr}}
-                                 | {source: 'CUSTOM', text},
-                  answers: [{author: {id, name, pictureUrl?}, text, mine}] }
+Icebreaker      { state: 'WAITING'|'ASKED', answeredCount,
+                  question: {id, text} | null,
+                  answers: [{author: {id, name, pictureUrl?}, text, mine, revealed}] }
 Template        { id, scope: 'BUILTIN'|'TEAM', name, description: string | null,
                   columns: [{title, prompt: string | null}], maxVotes: number | null,
                   timerSeconds: number | null, updatedAt?, updatedBy?: {id, name} }
@@ -859,21 +851,42 @@ epoch milliseconds; `points` in `game.hit` is the player's total, not a delta.
   cannot leave a pointer behind.
 - The board is pushed by the service on every change; the page only falls back to fetching
   while the socket is down.
-- **Waiting room** (`LOBBY`): a dialog over the board that nobody dismisses (no close button,
-  backdrop or `Escape`), gone for everybody once the retro leaves `LOBBY`. It holds a welcome
-  (`Welcome to the pit stop`, retro title and team), the icebreaker preview for the
-  facilitator only when the retro has one, then who is here among the team's members
-  (`x/y joined`, present first with their avatar and first name, popping in as they join
-  (no animation with reduced motion), then absent as "not here yet"; `Everyone is here` once
-  complete), then the game. Presence is shown only while the socket is connected,
-  `Reconnecting…` otherwise, so `0/y` never shows. The others read
-  `Waiting for {name} to start the retro`; when the facilitator is not connected they also get
-  `Take over facilitation`, since the toolbar is under the dialog. The facilitator starts with
-  `Start the retro` (never conditioned on presence), whose target is `nextOpeningPhase(board)`,
-  and can step out with `Set up the board`: the dialog closes for them only, the board and its
-  column controls show, with `Back to the waiting room` to reopen it; the toolbar still offers
-  the start. `LOBBY` is not in the phase stepper, and no cursor is sent.
-- **Wheel Gun**, in the dialog below the people, always on: it is played while the dialog is
+- **Waiting room** (`LOBBY` then `ICEBREAKER`): one dialog over the board that nobody dismisses
+  (no close button, backdrop or `Escape`), gone for everybody once the retro leaves it. Its
+  `aria-labelledby` follows the current step's heading.
+  - **Step 1** (`LOBBY`): a welcome (`Welcome to the pit stop`, retro title and team), then who
+    is here among the team's members (`x/y joined`, present first with their avatar and first
+    name, popping in as they join (no animation with reduced motion), then absent as "not here
+    yet"; `Everyone is here` once complete), then the game. Presence is shown only while the
+    socket is connected, `Reconnecting…` otherwise, so `0/y` never shows. The others read
+    `Waiting for {name} to start the retro`; when the facilitator is not connected they also get
+    `Take over facilitation`, since the toolbar is under the dialog. When the retro has an
+    icebreaker the facilitator gets `Start with the icebreaker` (phase `ICEBREAKER`), a small
+    `or`, then `Start without icebreaker` (the phase after it, `nextOpeningPhase` without the
+    icebreaker: `REVIEW` when the review step is on, `BRAINSTORM` otherwise); otherwise a single `Start the retro` (target
+    `nextOpeningPhase(board)`). Neither is conditioned on presence. `Set up the board` closes
+    the dialog for the facilitator only, the board and its column controls show, with `Back to
+    the waiting room` to reopen it; the toolbar still offers the start. `LOBBY` is not in the
+    phase stepper, and no cursor is sent. Above the people, the facilitator alone gets a
+    `Review n open actions first` switch when there is anything to review.
+  - **Step 2** (`ICEBREAKER`): the same dialog, no game, no `Set up the board`. The question
+    is an `h2`, large, at the top; below it one zone of post-its and a counter
+    `{n} of {expected} answered` (`aria-live="polite"`, expected = present participants plus
+    answer authors). A click in the empty part of the zone creates my post-it in inline edit
+    (`Enter` validates, `Escape` cancels, 140 characters with a counter), as when adding a
+    note; a hint reads `Click here to add your answer…` until I have one. There is one
+    post-it per person: once I have mine, a click in the zone edits mine, as does a click on
+    its text; validating an empty text removes it. Each post-it carries the author's
+    `UserAvatar` and name, with the board's post-it style. A new post-it is hidden: its author
+    clicks the eye (`Show my answer` / `Hide my answer`, `aria-pressed`) to share it. Others'
+    hidden post-its are shown like a withheld board note (no text, author visible,
+    `aria-label="{name} answered"`). The facilitator reads `Move on to {label}` (target
+    `nextOpeningPhase(board)`: `Review` when the review step is on, `Brainstorm` otherwise), enabled with no column; the others read
+    `Waiting for {name} to move on`, with `Take over facilitation` when the facilitator is not
+    connected. Mobile: one column, no horizontal scroll.
+  - After the icebreaker, a recap chip in the header opens a popover with the question and
+    only the answers that were revealed.
+- **Wheel Gun**, in the step 1 dialog below the people, always on: it is played while the dialog is
   open (the facilitator setting up the board leaves it). Positions use
   `offset = serverNow − Date.now()` from the last game event. A tap plays at once; the wheel
   turns to the winner's colour if someone else got it, and frees itself locally after 1 s
@@ -900,8 +913,8 @@ epoch milliseconds; `points` in `game.hit` is the player's total, not a delta.
   The facilitator moves the focus by clicking a row, `Previous` / `Next` (next undecided,
   wrapping) or the arrow keys; others read `{name} is leading the review`. `Start brainstorming`
   in the toolbar leaves it; leaving with undecided actions asks first ("They stay open").
-  The waiting room's facilitator card adds a `Review n open actions first` switch when there
-  is anything to review.
+  Step 1 of the waiting room gives the facilitator a `Review n open actions first` switch when
+  there is anything to review.
 - The team page shows a **Follow-through** card above its actions: done since the last retro,
   dropped, open, and one bar per retro of the completion trend, labelled in words too. It is
   hidden while it has nothing to report.
@@ -962,7 +975,6 @@ to the login screen.
 | Template `maxVotes` | integer, 1 to 10, or null |
 | Template `timerSeconds` | integer, 5 to 3600, or null |
 | Note text | required, <= 500 |
-| Icebreaker question of the facilitator | 1 to 200 after trimming |
 | Icebreaker answer | 1 to 140 after trimming |
 | `icebreaker` at creation | boolean |
 | Cluster title | required, <= 60 |

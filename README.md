@@ -36,9 +36,8 @@ freely.
   Mad / Sad / Glad, 4L, Wrap-up + kudos) or from a blank board, and picks how many votes each
   person gets: 3 by default, fewer votes keep the discussion focused. The facilitator can
   rename, add or remove columns and change the vote count until voting starts.
-- **Icebreaker** (optional, ticked by default). One fun question for everyone, in English or
-  French after the browser. Each person answers in one line or out loud, and the facilitator
-  reveals the answers together. A team does not get the same question twice before the bank
+- **Icebreaker** (optional, ticked by default). One fun question for everyone, right after
+  the waiting room. Each person answers on a post-it, hidden until they share it, or out loud. A team does not get the same question twice before the bank
   of 60 runs out.
 - **Brainstorm.** Everyone writes. Others see that you are writing, not what.
 - **Share.** Each person shares their notes, or hides them again, with one click. Notes are

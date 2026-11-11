@@ -3,9 +3,8 @@ import type {IcebreakerQuestion} from '~/Icebreaker/questions';
 
 const question = (id: string, active = true): IcebreakerQuestion => ({
   active,
-  category: 'FUN',
   id,
-  text: {en: id, fr: id},
+  text: id,
 });
 
 const bank = [question('fun-001'), question('fun-002'), question('fun-003')];
@@ -21,7 +20,6 @@ const possible = (
       drawIcebreakerQuestion({
         askedIds: new Set(),
         bank,
-        currentId: null,
         reservedIds: new Set(),
         ...input,
         random: () => value,
@@ -47,15 +45,11 @@ describe('drawIcebreakerQuestion', () => {
 
   it('leaves the questions another waiting room holds, unless nothing else is left', () => {
     expect(possible({reservedIds: new Set(['fun-001'])})).toEqual(['fun-002', 'fun-003']);
-    expect(
-      possible({currentId: 'fun-003', reservedIds: new Set(['fun-001', 'fun-002'])}),
-    ).toEqual(['fun-001', 'fun-002']);
-  });
-
-  it('never gives the current question back while another exists', () => {
-    expect(
-      possible({askedIds: new Set(['fun-001', 'fun-002', 'fun-003']), currentId: 'fun-002'}),
-    ).toEqual(['fun-001', 'fun-003']);
+    expect(possible({reservedIds: new Set(['fun-001', 'fun-002', 'fun-003'])})).toEqual([
+      'fun-001',
+      'fun-002',
+      'fun-003',
+    ]);
   });
 
   it('never draws a retired question', () => {
@@ -63,6 +57,6 @@ describe('drawIcebreakerQuestion', () => {
   });
 
   it('gives the only question of a one-question bank back', () => {
-    expect(possible({bank: [question('fun-001')], currentId: 'fun-001'})).toEqual(['fun-001']);
+    expect(possible({bank: [question('fun-001')]})).toEqual(['fun-001']);
   });
 });

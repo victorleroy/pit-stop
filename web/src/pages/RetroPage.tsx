@@ -37,7 +37,8 @@ import {
   takeFacilitation,
   reorderColumns,
   revealMyNotes,
-  sendIcebreakerCommand,
+  hideIcebreakerAnswer,
+  revealIcebreakerAnswer,
   setNoteRevealed,
   setReviewFocus,
   recordReviewOutcome,
@@ -52,7 +53,6 @@ import type {
   ActionStatus,
   Board,
   GameEvent,
-  IcebreakerCommand,
   RetroPhase,
   ReviewOutcome,
   TimerAction,
@@ -64,14 +64,13 @@ import {ActionReview} from '@/components/ActionReview';
 import {BoardColumn} from '@/components/BoardColumn';
 import {CursorLayer} from '@/components/CursorLayer';
 import {EmptyState} from '@/components/EmptyState';
-import {IcebreakerPreview} from '@/components/icebreaker/IcebreakerPreview';
 import {IcebreakerRecap} from '@/components/icebreaker/IcebreakerRecap';
-import {IcebreakerStage} from '@/components/icebreaker/IcebreakerStage';
+import {IcebreakerStep} from '@/components/icebreaker/IcebreakerStep';
 import {LobbyView} from '@/components/lobby/LobbyView';
 import {WheelGun} from '@/components/lobby/WheelGun';
 import {useAuth} from '@/contexts/AuthContext';
 import {useToast} from '@/contexts/ToastContext';
-import {BoardToolbar} from '@/components/BoardToolbar';
+import {BoardToolbar, PHASE_LABELS} from '@/components/BoardToolbar';
 import {PresenceBar} from '@/components/PresenceBar';
 import {RetroHeader} from '@/components/RetroHeader';
 import {SpeakingOrder} from '@/components/SpeakingOrder';
@@ -316,16 +315,20 @@ export const RetroPage = () => {
       updateRetro(retroId as string, {timer: {action, seconds}}),
     ...boardMutationOptions,
   });
-  const icebreakerMutation = useMutation({
-    mutationFn: (command: IcebreakerCommand) => sendIcebreakerCommand(retroId as string, command),
-    ...boardMutationOptions,
-  });
   const answerMutation = useMutation({
     mutationFn: (text: string) => answerIcebreaker(retroId as string, text),
     ...boardMutationOptions,
   });
   const removeAnswerMutation = useMutation({
     mutationFn: () => removeIcebreakerAnswer(retroId as string),
+    ...boardMutationOptions,
+  });
+  const revealAnswerMutation = useMutation({
+    mutationFn: () => revealIcebreakerAnswer(retroId as string),
+    ...boardMutationOptions,
+  });
+  const hideAnswerMutation = useMutation({
+    mutationFn: () => hideIcebreakerAnswer(retroId as string),
     ...boardMutationOptions,
   });
   const revealMutation = useMutation({
@@ -469,9 +472,10 @@ export const RetroPage = () => {
     phaseMutation,
     maxVotesMutation,
     timerMutation,
-    icebreakerMutation,
     answerMutation,
     removeAnswerMutation,
+    revealAnswerMutation,
+    hideAnswerMutation,
     takeFacilitationMutation,
     revealMutation,
     hideMutation,
@@ -533,6 +537,7 @@ export const RetroPage = () => {
   };
 
   const isLobby = board.phase === 'LOBBY';
+  const isIcebreaker = board.phase === 'ICEBREAKER' && board.icebreaker !== null;
   const isSettingUp = isLobby && board.isFacilitator && lobbyTab === 'setup';
   const isRolling = board.phase === 'DISCUSS' && isConnected;
   const canEditColumns = COLUMN_EDIT_PHASES.includes(board.phase);
@@ -654,51 +659,66 @@ export const RetroPage = () => {
         receivedAt={dataUpdatedAt}
       />
 
-      {isLobby ? (
+      {isLobby || isIcebreaker ? (
         <LobbyView
           facilitatorId={board.facilitatorId}
-          game={<WheelGun game={game} isConnected={isConnected} participants={participants} userId={user?.id} />}
+          game={
+            isLobby ? (
+              <WheelGun game={game} isConnected={isConnected} participants={participants} userId={user?.id} />
+            ) : undefined
+          }
+          icebreaker={
+            isIcebreaker && board.icebreaker ? (
+              <IcebreakerStep
+                icebreaker={board.icebreaker}
+                isBusy={isBusy}
+                onAnswer={(text) => answerMutation.mutate(text)}
+                onHide={() => hideAnswerMutation.mutate()}
+                onRemoveAnswer={() => removeAnswerMutation.mutate()}
+                onReveal={() => revealAnswerMutation.mutate()}
+                participants={participants}
+              />
+            ) : undefined
+          }
           isConnected={isConnected}
           isFacilitator={board.isFacilitator}
           isStarting={phaseMutation.isPending}
           isTakingOver={takeFacilitationMutation.isPending}
           members={members}
           onSetUpBoard={() => setLobbyTab('setup')}
+          onSkipIcebreaker={
+            isLobby && board.icebreaker
+              ? () => phaseMutation.mutate(nextOpeningPhase({...board, icebreaker: null}))
+              : undefined
+          }
           onStart={() => phaseMutation.mutate(nextOpeningPhase(board))}
           onTakeOver={() => takeFacilitationMutation.mutate()}
           open={!isSettingUp}
           participants={participants}
           preview={
-            board.isFacilitator ? (
-              <Stack spacing={1.5}>
-                <IcebreakerPreview
-                  icebreaker={board.icebreaker}
-                  isBusy={icebreakerMutation.isPending}
-                  isFacilitator={board.isFacilitator}
-                  onCustom={(text) => icebreakerMutation.mutate({action: 'custom', text})}
-                  onDraw={() => icebreakerMutation.mutate({action: 'draw'})}
-                />
-                {board.review.items.length > 0 ? (
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={board.review.enabled}
-                        disabled={actionReviewMutation.isPending}
-                        onChange={(event) => actionReviewMutation.mutate(event.target.checked)}
-                        size="small"
-                      />
-                    }
-                    label={`Review ${board.review.items.length} open action${
-                      board.review.items.length === 1 ? '' : 's'
-                    } first`}
+            board.isFacilitator && isLobby && board.review.items.length > 0 ? (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={board.review.enabled}
+                    disabled={actionReviewMutation.isPending}
+                    onChange={(event) => actionReviewMutation.mutate(event.target.checked)}
+                    size="small"
                   />
-                ) : null}
-              </Stack>
+                }
+                label={`Review ${board.review.items.length} open action${
+                  board.review.items.length === 1 ? '' : 's'
+                } first`}
+              />
             ) : undefined
           }
           retroTitle={board.title}
           startLabel={
-            nextOpeningPhase(board) === 'ICEBREAKER' ? 'Start with the icebreaker' : 'Start the retro'
+            isIcebreaker
+              ? `Move on to ${PHASE_LABELS[nextOpeningPhase(board)]}`
+              : nextOpeningPhase(board) === 'ICEBREAKER'
+                ? 'Start with the icebreaker'
+                : 'Start the retro'
           }
           teamName={teams?.find(({id}) => id === board.teamId)?.name}
         />
@@ -715,21 +735,7 @@ export const RetroPage = () => {
         </Stack>
       ) : null}
 
-      {board.phase === 'ICEBREAKER' && board.icebreaker ? (
-        // Before everything else: the phase has no columns, and a blank board must not hide it.
-        <IcebreakerStage
-          icebreaker={board.icebreaker}
-          isBusy={icebreakerMutation.isPending || answerMutation.isPending || removeAnswerMutation.isPending}
-          isFacilitator={board.isFacilitator}
-          onAnswer={(text) => answerMutation.mutate(text)}
-          onCustom={(text) => icebreakerMutation.mutate({action: 'custom', text})}
-          onDraw={() => icebreakerMutation.mutate({action: 'draw'})}
-          onHide={() => icebreakerMutation.mutate({action: 'hideAnswers'})}
-          onRemoveAnswer={() => removeAnswerMutation.mutate()}
-          onReveal={() => icebreakerMutation.mutate({action: 'revealAnswers'})}
-          participants={participants}
-        />
-      ) : board.phase === 'REVIEW' ? (
+      {board.phase === 'REVIEW' ? (
         <ActionReview
           facilitatorName={facilitatorName}
           isBusy={outcomeMutation.isPending || focusMutation.isPending}

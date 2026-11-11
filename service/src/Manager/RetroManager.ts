@@ -166,7 +166,7 @@ export class RetroManager {
 
     const id = uuid();
     const icebreakerQuestionId = (options.icebreaker ?? false)
-      ? await this.icebreakerManager.drawFor(auth, {icebreakerQuestionId: null, id, teamId})
+      ? await this.icebreakerManager.drawFor(auth, {id, teamId})
       : null;
 
     // One transaction: a failure leaves neither a retro without its columns nor orphan columns.
@@ -253,29 +253,26 @@ export class RetroManager {
   }
 
   /**
-   * Answers are signed, like notes: everyone sees who answered, nobody reads an answer but
-   * its author until the facilitator reveals them, the facilitator included. Before the
-   * question is asked it is the facilitator's preview alone, and a question never asked
-   * disappears once the retro moves on, for everyone.
+   * Answers are post-its, signed like notes: everyone sees who answered, and the text reaches
+   * the others only once its author shares it. The question stays a surprise until it is
+   * asked, for everyone; a question never asked disappears once the retro moves on.
    */
   public static buildIcebreaker(
     retro: RetroRow,
     answers: IcebreakerAnswerRow[],
     userId: string,
   ): IcebreakerModel | null {
-    const hasQuestion = retro.icebreakerQuestionId !== null || retro.icebreakerCustomText !== null;
     const isAsked = retro.icebreakerAskedAt !== null;
 
-    if (!hasQuestion || (!isAsked && retro.phase !== 'LOBBY')) {
+    if (retro.icebreakerQuestionId === null || (!isAsked && retro.phase !== 'LOBBY')) {
       return null;
     }
-
-    const revealed = Boolean(retro.icebreakerAnswersRevealed);
 
     return {
       answeredCount: answers.length,
       answers: answers.map((answer) => {
         const mine = answer.userId === userId;
+        const revealed = Boolean(answer.revealed);
 
         return {
           author: {
@@ -284,29 +281,25 @@ export class RetroManager {
             ...(answer.authorPictureUrl ? {pictureUrl: answer.authorPictureUrl} : {}),
           },
           mine,
+          revealed,
           text: revealed || mine ? answer.text : '',
         };
       }),
-      answersRevealed: revealed,
-      question: isAsked || retro.facilitatorId === userId ? RetroManager.toQuestion(retro) : null,
+      question: isAsked ? RetroManager.toQuestion(retro) : null,
       state: isAsked ? 'ASKED' : 'WAITING',
     };
   }
 
   private static toQuestion(retro: RetroRow): IcebreakerQuestionModel {
-    if (retro.icebreakerCustomText !== null) {
-      return {source: 'CUSTOM', text: retro.icebreakerCustomText};
-    }
-
     const question = QUESTIONS_BY_ID.get(retro.icebreakerQuestionId ?? '');
 
     if (!question) {
       logger.error({questionId: retro.icebreakerQuestionId, retroId: retro.id}, 'Unknown icebreaker question');
 
-      return {source: 'CUSTOM', text: ''};
+      return {id: retro.icebreakerQuestionId ?? '', text: ''};
     }
 
-    return {category: question.category, id: question.id, source: 'BANK', text: question.text};
+    return {id: question.id, text: question.text};
   }
 
   /**
@@ -452,7 +445,7 @@ export class RetroManager {
     const icebreakerChanges: UpdateRetroInput = {};
 
     if (changes.phase === 'ICEBREAKER' && retro.phase !== 'ICEBREAKER') {
-      if (retro.icebreakerQuestionId === null && retro.icebreakerCustomText === null) {
+      if (retro.icebreakerQuestionId === null) {
         icebreakerChanges.icebreakerQuestionId = await this.icebreakerManager.drawFor(auth, retro);
       }
 

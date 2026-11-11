@@ -20,9 +20,7 @@ const RETRO_COLUMNS = [
   'templateName',
   'defaultTimerSeconds',
   'icebreakerQuestionId',
-  'icebreakerCustomText',
   'icebreakerAskedAt',
-  'icebreakerAnswersRevealed',
   'actionReview',
   'reviewFocusActionId',
 ] as const;
@@ -47,9 +45,7 @@ export interface CreateRetroInput {
 export interface UpdateRetroInput {
   actionReview?: number;
   facilitatorId?: string;
-  icebreakerAnswersRevealed?: number;
   icebreakerAskedAt?: string | null;
-  icebreakerCustomText?: string | null;
   icebreakerQuestionId?: string | null;
   maxVotes?: number;
   phase?: RetroPhase;

@@ -32,7 +32,7 @@ import {COLUMN_EDIT_PHASES, hasReviewStep, nextOpeningPhase} from '@/utils/phase
 import {boardAuthors} from '@/utils/authorFilter';
 import {WASH_EDGE} from '@/theme/texture';
 
-const PHASE_LABELS: Record<RetroPhase, string> = {
+export const PHASE_LABELS: Record<RetroPhase, string> = {
   ARCHIVED: 'Archived',
   BRAINSTORM: 'Brainstorm',
   DISCUSS: 'Discuss',
@@ -47,7 +47,7 @@ const PHASE_HINTS: Record<RetroPhase, string> = {
   ARCHIVED: 'This retro is archived and read-only.',
   BRAINSTORM: 'Others see that you are writing, not what. Write freely.',
   DISCUSS: 'Going through the topics in vote order.',
-  ICEBREAKER: 'Answer in one line, or out loud.',
+  ICEBREAKER: 'Answer on a post-it, or out loud.',
   LOBBY: 'The retro has not started yet. Say hello while everyone arrives.',
   REVIEW: 'Did we do what we decided?',
   SHARE: 'Share your notes to make them readable. You can hide them again. A note added now is shared at once.',

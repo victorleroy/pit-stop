@@ -11,6 +11,7 @@ export const InlineEditor = ({
   onClose,
   onSave,
   placeholder,
+  showCount = false,
   sx,
   value,
 }: {
@@ -22,6 +23,8 @@ export const InlineEditor = ({
   onClose: () => void;
   onSave: (text: string) => void;
   placeholder?: string;
+  /** A `n/max` counter under the field; needs `maxLength`. */
+  showCount?: boolean;
   sx?: object;
   value: string;
 }) => {
@@ -45,6 +48,7 @@ export const InlineEditor = ({
     <Stack direction="row" spacing={0.5} sx={{alignItems: 'flex-start', flexGrow: 1, minWidth: 0}}>
       <TextField
         fullWidth
+        helperText={showCount && maxLength ? `${draft.length}/${maxLength}` : undefined}
         inputRef={inputRef}
         multiline={multiline}
         onBlur={() => finish(true)}

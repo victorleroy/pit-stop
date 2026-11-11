@@ -8,12 +8,9 @@ export interface RetroRow {
   createdBy: string;
   defaultTimerSeconds: number | null;
   facilitatorId: string;
-  /** Always 0 or 1. */
-  icebreakerAnswersRevealed: number;
   /** Set on entering ICEBREAKER: from then on the question is asked, and counts as used. */
   icebreakerAskedAt: string | null;
-  /** A bank question or the facilitator's own text, never both (CHECK). */
-  icebreakerCustomText: string | null;
+  /** A bank question. */
   icebreakerQuestionId: string | null;
   id: string;
   maxVotes: number;
@@ -92,6 +89,7 @@ export interface IcebreakerAnswerRow {
   authorName: string;
   authorPictureUrl: string | null;
   createdAt: string;
+  revealed: number;
   text: string;
   userId: string;
 }
@@ -184,6 +182,7 @@ export class BoardRepository {
           'users.name as authorName',
           'users.pictureUrl as authorPictureUrl',
           'icebreakerAnswers.text',
+          'icebreakerAnswers.revealed',
           'icebreakerAnswers.createdAt',
         ])
         .where('icebreakerAnswers.retroId', '=', retro.id)

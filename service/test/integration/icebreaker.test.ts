@@ -67,11 +67,12 @@ describe('icebreaker', () => {
       expect(created.icebreaker).toBeNull();
     });
 
-    it('draws a question in the waiting room, shown to the facilitator alone', async () => {
+    it('draws a question in the waiting room, kept a surprise for everyone', async () => {
       const created = await create();
 
-      expect(created.icebreaker).toMatchObject({answeredCount: 0, question: {source: 'BANK'}, state: 'WAITING'});
-      expect((await board(member, created.id)).icebreaker).toMatchObject({question: null, state: 'WAITING'});
+      expect(created.icebreaker).toEqual({answeredCount: 0, answers: [], question: null, state: 'WAITING'});
+      expect((await board(member, created.id)).icebreaker).toEqual(created.icebreaker);
+      expect((await askedId(created.id)).icebreakerQuestionId).toMatch(/^fun-/);
       expect((await askedId(created.id)).icebreakerAskedAt).toBeNull();
     });
 
@@ -92,7 +93,7 @@ describe('icebreaker', () => {
       const asked = await ask(id);
       const {icebreakerAskedAt} = await askedId(id);
 
-      expect(asked.icebreaker).toMatchObject({question: {source: 'BANK'}, state: 'ASKED'});
+      expect(asked.icebreaker).toMatchObject({question: {id: expect.stringMatching(/^fun-/)}, state: 'ASKED'});
       expect((await board(member, id)).icebreaker?.question).not.toBeNull();
       expect(icebreakerAskedAt).not.toBeNull();
 
@@ -106,7 +107,7 @@ describe('icebreaker', () => {
       const {id} = await create(false);
       const asked = await ask(id);
 
-      expect(asked.icebreaker).toMatchObject({question: {source: 'BANK'}, state: 'ASKED'});
+      expect(asked.icebreaker).toMatchObject({question: {id: expect.stringMatching(/^fun-/)}, state: 'ASKED'});
     });
 
     it('forgets a question never asked once the retro moves on', async () => {
@@ -135,63 +136,10 @@ describe('icebreaker', () => {
     });
   });
 
-  describe('choosing the question', () => {
-    it('draws another question or takes the facilitator own, in the waiting room', async () => {
-      const {id} = await create();
-      const first = (await board(facilitator, id)).icebreaker?.question;
-      const drawn = await icebreaker().command(facilitator, id, 'draw');
+  it('has no route left to change the question', async () => {
+    const {id} = await create();
 
-      expect(drawn.icebreaker?.question).not.toEqual(first);
-
-      const custom = await icebreaker().command(facilitator, id, 'custom', '  Coffee or tea?  ');
-
-      expect(custom.icebreaker?.question).toEqual({source: 'CUSTOM', text: 'Coffee or tea?'});
-      expect((await askedId(id)).icebreakerQuestionId).toBeNull();
-    });
-
-    it('adds an icebreaker to a retro created without one', async () => {
-      const {id} = await create(false);
-
-      expect((await icebreaker().command(facilitator, id, 'draw')).icebreaker?.state).toBe('WAITING');
-    });
-
-    it('is the facilitator own', async () => {
-      const {id} = await create();
-
-      expect((await request(`/retros/${id}/icebreaker`, {body: json({action: 'draw'}), method: 'PATCH'})).status).toBe(403);
-    });
-
-    it('refuses an empty or over-long question, and an unknown command', async () => {
-      const {id} = await create();
-      const patch = (body: unknown) =>
-        request(`/retros/${id}/icebreaker`, {body: json(body), method: 'PATCH'}, facilitator);
-
-      expect((await patch({action: 'custom', text: '   '})).status).toBe(400);
-      expect((await patch({action: 'custom', text: 'x'.repeat(201)})).status).toBe(400);
-      expect((await patch({action: 'custom'})).status).toBe(400);
-      expect((await patch({action: 'ask'})).status).toBe(400);
-      expect((await patch({action: 'custom', text: 'x'.repeat(200)})).status).toBe(200);
-    });
-
-    it('clears the answers and hides them again when the asked question changes', async () => {
-      const {id} = await create();
-
-      await ask(id);
-      await icebreaker().answer(member, id, 'Tea');
-      await icebreaker().command(facilitator, id, 'revealAnswers');
-
-      const changed = await icebreaker().command(facilitator, id, 'draw');
-
-      expect(changed.icebreaker).toMatchObject({answeredCount: 0, answers: [], answersRevealed: false, state: 'ASKED'});
-    });
-
-    it('is refused outside the waiting room and the icebreaker', async () => {
-      const {id} = await create();
-
-      await retros().updateRetro(facilitator, id, {phase: 'BRAINSTORM'});
-
-      await expect(icebreaker().command(facilitator, id, 'draw')).rejects.toMatchObject({status: 403});
-    });
+    expect((await request(`/retros/${id}/icebreaker`, {body: json({action: 'draw'}), method: 'PATCH'}, facilitator)).status).toBe(404);
   });
 
   describe('answers', () => {
@@ -212,8 +160,39 @@ describe('icebreaker', () => {
       const replaced = await icebreaker().answer(member, retroId, 'Coffee');
 
       expect(replaced.icebreaker?.answers).toEqual([
-        {author: {id: member.userId, name: 'Alice'}, mine: true, text: 'Coffee'},
+        {author: {id: member.userId, name: 'Alice'}, mine: true, revealed: false, text: 'Coffee'},
       ]);
+    });
+
+    it('is hidden when written, and its author alone shares or hides it again', async () => {
+      await ask(retroId);
+      await icebreaker().answer(member, retroId, 'Tea');
+
+      const reveal = (method: 'DELETE' | 'POST', auth: AuthContext = member) =>
+        request(`/retros/${retroId}/icebreaker/answer/reveal`, {method}, auth);
+      const seenByFacilitator = async () => (await board(facilitator, retroId)).icebreaker?.answers[0];
+
+      expect(await seenByFacilitator()).toMatchObject({revealed: false, text: ''});
+      expect((await board(member, retroId)).icebreaker?.answers[0]).toMatchObject({revealed: false, text: 'Tea'});
+
+      expect((await reveal('POST')).status).toBe(200);
+      expect((await reveal('POST')).status).toBe(200);
+      expect(await seenByFacilitator()).toMatchObject({revealed: true, text: 'Tea'});
+
+      // A new text keeps the post-it shared.
+      await icebreaker().answer(member, retroId, 'Coffee');
+      expect(await seenByFacilitator()).toMatchObject({revealed: true, text: 'Coffee'});
+
+      expect((await reveal('DELETE')).status).toBe(200);
+      expect(await seenByFacilitator()).toMatchObject({revealed: false, text: ''});
+    });
+
+    it('cannot be shown or hidden by someone without an answer', async () => {
+      await ask(retroId);
+      await icebreaker().answer(member, retroId, 'Tea');
+
+      expect((await request(`/retros/${retroId}/icebreaker/answer/reveal`, {method: 'POST'}, facilitator)).status).toBe(404);
+      expect((await board(member, retroId)).icebreaker?.answers[0]?.revealed).toBe(false);
     });
 
     it('refuses an empty or over-long answer', async () => {
@@ -248,17 +227,14 @@ describe('icebreaker', () => {
       for (const attempt of [
         () => icebreaker().answer(member, retroId, 'Tea'),
         () => icebreaker().removeAnswer(member, retroId),
-        () => icebreaker().command(facilitator, retroId, 'draw'),
-        () => icebreaker().command(facilitator, retroId, 'custom', 'Hi?'),
-        () => icebreaker().command(facilitator, retroId, 'revealAnswers'),
-        () => icebreaker().command(facilitator, retroId, 'hideAnswers'),
+        () => icebreaker().setRevealed(member, retroId, false),
       ]) {
         await expect(attempt()).rejects.toMatchObject({status: 409});
       }
     });
 
-    it('can only be revealed during the icebreaker', async () => {
-      await expect(icebreaker().command(facilitator, retroId, 'revealAnswers')).rejects.toMatchObject({status: 403});
+    it('can only be shown or hidden during the icebreaker', async () => {
+      await expect(icebreaker().setRevealed(member, retroId, false)).rejects.toMatchObject({status: 403});
     });
 
     it('are deleted with the retro', async () => {
@@ -273,6 +249,8 @@ describe('icebreaker', () => {
   });
 
   describe('history', () => {
+    const questionOf = async (retroId: string) => (await askedId(retroId)).icebreakerQuestionId;
+
     beforeEach(() => {
       // Always the first candidate: what the draw leaves out is all that varies.
       jest.spyOn(Math, 'random').mockReturnValue(0);
@@ -282,31 +260,26 @@ describe('icebreaker', () => {
       const first = await create(true, 'One');
       const second = await create(true, 'Two');
 
-      expect(second.icebreaker?.question).not.toEqual(first.icebreaker?.question);
+      expect(await questionOf(second.id)).not.toEqual(await questionOf(first.id));
 
       await ask(first.id);
       await retros().remove(facilitator, second.id);
 
       const third = await create(true, 'Three');
 
-      expect(third.icebreaker?.question).not.toEqual(first.icebreaker?.question);
+      expect(await questionOf(third.id)).not.toEqual(await questionOf(first.id));
     });
 
-    it('does not count a question skipped by a new draw, or a deleted retro, as asked', async () => {
+    it('does not count the question of a deleted retro as asked', async () => {
       const first = await create(true, 'One');
-      const skipped = first.icebreaker?.question;
 
-      await icebreaker().command(facilitator, first.id, 'draw');
+      await ask(first.id);
 
-      expect((await create(true, 'Two')).icebreaker?.question).toEqual(skipped);
-
-      const asked = await ask(first.id);
+      const asked = await questionOf(first.id);
 
       await retros().remove(facilitator, first.id);
 
-      const other = await retros().create(facilitator, teamId, 'Three', {icebreaker: true});
-
-      expect([skipped, asked.icebreaker?.question]).toContainEqual(other.icebreaker?.question);
+      expect(await questionOf((await create(true, 'Two')).id)).toEqual(asked);
     });
 
     it('releases the question of a waiting room left without the icebreaker', async () => {
@@ -314,7 +287,7 @@ describe('icebreaker', () => {
 
       await retros().updateRetro(facilitator, first.id, {phase: 'BRAINSTORM'});
 
-      expect((await create(true, 'Two')).icebreaker?.question).toEqual(first.icebreaker?.question);
+      expect(await questionOf((await create(true, 'Two')).id)).toEqual(await questionOf(first.id));
     });
 
     it('is kept per team', async () => {
@@ -325,17 +298,8 @@ describe('icebreaker', () => {
       const otherTeam = await harness.createTeam(facilitator);
       const elsewhere = await retros().create(facilitator, otherTeam, 'Elsewhere', {icebreaker: true});
 
-      expect(elsewhere.icebreaker?.question).toEqual(first.icebreaker?.question);
+      expect(await questionOf(elsewhere.id)).toEqual(await questionOf(first.id));
     });
-  });
-
-  it('gives the preview to whoever takes the facilitation over', async () => {
-    const {id} = await create();
-
-    await harness.container.adminManager.takeFacilitation(member, id);
-
-    expect((await board(member, id)).icebreaker?.question).not.toBeNull();
-    expect((await board(facilitator, id)).icebreaker?.question).toBeNull();
   });
 
   it('keeps the votes when going back to the icebreaker, and freezes the budget there', async () => {

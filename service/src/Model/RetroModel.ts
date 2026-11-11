@@ -53,18 +53,17 @@ export interface RetroSummaryModel {
   title: string;
 }
 
-export type IcebreakerCategoryModel = 'FUN';
-
-/** A bank question travels in both languages: the reader's browser picks one. */
-export type IcebreakerQuestionModel =
-  | {category: IcebreakerCategoryModel; id: string; source: 'BANK'; text: {en: string; fr: string}}
-  | {source: 'CUSTOM'; text: string};
+export interface IcebreakerQuestionModel {
+  id: string;
+  text: string;
+}
 
 export interface IcebreakerAnswerModel {
   /** Always present: answers are signed. */
   author: NoteAuthorModel;
   mine: boolean;
-  /** Empty until the answers are revealed, except for the author's own. */
+  /** Its author shows or hides it; a hidden answer reaches the others with an empty text. */
+  revealed: boolean;
   text: string;
 }
 
@@ -72,8 +71,7 @@ export interface IcebreakerModel {
   answeredCount: number;
   /** Oldest first. */
   answers: IcebreakerAnswerModel[];
-  answersRevealed: boolean;
-  /** Null for everyone but the facilitator until the question is asked. */
+  /** Null until the question is asked: the waiting room only knows there is one. */
   question: IcebreakerQuestionModel | null;
   /** WAITING exists in LOBBY only: drawn, not asked yet. */
   state: 'ASKED' | 'WAITING';

@@ -13,8 +13,8 @@ public domain under CC0-1.0, so a self-hosted copy can change it without trackin
 contribution to that file is made under CC0-1.0.
 
 A question of the bank is original (never copied from another list), light and playful,
-answerable in one short sentence, and stays clear of family, health, religion, politics and money. It exists in English
-and French, at most 140 characters each. Retire a question with `active: false`; never delete
+answerable in one short sentence, and stays clear of family, health, religion, politics and money. It is written in
+English, at most 140 characters. Retire a question with `active: false`; never delete
 it or reuse its id.
 
 ## Before writing code

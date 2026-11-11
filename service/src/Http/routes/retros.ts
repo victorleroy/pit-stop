@@ -4,7 +4,7 @@ import type {ActionReviewOutcome, RetroPhase} from '~/Db/schema';
 import {RenameClusterDto, GroupNoteDto} from '~/Dto/Retro/ClusterDto';
 import {CreateColumnDto, ReorderColumnsDto, UpdateColumnDto} from '~/Dto/Retro/ColumnDto';
 import {CreateRetroDto} from '~/Dto/Retro/CreateRetroDto';
-import {IcebreakerAnswerDto, IcebreakerCommandDto} from '~/Dto/Retro/IcebreakerDto';
+import {IcebreakerAnswerDto} from '~/Dto/Retro/IcebreakerDto';
 import {CreateNoteDto, UpdateNoteDto} from '~/Dto/Retro/NoteDto';
 import {UpdateRetroDto} from '~/Dto/Retro/UpdateRetroDto';
 import {ReviewFocusDto, ReviewOutcomeDto} from '~/Dto/Retro/ReviewDto';
@@ -14,7 +14,6 @@ import {HandOverDto} from '~/Dto/Admin/AdminDto';
 import type {Variables} from '~/Http/middleware/auth';
 import {validateBody} from '~/Http/middleware/validate';
 import type {TimerAction} from '~/Model/TimerModel';
-import type {IcebreakerAction} from '~/Manager/IcebreakerManager';
 import type {AuthContext} from '~/Security/AuthContext';
 import {logger} from '~/logger';
 
@@ -300,21 +299,6 @@ export const retroRoutes = (c: Container) => {
 
   // --------------------------------------------------------------- icebreaker
 
-  app.patch('/retros/:retroId/icebreaker', async (context) => {
-    const retroId = context.req.param('retroId');
-    const body = await validateBody(context, IcebreakerCommandDto);
-    const board = await c.hub.run(retroId, () =>
-      c.icebreakerManager.command(
-        context.get('auth'),
-        retroId,
-        body.action as IcebreakerAction,
-        body.text,
-      ),
-    );
-
-    return context.json(board);
-  });
-
   app.put('/retros/:retroId/icebreaker/answer', async (context) => {
     const retroId = context.req.param('retroId');
     const body = await validateBody(context, IcebreakerAnswerDto);
@@ -329,6 +313,24 @@ export const retroRoutes = (c: Container) => {
     const retroId = context.req.param('retroId');
     const board = await c.hub.run(retroId, () =>
       c.icebreakerManager.removeAnswer(context.get('auth'), retroId),
+    );
+
+    return context.json(board);
+  });
+
+  app.post('/retros/:retroId/icebreaker/answer/reveal', async (context) => {
+    const retroId = context.req.param('retroId');
+    const board = await c.hub.run(retroId, () =>
+      c.icebreakerManager.setRevealed(context.get('auth'), retroId, true),
+    );
+
+    return context.json(board);
+  });
+
+  app.delete('/retros/:retroId/icebreaker/answer/reveal', async (context) => {
+    const retroId = context.req.param('retroId');
+    const board = await c.hub.run(retroId, () =>
+      c.icebreakerManager.setRevealed(context.get('auth'), retroId, false),
     );
 
     return context.json(board);

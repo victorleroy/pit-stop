@@ -10,7 +10,7 @@ import type {Note} from '@/api/types';
 import {InlineEditor} from '@/components/InlineEditor';
 import {UserAvatar} from '@/components/UserAvatar';
 import {SLIPSTREAM} from '@/ui/theme';
-import {PAPER_SHADOW, PAPER_SHADOW_RAISED, noteColours} from '@/theme/texture';
+import {PAPER_SHADOW_RAISED, noteSurfaceSx, withheldLineSx} from '@/theme/texture';
 import {startNoteDrag} from '@/utils/noteDrag';
 
 export const NoteCard = ({
@@ -48,7 +48,6 @@ export const NoteCard = ({
 }) => {
   const [isEditing, setIsEditing] = useState(false);
 
-  const {ink, paper} = noteColours(columnIndex);
   const canMove = note.isMine || isFacilitator;
   // Anyone can carry a shared note onto another card to group them, without owning it.
   const canHandle = canDrag && (canMove || (canGroup && note.revealed));
@@ -67,19 +66,7 @@ export const NoteCard = ({
         '&:hover': canHandle
           ? {boxShadow: PAPER_SHADOW_RAISED, transform: 'translateY(-2px)'}
           : undefined,
-        // A withheld note is face down: no paper colour, nothing to read, a closed padlock.
-        // Anonymity is the product's whole promise, so it has to be a state you can see
-        // across the room rather than a line of grey small print.
-        backgroundColor: isWithheld ? SLIPSTREAM.surface : paper,
-        backgroundImage: isWithheld
-          ? 'none'
-          : 'linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 38%)',
-        border: isWithheld ? '1px dashed #CFD7E3' : 0,
-        // Your own notes, shared or not, keep their paper and gain an indigo edge.
-        borderLeft: note.isMine ? `3px solid ${SLIPSTREAM.indigo}` : undefined,
-        borderRadius: '10px',
-        boxShadow: isWithheld ? 'none' : PAPER_SHADOW,
-        color: isWithheld ? SLIPSTREAM.inkMuted : ink,
+        ...noteSurfaceSx(columnIndex, {isMine: note.isMine, isWithheld}),
         cursor: canHandle && !isEditing ? 'grab' : 'default',
         opacity: isDimmed ? 0.3 : 1,
         p: 1.25,
@@ -97,24 +84,8 @@ export const NoteCard = ({
           />
         ) : isWithheld ? (
           <Stack aria-label="Not shared yet" spacing={0.75} sx={{py: 0.5}}>
-            <Box
-              sx={{
-                background:
-                  'repeating-linear-gradient(45deg, #E9EEF5 0 6px, #F4F7FB 6px 12px)',
-                borderRadius: 999,
-                height: 8,
-                width: '88%',
-              }}
-            />
-            <Box
-              sx={{
-                background:
-                  'repeating-linear-gradient(45deg, #E9EEF5 0 6px, #F4F7FB 6px 12px)',
-                borderRadius: 999,
-                height: 8,
-                width: '60%',
-              }}
-            />
+            <Box sx={withheldLineSx('88%')} />
+            <Box sx={withheldLineSx('60%')} />
           </Stack>
         ) : (
           <Typography

@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import {cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {cleanup, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {MemoryRouter, Route, Routes} from 'react-router-dom';
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {fetchBoard, updateRetro} from '@/api/retros';
+import {answerIcebreaker, fetchBoard, hideIcebreakerAnswer, revealIcebreakerAnswer, updateRetro} from '@/api/retros';
 import {fetchTeamMembers, fetchTeams} from '@/api/teams';
 import type {Board} from '@/api/types';
 import {ToastProvider} from '@/contexts/ToastContext';
@@ -36,7 +36,10 @@ vi.mock('@/components/CursorLayer', () => ({CursorLayer: () => <div data-testid=
 vi.mock('@/api/teams', () => ({fetchTeamMembers: vi.fn(), fetchTeams: vi.fn()}));
 vi.mock('@/api/retros', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/retros')>()),
+  answerIcebreaker: vi.fn(),
   fetchBoard: vi.fn(),
+  hideIcebreakerAnswer: vi.fn(),
+  revealIcebreakerAnswer: vi.fn(),
   updateRetro: vi.fn(),
 }));
 
@@ -151,41 +154,135 @@ describe('RetroPage in the waiting room', () => {
   });
 });
 
-describe('RetroPage in the icebreaker', () => {
+describe('RetroPage with an icebreaker', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  const icebreakerBoard = (columns: Board['columns']) =>
+  const columns = [{cards: [], id: 'c1', order: 0, title: 'Start'}] as unknown as Board['columns'];
+  const icebreakerBoard = (overrides: Partial<Board> = {}, isFacilitator = true) =>
     ({
-      ...board(true),
-      columns,
+      ...board(isFacilitator),
       icebreaker: {
         answeredCount: 0,
         answers: [],
-        answersRevealed: false,
-        question: {source: 'CUSTOM', text: 'Best lunch this week?'},
+        question: {id: 'q1', text: 'Best lunch this week?'},
         state: 'ASKED',
       },
       phase: 'ICEBREAKER',
+      ...overrides,
     }) as unknown as Board;
 
-  it('shows the question instead of the empty board, without cursors', async () => {
-    renderPage(icebreakerBoard([]));
+  it('offers the facilitator the icebreaker or the retro straight away from the waiting room', async () => {
+    vi.mocked(updateRetro).mockResolvedValue(icebreakerBoard());
+    const lobby = {...board(true), icebreaker: {answeredCount: 0, answers: [], question: null, state: 'WAITING'}} as unknown as Board;
+    renderPage(lobby);
 
-    expect(await screen.findByRole('heading', {name: 'Best lunch this week?'})).toBeTruthy();
-    expect(screen.queryByText('Add at least one column to start')).toBeNull();
-    expect(screen.queryByTestId('cursors')).toBeNull();
-    expect(screen.getByRole('button', {name: 'Move on to Brainstorm'})).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', {name: 'Start with the icebreaker'}));
+    await waitFor(() => expect(updateRetro).toHaveBeenCalledWith('r1', {phase: 'ICEBREAKER'}));
+
+    fireEvent.click(screen.getByRole('button', {name: 'Start without icebreaker'}));
+    await waitFor(() => expect(updateRetro).toHaveBeenCalledWith('r1', {phase: 'BRAINSTORM'}));
   });
 
-  it('keeps the columns out of the way even when the board has some', async () => {
-    renderPage(icebreakerBoard([{cards: [], id: 'c1', order: 0, title: 'Start'}] as unknown as Board['columns']));
+  it('chains into the review when it is on: skipping the icebreaker, or moving on from it', async () => {
+    const review = {
+      enabled: true,
+      focusActionId: null,
+      items: [{action: {closedAt: null, id: 'a1', status: 'OPEN', text: 'Fix the CI'}, outcome: null}],
+    } as unknown as Board['review'];
+    vi.mocked(updateRetro).mockResolvedValue({...icebreakerBoard({review}), phase: 'REVIEW'} as Board);
+    const lobby = {
+      ...board(true),
+      icebreaker: {answeredCount: 0, answers: [], question: null, state: 'WAITING'},
+      review,
+    } as unknown as Board;
+    renderPage(lobby);
 
-    expect(await screen.findByRole('heading', {name: 'Best lunch this week?'})).toBeTruthy();
-    expect(screen.queryByText('Start', {selector: 'h3, h2, p, span'})).toBeNull();
+    expect(await screen.findByLabelText('Review 1 open action first')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', {name: 'Start without icebreaker'}));
+    await waitFor(() => expect(updateRetro).toHaveBeenCalledWith('r1', {phase: 'REVIEW'}));
+
+    cleanup();
+    vi.mocked(updateRetro).mockClear();
+    renderPage(icebreakerBoard({review}));
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Move on to Review'}));
+    await waitFor(() => expect(updateRetro).toHaveBeenCalledWith('r1', {phase: 'REVIEW'}));
+    expect(screen.queryByLabelText(/open action/)).toBeNull();
+  });
+
+  it('shows the question and the answers zone in the dialog, over the board', async () => {
+    renderPage(icebreakerBoard({columns: []}));
+
+    const dialog = await screen.findByRole('dialog', {name: 'Best lunch this week?'});
+
+    expect(within(dialog).getByRole('group', {name: 'Answers'})).toBeTruthy();
+    expect(within(dialog).queryByTestId('wheel-gun')).toBeNull();
     expect(screen.queryByTestId('cursors')).toBeNull();
+  });
+
+  it('lets the facilitator move on to brainstorm even with no column', async () => {
+    vi.mocked(updateRetro).mockResolvedValue({...icebreakerBoard(), phase: 'BRAINSTORM'} as Board);
+    renderPage(icebreakerBoard({columns: []}));
+
+    const button = (await screen.findByRole('button', {name: 'Move on to Brainstorm'})) as HTMLButtonElement;
+
+    expect(button.disabled).toBe(false);
+    fireEvent.click(button);
+
+    await waitFor(() => expect(updateRetro).toHaveBeenCalledWith('r1', {phase: 'BRAINSTORM'}));
+  });
+
+  it('makes a participant wait for the facilitator, who can be replaced when away', async () => {
+    renderPage(icebreakerBoard({columns}, false));
+
+    expect(await screen.findByText('Waiting for Fay to move on')).toBeTruthy();
+    expect(screen.queryByRole('button', {name: /Move on/})).toBeNull();
+  });
+
+  it('writes my post-it with a PUT', async () => {
+    vi.mocked(answerIcebreaker).mockResolvedValue(icebreakerBoard());
+    renderPage(icebreakerBoard());
+
+    fireEvent.click(await screen.findByRole('group', {name: 'Answers'}));
+    const field = screen.getByRole('textbox', {name: 'Your answer'});
+    fireEvent.change(field, {target: {value: ' Pasta '}});
+    fireEvent.keyDown(field, {key: 'Enter'});
+
+    await waitFor(() => expect(answerIcebreaker).toHaveBeenCalledWith('r1', 'Pasta'));
+  });
+
+  it('shows my post-it with a POST and hides it with a DELETE on the eye', async () => {
+    const withMine = (revealed: boolean) =>
+      icebreakerBoard({
+        icebreaker: {
+          answeredCount: 1,
+          answers: [{author: {id: 'f', name: 'Fay'}, mine: true, revealed, text: 'Pasta'}],
+          question: {id: 'q1', text: 'Best lunch this week?'},
+          state: 'ASKED',
+        },
+      } as Partial<Board>);
+    vi.mocked(revealIcebreakerAnswer).mockResolvedValue(withMine(true));
+    vi.mocked(hideIcebreakerAnswer).mockResolvedValue(withMine(false));
+    renderPage(withMine(false));
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Show my answer'}));
+    await waitFor(() => expect(revealIcebreakerAnswer).toHaveBeenCalledWith('r1'));
+
+    cleanup();
+    renderPage(withMine(true));
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Hide my answer'}));
+    await waitFor(() => expect(hideIcebreakerAnswer).toHaveBeenCalledWith('r1'));
+  });
+
+  it('closes the dialog for everybody once the phase is brainstorm', async () => {
+    renderPage(icebreakerBoard({columns, phase: 'BRAINSTORM'}, false));
+
+    expect(await screen.findByText('Start')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
 
@@ -195,70 +292,39 @@ describe('RetroPage after the icebreaker', () => {
     vi.clearAllMocks();
   });
 
-  it('keeps the question one click away', async () => {
-    renderPage({
+  const after = (answers: unknown[]) =>
+    ({
       ...board(true),
       icebreaker: {
-        answeredCount: 1,
-        answers: [{author: {id: 'f', name: 'Fay'}, mine: true, text: 'Pasta'}],
-        answersRevealed: true,
-        question: {source: 'CUSTOM', text: 'Best lunch this week?'},
+        answeredCount: answers.length,
+        answers,
+        question: {id: 'q1', text: 'Best lunch this week?'},
         state: 'ASKED',
       },
       phase: 'BRAINSTORM',
-    } as unknown as Board);
+    }) as unknown as Board;
+
+  it('lists only the revealed answers in the recap', async () => {
+    renderPage(
+      after([
+        {author: {id: 'f', name: 'Fay'}, mine: true, revealed: true, text: 'Pasta'},
+        {author: {id: 'b', name: 'Bea'}, mine: false, revealed: false, text: ''},
+        {author: {id: 'z', name: 'Zed'}, mine: true, revealed: false, text: 'Secret'},
+      ]),
+    );
 
     fireEvent.click(await screen.findByRole('button', {name: 'Icebreaker: Best lunch this week?'}));
 
     expect(await screen.findByText('Pasta')).toBeTruthy();
+    expect(screen.queryByText('Secret')).toBeNull();
+    expect(screen.queryByText('Bea')).toBeNull();
   });
 
-  it('says so when the answers were never revealed', async () => {
-    renderPage({
-      ...board(true),
-      icebreaker: {
-        answeredCount: 1,
-        answers: [{author: {id: 'f', name: 'Fay'}, mine: true, text: 'Pasta'}],
-        answersRevealed: false,
-        question: {source: 'CUSTOM', text: 'Best lunch this week?'},
-        state: 'ASKED',
-      },
-      phase: 'BRAINSTORM',
-    } as unknown as Board);
+  it('says so when nothing was shared', async () => {
+    renderPage(after([{author: {id: 'b', name: 'Bea'}, mine: false, revealed: false, text: ''}]));
 
     fireEvent.click(await screen.findByRole('button', {name: 'Icebreaker: Best lunch this week?'}));
 
-    expect(await screen.findByText('The answers were not revealed.')).toBeTruthy();
-    expect(screen.queryByText('Pasta')).toBeNull();
-  });
-});
-
-describe('RetroPage icebreaker preview in the waiting room', () => {
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-  });
-
-  it('shows the facilitator the preview, and a participant nothing', async () => {
-    const withQuestion = (isFacilitator: boolean) =>
-      ({
-        ...board(isFacilitator),
-        icebreaker: {
-          answeredCount: 0,
-          answers: [],
-          answersRevealed: false,
-          question: isFacilitator ? {source: 'CUSTOM', text: 'Best lunch this week?'} : null,
-          state: 'WAITING',
-        },
-      }) as unknown as Board;
-
-    renderPage(withQuestion(true));
-    expect(await screen.findByText('Best lunch this week?')).toBeTruthy();
-    expect(screen.getAllByRole('button', {hidden: true, name: 'Start with the icebreaker'})).toHaveLength(2);
-
-    cleanup();
-    renderPage(withQuestion(false));
-    await screen.findByText('Welcome to the pit stop');
-    expect(screen.queryByText('Only you can see this')).toBeNull();
+    expect(await screen.findByText('No answer was shared.')).toBeTruthy();
   });
 });

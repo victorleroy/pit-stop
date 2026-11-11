@@ -5,7 +5,6 @@ import type {
   ActionStatus,
   Board,
   DieRoll,
-  IcebreakerCommand,
   RetroPhase,
   RetroSummary,
   ReviewItem,
@@ -39,14 +38,17 @@ export const createRetro = (
   } = {},
 ) => request<Board>(`/teams/${teamId}/retros`, {body: {...options, title}, method: 'POST'});
 
-export const sendIcebreakerCommand = (retroId: string, command: IcebreakerCommand) =>
-  request<Board>(`/retros/${retroId}/icebreaker`, {body: command, method: 'PATCH'});
-
 export const answerIcebreaker = (retroId: string, text: string) =>
   request<Board>(`/retros/${retroId}/icebreaker/answer`, {body: {text}, method: 'PUT'});
 
 export const removeIcebreakerAnswer = (retroId: string) =>
   request<Board>(`/retros/${retroId}/icebreaker/answer`, {method: 'DELETE'});
+
+export const revealIcebreakerAnswer = (retroId: string) =>
+  request<Board>(`/retros/${retroId}/icebreaker/answer/reveal`, {method: 'POST'});
+
+export const hideIcebreakerAnswer = (retroId: string) =>
+  request<Board>(`/retros/${retroId}/icebreaker/answer/reveal`, {method: 'DELETE'});
 
 export const fetchBoard = (retroId: string) => request<Board>(`/retros/${retroId}`);
 

@@ -158,6 +158,42 @@ describe('migrations', () => {
     await db.destroy();
   });
 
+  it('keeps revealed icebreaker answers shared, and drops custom questions so a bank one can be drawn', () => {
+    const VISIBILITY = ALL.find((name) => name.endsWith('_icebreaker_answer_visibility.sql'))!;
+
+    migrate(file, migrationsUpTo(ALL.filter((name) => name < VISIBILITY)));
+    populate();
+
+    const before = new SQLite(file);
+
+    before.prepare("UPDATE retros SET phase = 'LOBBY', icebreaker_custom_text = 'Tea?' WHERE id = 'r1'").run();
+    before
+      .prepare("UPDATE retros SET icebreaker_custom_text = 'Coffee?', icebreaker_answers_revealed = 1 WHERE id = 'r2'")
+      .run();
+    for (const retroId of ['r1', 'r2']) {
+      before
+        .prepare(
+          `INSERT INTO icebreaker_answers (retro_id, user_id, text, created_at, updated_at)
+           VALUES (?, 'usr', 'Tea', '2026-10-01T10:00:00.000Z', '2026-10-01T10:00:00.000Z')`,
+        )
+        .run(retroId);
+    }
+    before.close();
+
+    migrate(file, MIGRATIONS);
+
+    const after = new SQLite(file);
+
+    expect(after.prepare('SELECT retro_id, revealed FROM icebreaker_answers ORDER BY retro_id').all()).toEqual([
+      {retro_id: 'r1', revealed: 0},
+      {retro_id: 'r2', revealed: 1},
+    ]);
+    expect(() =>
+      after.prepare("UPDATE retros SET icebreaker_question_id = 'fun-001' WHERE id = 'r1'").run(),
+    ).not.toThrow();
+    after.close();
+  });
+
   it('takes no backup of a fresh database', () => {
     migrate(file, MIGRATIONS);
 

@@ -98,7 +98,7 @@ describe('BoardToolbar in the waiting room', () => {
 describe('BoardToolbar and the icebreaker', () => {
   afterEach(cleanup);
 
-  const icebreaker = {answeredCount: 0, answers: [], answersRevealed: false, question: null, state: 'ASKED'} as Board['icebreaker'];
+  const icebreaker = {answeredCount: 0, answers: [], question: null, state: 'ASKED'} as Board['icebreaker'];
 
   it('opens the stepper with the icebreaker when the retro has one', () => {
     renderToolbar(board({icebreaker, phase: 'BRAINSTORM'}));
@@ -113,7 +113,7 @@ describe('BoardToolbar and the icebreaker', () => {
     renderToolbar(board({icebreaker, phase: 'ICEBREAKER'}));
 
     expect(screen.getByText('Icebreaker')).toBeTruthy();
-    expect(screen.getByText(/Answer in one line, or out loud\./)).toBeTruthy();
+    expect(screen.getByText(/Answer on a post-it, or out loud\./)).toBeTruthy();
   });
 
   it('starts the stepper with brainstorm when there is no icebreaker', () => {

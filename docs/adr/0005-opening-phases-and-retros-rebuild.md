@@ -66,8 +66,8 @@ in `board.updated` like the rest of the board.
 ### D7: Asking the icebreaker is entering its phase
 
 There is no `ask` command: `PATCH {phase: 'ICEBREAKER'}` sets `icebreaker_asked_at` (and draws a
-question if there is none) in the same queued command. Before that the question is the
-facilitator's preview in `LOBBY`, which `projectBoard` withholds from everybody else. Question
+question if there is none) in the same queued command. Until then the question is nobody's,
+the facilitator's included: it stays a surprise. Leaving `LOBBY` for any other phase skips it. Question
 and answers are persisted columns and rows, projected like the rest of the board, so they
 survive a restart; the history of asked questions is derived from `retros`, not stored apart.
 
