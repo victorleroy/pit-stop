@@ -202,7 +202,42 @@ export interface Cursor {
   y: number;
 }
 
+export type GameWheel = 'front' | 'rear';
+
+export interface GameCar {
+  id: number;
+  lane: 0 | 1 | 2;
+  livery: number;
+  spawnAt: number;
+  speed: number;
+}
+
+export interface GameScore {
+  name: string;
+  pictureUrl?: string;
+  points: number;
+  userId: string;
+}
+
+export type GameEvent =
+  | {cars: (GameCar & {taken: {front?: string; rear?: string}})[]; scores: GameScore[]; serverNow: number; teamStops: number; type: 'game.state'}
+  | {cars: GameCar[]; serverNow: number; type: 'game.spawns'}
+  | {
+      carId: number;
+      name: string;
+      pictureUrl?: string;
+      points: number;
+      serverNow: number;
+      serviced: boolean;
+      teamStops: number;
+      type: 'game.hit';
+      userId: string;
+      wheel: GameWheel;
+    }
+  | {scores: GameScore[]; teamStops: number; type: 'game.ended'};
+
 export type ServerEvent =
+  | GameEvent
   | {board: Board; type: 'board.updated'}
   | {cursor: Cursor; type: 'cursor.moved'}
   | {message: string; type: 'error'}

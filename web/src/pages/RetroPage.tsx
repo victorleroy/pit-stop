@@ -42,7 +42,7 @@ import {
   updateRetro,
 } from '@/api/retros';
 import {fetchTeamMembers, fetchTeams} from '@/api/teams';
-import type {ActionStatus, Board, RetroPhase, TimerAction} from '@/api/types';
+import type {ActionStatus, Board, GameEvent, RetroPhase, TimerAction} from '@/api/types';
 import type {ConfirmRequest} from '@/components/ConfirmDialog';
 import {ConfirmDialog} from '@/components/ConfirmDialog';
 import {ActionList} from '@/components/ActionList';
@@ -50,6 +50,7 @@ import {BoardColumn} from '@/components/BoardColumn';
 import {CursorLayer} from '@/components/CursorLayer';
 import {EmptyState} from '@/components/EmptyState';
 import {LobbyView} from '@/components/lobby/LobbyView';
+import {WheelGun} from '@/components/lobby/WheelGun';
 import {useAuth} from '@/contexts/AuthContext';
 import {useToast} from '@/contexts/ToastContext';
 import {BoardToolbar} from '@/components/BoardToolbar';
@@ -58,6 +59,7 @@ import {RetroHeader} from '@/components/RetroHeader';
 import {SpeakingOrder} from '@/components/SpeakingOrder';
 import {useBoardSocket} from '@/hooks/useBoardSocket';
 import {useDiceSpin} from '@/hooks/useDiceSpin';
+import {podiumMessage, useLobbyGame, useLobbyGamePref} from '@/hooks/useLobbyGame';
 import {SLIPSTREAM} from '@/ui/theme';
 import {readZoom, saveZoom, stepZoom} from '@/utils/boardZoom';
 import {boardAuthors} from '@/utils/authorFilter';
@@ -189,10 +191,14 @@ export const RetroPage = () => {
 
   const onBoard = (next: Board) => queryClient.setQueryData(queryKey, next);
 
-  const {cursors, hideCursor, isConnected, isDiceSnapshot, participants, rolls, sendCursor} = useBoardSocket({
-    onBoard,
-    retroId,
-  });
+  const gameEventRef = useRef<(event: GameEvent) => void>(() => undefined);
+
+  const {cursors, hideCursor, isConnected, isDiceSnapshot, isSubscribed, participants, rolls, send, sendCursor} =
+    useBoardSocket({
+      onBoard,
+      onGameEvent: (event) => gameEventRef.current(event),
+      retroId,
+    });
   const dice = useDiceSpin(rolls, {
     isSnapshot: isDiceSnapshot,
     reducedMotion: useMediaQuery('(prefers-reduced-motion: reduce)'),
@@ -213,6 +219,20 @@ export const RetroPage = () => {
     queryKey,
     refetchInterval: isConnected ? false : FALLBACK_POLL_INTERVAL_MS,
   });
+
+  const [isGameOn, setIsGameOn] = useLobbyGamePref();
+
+  // Held here, not in the lobby: the podium of a game ended by "Start the retro" must outlive
+  // the lobby view it came from.
+  const game = useLobbyGame({
+    enabled: isGameOn,
+    isActive: board?.phase === 'LOBBY' && !(board.isFacilitator && lobbyTab === 'setup'),
+    isConnected: isSubscribed,
+    onEnded: ({scores, teamStops}) => toast.info(podiumMessage(scores, teamStops)),
+    send,
+    userId: user?.id,
+  });
+  gameEventRef.current = game.handleEvent;
 
   const {data: members} = useQuery({
     enabled: Boolean(board?.teamId),
@@ -524,6 +544,16 @@ export const RetroPage = () => {
       {isLobby && !isSettingUp ? (
         <LobbyView
           facilitatorId={board.facilitatorId}
+          game={
+            <WheelGun
+              game={game}
+              isConnected={isConnected}
+              isOn={isGameOn}
+              onToggle={setIsGameOn}
+              participants={participants}
+              userId={user?.id}
+            />
+          }
           isConnected={isConnected}
           isFacilitator={board.isFacilitator}
           isStarting={phaseMutation.isPending}

@@ -10,6 +10,8 @@ import {ToastProvider} from '@/contexts/ToastContext';
 import {RetroPage} from '@/pages/RetroPage';
 
 const sendCursor = vi.hoisted(() => vi.fn());
+const send = vi.hoisted(() => vi.fn());
+const socket = vi.hoisted(() => ({isSubscribed: true}));
 
 vi.mock('@/hooks/useBoardSocket', () => {
   const value = {
@@ -17,14 +19,19 @@ vi.mock('@/hooks/useBoardSocket', () => {
     hideCursor: vi.fn(),
     isConnected: true,
     isDiceSnapshot: false,
+    get isSubscribed() {
+      return socket.isSubscribed;
+    },
     participants: [{name: 'Fay', userId: 'f'}],
     rolls: [],
+    send,
     sendCursor,
   };
 
   return {useBoardSocket: () => value};
 });
 vi.mock('@/contexts/AuthContext', () => ({useAuth: () => ({user: {id: 'f', name: 'Fay'}})}));
+vi.mock('@/components/lobby/WheelGun', () => ({WheelGun: () => <div data-testid="wheel-gun" />}));
 vi.mock('@/components/CursorLayer', () => ({CursorLayer: () => <div data-testid="cursors" />}));
 vi.mock('@/api/teams', () => ({fetchTeamMembers: vi.fn(), fetchTeams: vi.fn()}));
 vi.mock('@/api/retros', async (importOriginal) => ({
@@ -77,7 +84,10 @@ describe('RetroPage in the waiting room', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    socket.isSubscribed = true;
   });
+
+  const gameActions = () => send.mock.calls.map(([payload]) => payload.action);
 
   it('shows a participant the waiting room only, without cursors or columns', async () => {
     renderPage(board(false));
@@ -107,5 +117,24 @@ describe('RetroPage in the waiting room', () => {
 
     expect(screen.getByRole('tab', {hidden: true, name: 'Board setup'}).getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByText('Welcome to the pit stop')).toBeNull();
+  });
+
+  it('joins the game only once the service has confirmed the subscription', async () => {
+    socket.isSubscribed = false;
+    renderPage(board(false));
+
+    expect(await screen.findByText('Welcome to the pit stop')).toBeTruthy();
+    expect(gameActions()).not.toContain('game.join');
+  });
+
+  it('leaves the game while the facilitator is on the board setup tab', async () => {
+    renderPage(board(true));
+
+    await screen.findByText('Welcome to the pit stop');
+    expect(gameActions()).toEqual(['game.join']);
+
+    fireEvent.click(screen.getByRole('tab', {name: 'Board setup'}));
+
+    expect(gameActions()).toEqual(['game.join', 'game.leave']);
   });
 });

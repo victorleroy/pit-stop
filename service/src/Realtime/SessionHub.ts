@@ -114,6 +114,7 @@ export class SessionHub implements PresenceReader {
     session.remove(connection);
 
     if (session.size === 0) {
+      session.dispose();
       this.sessions.delete(retroId);
       return;
     }

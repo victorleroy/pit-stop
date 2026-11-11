@@ -1,5 +1,5 @@
 import {Alert, Button, Stack} from '@/ui';
-import {createContext, useCallback, useContext, useMemo, useState} from 'react';
+import {createContext, useCallback, useContext, useEffect, useMemo, useState} from 'react';
 import type {ReactNode} from 'react';
 
 const DISMISS_AFTER_MS = 6_000;
@@ -13,11 +13,12 @@ interface Toast {
   action?: ToastAction;
   id: number;
   message: string;
-  severity: 'error' | 'success';
+  severity: 'error' | 'info' | 'success';
 }
 
 interface ToastContextValue {
   error: (message: string) => void;
+  info: (message: string) => void;
   success: (message: string, action?: ToastAction) => void;
 }
 
@@ -44,9 +45,23 @@ export const ToastProvider = ({children}: {children: ReactNode}) => {
     [dismiss],
   );
 
+  // Transient feedback never traps: Escape clears it without taking focus.
+  useEffect(() => {
+    if (!toasts.some(({severity}) => severity === 'info')) return undefined;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setToasts((current) => current.filter(({severity}) => severity !== 'info'));
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [toasts]);
+
   const value = useMemo(
     () => ({
       error: (message: string) => push('error', message),
+      info: (message: string) => push('info', message),
       success: (message: string, action?: ToastAction) => push('success', message, action),
     }),
     [push],
@@ -86,11 +101,13 @@ export const ToastProvider = ({children}: {children: ReactNode}) => {
               ) : undefined
             }
             key={toast.id}
+            onClick={() => dismiss(toast.id)}
             onClose={() => dismiss(toast.id)}
             severity={toast.severity}
             sx={{
               boxShadow: '0 10px 30px -12px rgba(15, 23, 42, 0.55)',
               maxWidth: 560,
+              cursor: 'pointer',
               pointerEvents: 'auto',
               width: '100%',
             }}

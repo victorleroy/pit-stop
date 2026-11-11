@@ -407,6 +407,32 @@ template's suggested duration (`board.defaultTimerSeconds`), 5 minutes otherwise
 `seconds` is bounded to `[5, 3600]`. Extending an already-overdue timer never yields a
 negative duration.
 
+### Waiting room game
+
+Wheel Gun, played by whoever wants while the retro is in `LOBBY`. Nothing of it is stored: it
+lives in the retro's `RetroSession` and ends with it (ADR-006).
+
+- Cars cross a pit lane of width 1 on 3 lanes, left to right. A car is `0.12` long and enters
+  at `x = -0.12`; `x(t) = -0.12 + speed × (t − spawnAt) / 1000`, `speed` in `[0.11, 0.25]`
+  widths per second. Its rear wheel is at `x + 0.025`, its front wheel at `x + 0.095`.
+- The service draws the cars and sends them ahead: a first chunk at once covering
+  `[now + 1 s, now + 12 s[`, then every 10 s a chunk covering `[now + 2 s, now + 12 s[`. The
+  mean gap is `clamp(2200 − 50 × players, 700, 2200)` ms, ±40%. At most 8 cars on the track;
+  a car never catches the one ahead in its lane; a draw that fits nowhere is skipped.
+- A wheel goes to the first valid hit: +1. The second wheel of a car completes the pit stop:
+  +1 more to each distinct contributor, and the team's `Pit stops` count grows.
+- A hit is ignored, without an answer, when the game is not running or the retro left
+  `LOBBY`, the connection has not joined, the car or the wheel is unknown, the wheel is taken,
+  the person already tried that wheel of that car (**one attempt per person, car and wheel**,
+  every tab included), or the wheel is not on screen give or take 300 ms. Click coordinates are
+  never sent; misses are not sent either. A scripted client can still win the lobby: accepted.
+- Scores are per person, ranked by points, then by who reached them first.
+- The game runs while somebody has joined; with nobody playing, no car is drawn and the scores
+  stay. Joining and every chunk re-check access: a removed member stops receiving the game at
+  the next chunk.
+- Leaving `LOBBY` ends it: `game.ended` with the scores goes to every connection right after
+  the new board. Deleting the retro stops it without `game.ended`.
+
 ### Speaking order
 
 During DISCUSS only, everybody connected gets a die in the retro band and rolls their own, once
@@ -678,7 +704,7 @@ Template        { id, scope: 'BUILTIN'|'TEAM', name, description: string | null,
 
 ## 8. WebSocket contract
 
-Six outbound events, to keep identical:
+Ten outbound events, to keep identical:
 
 ```ts
 { type: 'board.updated',    board: Board }                    // projected per recipient
@@ -687,9 +713,17 @@ Six outbound events, to keep identical:
 { type: 'cursor.left',      userId }
 { type: 'dice.updated',     rolls: [{userId, name, pictureUrl?, value}], snapshot? }
 { type: 'error',            message }
+{ type: 'game.state',  serverNow, cars: [GameCar & {taken: {front?, rear?}}], scores, teamStops } // to who joins
+{ type: 'game.spawns', serverNow, cars: [GameCar] }                                               // to players
+{ type: 'game.hit',    serverNow, carId, wheel, userId, name, pictureUrl?, points, serviced, teamStops } // to players
+{ type: 'game.ended',  scores, teamStops }                                                        // to everyone
+// GameCar {id, lane: 0|1|2, spawnAt, speed, livery: 0..11}; GameScore {userId, name, pictureUrl?, points}
 ```
 
-Inbound actions: `subscribe`, `cursor`.
+Inbound actions: `subscribe`, `cursor`, `game.join`, `game.leave`,
+`game.hit {carId, wheel: 'front'|'rear'}` (`carId` a positive safe integer, otherwise ignored).
+Game messages before a subscribe are ignored. `serverNow` and `spawnAt` are the service's
+epoch milliseconds; `points` in `game.hit` is the player's total, not a delta.
 
 **Rules to preserve:**
 
@@ -748,6 +782,17 @@ Inbound actions: `subscribe`, `cursor`.
   toolbar's. The facilitator starts with `Start the retro` (never conditioned on presence),
   whose target is `nextOpeningPhase(board)`, and has a second tab, `Board setup`, with the
   column controls. `LOBBY` is not in the phase stepper, and no cursor is sent.
+- **Wheel Gun**, beside the welcome: on by default, off by default when the system asks for
+  reduced motion and no choice is stored; the choice is kept in `localStorage` under
+  `pit-stop.lobby-game` (`on`/`off`). On joins the game (again after every reconnection), off
+  leaves it. Positions use `offset = serverNow − Date.now()` from the last game event. A tap
+  plays at once; the wheel turns to the winner's colour if someone else got it, and frees
+  itself locally after 1 s without an answer. Keys `1`, `2`, `3` fit the most advanced free
+  wheel inside the pit box (`x ∈ [0.35, 0.65]`) of that lane; touch targets are at least
+  44 px. Reduced motion: no particles or outline. The impact sound obeys
+  `pit-stop.timer-muted`, shown as `Sounds` in the waiting room, and only plays for one's own
+  taps. The scoreboard appears with the first point: top 5, then one's own row, then
+  `+n others`. On `game.ended` with points, a 6 s toast gives the record and the winner.
 - The retro's actions (this retro's and those carried over) live in a panel on the right,
   opened from the toolbar's `Actions · n` button, `n` being the open actions. On a wide screen
   the panel sits beside the board, which narrows; on a phone it slides over it. Turning a card
@@ -847,6 +892,7 @@ to the login screen.
 - Editing or deleting a template never changes an existing retro.
 - A template outside the team (another team, another organization, deleted) returns `404`.
 - A retro never returns to `LOBBY`, archived or not.
+- Two tabs of one person score as **one** player and share their attempts.
 
 ---
 

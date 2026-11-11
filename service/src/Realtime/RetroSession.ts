@@ -1,6 +1,7 @@
 import type {WebSocket} from 'ws';
 import {DICE_PHASE, RetroManager} from '~/Manager/RetroManager';
-import type {DieRoll, PresenceParticipant, WebSocketEvent} from '~/Model/WebSocketModel';
+import type {DieRoll, GameCar, PresenceParticipant, WebSocketEvent} from '~/Model/WebSocketModel';
+import {LobbyGame} from '~/Realtime/LobbyGame';
 import type {BoardRepository, RetroRow} from '~/Repository/BoardRepository';
 import {logger} from '~/logger';
 import type {RetroPhase} from '~/Db/schema';
@@ -27,6 +28,8 @@ export type Authorizer = (
   retroId: string,
 ) => Promise<{name: string; pictureUrl?: string} | undefined>;
 
+export type GameFactory = () => LobbyGame;
+
 /**
  * The authoritative actor for one retro (ADR-001 D1).
  *
@@ -45,11 +48,17 @@ export class RetroSession {
   /** One die per person, held here only: it ends with the session or with the DISCUSS phase. */
   private readonly dice = new Map<string, DieRoll & {tieBreak: number}>();
 
+  /** The waiting-room game and who plays it; ephemeral like the rest (ADR 0006). */
+  private game: LobbyGame | undefined;
+
+  private readonly players = new Set<Connection>();
+
   public constructor(
     public readonly retroId: string,
     private readonly boardRepository: BoardRepository,
     private readonly loadRetro: () => Promise<RetroRow | undefined>,
     private readonly authorize: Authorizer,
+    private readonly createGame: GameFactory = () => new LobbyGame(),
   ) {}
 
   public get size(): number {
@@ -72,6 +81,125 @@ export class RetroSession {
 
   public remove(connection: Connection): void {
     this.connections.delete(connection);
+    this.leaveGame(connection);
+  }
+
+  /** The last one gone: nothing may keep ticking for a retro nobody watches. */
+  public dispose(): void {
+    this.game?.stop();
+    this.game = undefined;
+    this.players.clear();
+  }
+
+  public get isGameRunning(): boolean {
+    return this.game?.isRunning ?? false;
+  }
+
+  /** Access is checked again: joining is when the game starts sending to this connection. */
+  public async joinGame(connection: Connection): Promise<void> {
+    if (this.phase !== 'LOBBY' || !this.connections.has(connection)) {
+      return;
+    }
+
+    const allowed = await this.authorize(connection.token, this.retroId);
+
+    if (!allowed) {
+      this.evict(connection);
+      this.broadcastPresence();
+      return;
+    }
+
+    // The retro may have started, or the socket left, while access was checked.
+    if (this.phase !== 'LOBBY' || !this.connections.has(connection)) {
+      return;
+    }
+
+    this.players.add(connection);
+    this.game ??= this.createGame();
+    this.send(connection, {...this.game.snapshot(), serverNow: this.game.time(), type: 'game.state'});
+    this.game.start(
+      () => new Set([...this.players].map(({userId}) => userId)).size,
+      (cars) => {
+        this.sendSpawns(cars).catch((error: unknown) =>
+          logger.error({err: error, retroId: this.retroId}, 'Game spawns failed'),
+        );
+      },
+    );
+  }
+
+  /** Scores stay; with nobody left playing, no more cars are drawn. */
+  public leaveGame(connection: Connection): void {
+    this.players.delete(connection);
+
+    if (!this.players.size) {
+      this.game?.pause();
+    }
+  }
+
+  /** Ignored without a word whenever it does not count (BEHAVIOUR.md section 6). */
+  public hitWheel(connection: Connection, carId: unknown, wheel: unknown): void {
+    if (this.phase !== 'LOBBY' || !this.game?.isRunning || !this.players.has(connection)) {
+      return;
+    }
+
+    const hit = this.game.hit(connection, carId, wheel);
+
+    if (!hit) {
+      return;
+    }
+
+    const event: WebSocketEvent = {...hit, serverNow: this.game.time(), type: 'game.hit'};
+
+    for (const player of [...this.players]) {
+      this.send(player, event);
+    }
+  }
+
+  /** Every chunk re-checks every player: there is no board broadcast in LOBBY to do it. */
+  private async sendSpawns(cars: GameCar[]): Promise<void> {
+    const players = [...this.players];
+    const allowed = await Promise.all(
+      players.map((player) => this.authorize(player.token, this.retroId)),
+    );
+    let evicted = false;
+
+    players.forEach((player, index) => {
+      if (!allowed[index]) {
+        this.evict(player);
+        evicted = true;
+      } else if (this.players.has(player)) {
+        this.send(player, {cars, serverNow: this.game?.time() ?? Date.now(), type: 'game.spawns'});
+      }
+    });
+
+    if (evicted) {
+      this.broadcastPresence();
+    }
+  }
+
+  private evict(connection: Connection): void {
+    this.send(connection, {message: 'Retro not accessible', type: 'error'});
+    this.connections.delete(connection);
+    this.leaveGame(connection);
+    connection.socket.close();
+  }
+
+  private endGame(): void {
+    if (!this.game) {
+      return;
+    }
+
+    const event: WebSocketEvent = {
+      scores: this.game.ranking(),
+      teamStops: this.game.snapshot().teamStops,
+      type: 'game.ended',
+    };
+
+    this.dispose();
+
+    for (const connection of [...this.connections]) {
+      this.send(connection, event);
+    }
   }
 
   /**
@@ -89,6 +217,8 @@ export class RetroSession {
       for (const connection of [...this.connections]) {
         this.send(connection, {message: 'This retro was deleted', type: 'error'});
       }
+
+      this.dispose();
 
       return;
     }
@@ -112,9 +242,7 @@ export class RetroSession {
 
       if (!identity) {
         // Removed from the team, signed out, or suspended: the next board is not theirs.
-        this.send(connection, {message: 'Retro not accessible', type: 'error'});
-        this.connections.delete(connection);
-        connection.socket.close();
+        this.evict(connection);
         evicted.add(connection.userId);
         return;
       }
@@ -136,6 +264,11 @@ export class RetroSession {
         type: 'board.updated',
       });
     });
+
+    // The retro has started: the game ends at once, the board first so the podium lands on it.
+    if (retro.phase !== 'LOBBY') {
+      this.endGame();
+    }
 
     if (evicted.size || renamed) {
       this.broadcastPresence();
@@ -248,6 +381,7 @@ export class RetroSession {
   private send(connection: Connection, event: WebSocketEvent): void {
     if (connection.socket.readyState !== connection.socket.OPEN) {
       this.connections.delete(connection);
+      this.leaveGame(connection);
       return;
     }
 
@@ -256,6 +390,7 @@ export class RetroSession {
     } catch (error: unknown) {
       logger.warn({err: error, retroId: this.retroId}, 'Dropping a connection that cannot be written to');
       this.connections.delete(connection);
+      this.leaveGame(connection);
     }
   }
 }

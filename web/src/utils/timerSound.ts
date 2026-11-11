@@ -68,3 +68,46 @@ export const playTimerChime = () => {
     // Blocked or unsupported audio must never break the timer.
   }
 };
+
+const CLACK_SECONDS = 0.06;
+const CLACK_VOLUME = 0.15;
+
+/** The "clack" of an impact wrench: 60 ms of filtered noise, no audio file. */
+export const playWrenchClack = () => {
+  const audio = getContext();
+  if (!audio) return;
+
+  if (audio.state === 'suspended') {
+    void audio.resume().then(() => {
+      if (audio.state === 'running') playWrenchClack();
+    }, () => undefined);
+    return;
+  }
+
+  if (audio.state !== 'running') return;
+
+  try {
+    const length = Math.ceil(audio.sampleRate * CLACK_SECONDS);
+    const buffer = audio.createBuffer(1, length, audio.sampleRate);
+    const samples = buffer.getChannelData(0);
+    for (let index = 0; index < length; index += 1) {
+      samples[index] = (Math.random() * 2 - 1) * (1 - index / length);
+    }
+
+    const source = audio.createBufferSource();
+    const filter = audio.createBiquadFilter();
+    const gain = audio.createGain();
+    const at = audio.currentTime;
+
+    source.buffer = buffer;
+    filter.type = 'bandpass';
+    filter.frequency.value = 1800;
+    filter.Q.value = 1.4;
+    gain.gain.setValueAtTime(CLACK_VOLUME, at);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + CLACK_SECONDS);
+    source.connect(filter).connect(gain).connect(audio.destination);
+    source.start(at);
+  } catch {
+    // Blocked or unsupported audio must never break the game.
+  }
+};
