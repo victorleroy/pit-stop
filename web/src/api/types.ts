@@ -80,6 +80,8 @@ export interface Column {
   cards: Card[];
   id: string;
   order: number;
+  /** One line telling people what goes in the column, copied from the template. */
+  prompt: string | null;
   title: string;
 }
 
@@ -165,12 +167,16 @@ export interface Board extends RetroSummary {
   actions: Action[];
   carriedOverActions: Action[];
   columns: Column[];
+  /** Suggested timer duration copied from the template, null when it set none. */
+  defaultTimerSeconds: number | null;
   maxVotes: number;
   myNotesRevealed: boolean;
   myVotesLeft: number;
   /** Carried-over actions, plus those already reviewed in this retro. */
   review: Review;
   teamId: string;
+  /** The template the retro was created from, as it was named then. */
+  template: {id: string; name: string} | null;
   timer: Timer;
   voteProgress: Record<string, number>;
   votesRevealed: boolean;
@@ -258,4 +264,41 @@ export interface PublicConfig {
   googleClientId: string;
   mailEnabled: boolean;
   setupRequired: boolean;
+}
+
+/** BUILTIN templates ship with the app and are read-only; TEAM templates belong to one team. */
+export type TemplateScope = 'BUILTIN' | 'TEAM';
+
+export interface TemplateColumn {
+  prompt: string | null;
+  title: string;
+}
+
+export interface Template {
+  columns: TemplateColumn[];
+  description: string | null;
+  /** `builtin:<slug>` for the catalogue, a UUID for a team template. */
+  id: string;
+  maxVotes: number | null;
+  name: string;
+  scope: TemplateScope;
+  timerSeconds: number | null;
+  /** TEAM only. */
+  updatedAt?: string;
+  updatedBy?: {id: string; name: string};
+}
+
+export interface TemplateInput {
+  columns: TemplateColumn[];
+  description?: string | null;
+  maxVotes?: number | null;
+  name: string;
+  timerSeconds?: number | null;
+}
+
+export interface TeamTemplates {
+  builtin: Template[];
+  /** Never null: the team's choice, or Start / Stop / Continue. */
+  defaultTemplateId: string;
+  team: Template[];
 }

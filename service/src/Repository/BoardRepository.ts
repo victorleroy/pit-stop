@@ -4,12 +4,16 @@ import type {ActionReviewOutcome, ActionStatus, RetroPhase} from '~/Db/schema';
 export interface RetroRow {
   createdAt: string;
   createdBy: string;
+  defaultTimerSeconds: number | null;
   facilitatorId: string;
   id: string;
   maxVotes: number;
   orgId: string;
   phase: RetroPhase;
   teamId: string;
+  /** Snapshot of the template the retro started from, never joined (ADR 0004). */
+  templateId: string | null;
+  templateName: string | null;
   timerEndsAt: string | null;
   timerRemainingMs: number | null;
   timerTotalMs: number | null;
@@ -19,6 +23,7 @@ export interface RetroRow {
 export interface ColumnRow {
   id: string;
   position: number;
+  prompt: string | null;
   title: string;
 }
 
@@ -97,7 +102,7 @@ export class BoardRepository {
     const [columns, notes, clusters, votes, actions, actionReviews] = await Promise.all([
       this.db
         .selectFrom('columns')
-        .select(['id', 'title', 'position'])
+        .select(['id', 'title', 'position', 'prompt'])
         .where('retroId', '=', retro.id)
         .orderBy('position')
         .execute(),

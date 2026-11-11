@@ -8,7 +8,7 @@ import type {Db} from '~/Db/connection';
  * that returns an unscoped query builder for a tenant-owned table, so forgetting the filter
  * is not something a new endpoint can do by omission.
  *
- * Child tables (columns, notes, clusters, votes, memberships) carry no `org_id`: they are
+ * Child tables (columns, notes, clusters, votes, memberships, retro_template_columns) carry no `org_id`: they are
  * only ever reached through a retro or a team whose access has already been checked by
  * RetroAccessChecker. That is the boundary, and it is the one thing a reviewer must verify
  * when adding a repository method.
@@ -33,6 +33,10 @@ export class ScopedDb {
 
   public actionReviews() {
     return this.db.selectFrom('actionReviews').where('actionReviews.orgId', '=', this.orgId);
+  }
+
+  public retroTemplates() {
+    return this.db.selectFrom('retroTemplates').where('retroTemplates.orgId', '=', this.orgId);
   }
 
   public orgMembers() {

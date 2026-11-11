@@ -1,4 +1,8 @@
+import {Hono} from 'hono';
 import {Harness} from '../helpers/harness';
+import {errorHandler} from '~/Http/errorHandler';
+import type {Variables} from '~/Http/middleware/auth';
+import {retroRoutes} from '~/Http/routes/retros';
 import type {AuthContext} from '~/Security/AuthContext';
 
 /** BEHAVIOUR.md section 3: the phase matrix, and the two rules that are easy to lose. */
@@ -216,8 +220,94 @@ describe('phases', () => {
     await setPhase('SHARE');
 
     await expect(
-      harness.container.retroManager.renameColumn(facilitator, retroId, columnId, 'Nope'),
+      harness.container.retroManager.updateColumn(facilitator, retroId, columnId, {title: 'Nope'}),
     ).rejects.toThrow('not allowed during the "SHARE" phase');
+  });
+
+  describe('column prompts', () => {
+    const setPrompt = (prompt: string | null, auth = facilitator) =>
+      harness.container.retroManager.updateColumn(auth, retroId, columnId, {prompt});
+
+    const patch = async (body: unknown) => {
+      const app = new Hono<{Variables: Variables}>();
+
+      app.onError(errorHandler);
+      app.use('*', async (context, next) => {
+        context.set('auth', facilitator);
+        await next();
+      });
+      app.route('/', retroRoutes(harness.container));
+
+      return app.request(`/retros/${retroId}/columns/${columnId}`, {
+        body: JSON.stringify(body),
+        headers: {'content-type': 'application/json'},
+        method: 'PATCH',
+      });
+    };
+
+    it('lets the facilitator set and clear a prompt during the brainstorm, for everyone', async () => {
+      await setPrompt('Be specific');
+
+      const seen = await harness.container.retroManager.getBoard(member, retroId);
+      expect(seen.columns[0]).toMatchObject({prompt: 'Be specific', title: 'Start'});
+
+      const cleared = await setPrompt(null);
+      expect(cleared.columns[0]).toMatchObject({prompt: null, title: 'Start'});
+    });
+
+    it('keeps the prompt when only the title changes', async () => {
+      await setPrompt('Be specific');
+
+      const board = await harness.container.retroManager.updateColumn(
+        facilitator,
+        retroId,
+        columnId,
+        {title: 'Begin'},
+      );
+
+      expect(board.columns[0]).toMatchObject({prompt: 'Be specific', title: 'Begin'});
+    });
+
+    it('refuses a prompt change from a participant', async () => {
+      await expect(setPrompt('Mine', member)).rejects.toMatchObject({status: 403});
+    });
+
+    it('refuses a prompt change outside the brainstorm', async () => {
+      for (const phase of ['SHARE', 'VOTE', 'DISCUSS'] as const) {
+        await setPhase(phase);
+        await expect(setPrompt('Late')).rejects.toThrow(`not allowed during the "${phase}" phase`);
+      }
+
+      await setPhase('ARCHIVED');
+      await expect(setPrompt('Late')).rejects.toMatchObject({status: 409});
+    });
+
+    it('adds a column with its prompt', async () => {
+      const board = await harness.container.retroManager.addColumn(
+        facilitator,
+        retroId,
+        'Extra',
+        'Anything else',
+      );
+
+      expect(board.columns.at(-1)).toMatchObject({prompt: 'Anything else', title: 'Extra'});
+    });
+
+    it('refuses a change with neither title nor prompt, or a prompt over 140 characters', async () => {
+      expect((await patch({})).status).toBe(400);
+      expect((await patch({prompt: 'x'.repeat(141)})).status).toBe(400);
+      expect((await patch({title: ''})).status).toBe(400);
+    });
+
+    it('clears the prompt from a blank text over HTTP', async () => {
+      await setPrompt('Be specific');
+
+      const response = await patch({prompt: '   '});
+      const board = (await response.json()) as {columns: {prompt: string | null; title: string}[]};
+
+      expect(response.status).toBe(200);
+      expect(board.columns[0]).toMatchObject({prompt: null, title: 'Start'});
+    });
   });
 
   describe('column order', () => {
@@ -307,8 +397,7 @@ describe('phases', () => {
         facilitator,
         teamId,
         'Sprint 43',
-        undefined,
-        3,
+        {maxVotes: 3},
       );
 
       expect(board).toMatchObject({maxVotes: 3, myVotesLeft: 3});
@@ -380,7 +469,9 @@ describe('phases', () => {
 
     beforeEach(async () => {
       const {teamId} = await harness.container.retroManager.getBoard(facilitator, retroId);
-      const board = await harness.container.retroManager.create(facilitator, teamId, 'Blank', []);
+      const board = await harness.container.retroManager.create(facilitator, teamId, 'Blank', {
+        columns: [],
+      });
 
       blankId = board.id;
     });

@@ -34,6 +34,8 @@ export interface ColumnModel {
   cards: CardModel[];
   id: string;
   order: number;
+  /** One line telling people what goes in the column, copied from the template. */
+  prompt: string | null;
   title: string;
 }
 
@@ -57,6 +59,8 @@ export interface BoardModel extends RetroSummaryModel {
   /** Still-open actions inherited from the previous retros of the team. */
   carriedOverActions: ActionModel[];
   columns: ColumnModel[];
+  /** Suggested timer duration, copied from the template; the facilitator still picks. */
+  defaultTimerSeconds: number | null;
   maxVotes: number;
   /** Whether the caller has shared the text of their notes. */
   myNotesRevealed: boolean;
@@ -64,6 +68,8 @@ export interface BoardModel extends RetroSummaryModel {
   /** The actions to review in this retro: carried over, or already reviewed here. */
   review: ReviewModel;
   teamId: string;
+  /** The template the retro was created from, as it was named then. */
+  template: {id: string; name: string} | null;
   timer: TimerModel;
   /** Votes spent per userId, only during VOTE (empty otherwise). Never what they went to. */
   voteProgress: Record<string, number>;

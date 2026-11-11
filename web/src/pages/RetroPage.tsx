@@ -29,13 +29,13 @@ import {
   resetDice,
   rollDie,
   takeFacilitation,
-  renameColumn,
   reorderColumns,
   revealMyNotes,
   setNoteRevealed,
   recordReviewOutcome,
   ungroupNote,
   updateAction,
+  updateColumn,
   updateNote,
   updateRetro,
 } from '@/api/retros';
@@ -253,9 +253,9 @@ export const RetroPage = () => {
     mutationFn: (title: string) => addColumn(retroId as string, title),
     ...boardMutationOptions,
   });
-  const renameColumnMutation = useMutation({
-    mutationFn: ({columnId, title}: {columnId: string; title: string}) =>
-      renameColumn(retroId as string, columnId, title),
+  const updateColumnMutation = useMutation({
+    mutationFn: ({columnId, ...changes}: {columnId: string; prompt?: string | null; title?: string}) =>
+      updateColumn(retroId as string, columnId, changes),
     ...boardMutationOptions,
   });
   const reorderColumnsMutation = useMutation({
@@ -355,7 +355,7 @@ export const RetroPage = () => {
     hideMutation,
     noteRevealMutation,
     addColumnMutation,
-    renameColumnMutation,
+    updateColumnMutation,
     reorderColumnsMutation,
     removeColumnMutation,
     createNoteMutation,
@@ -448,6 +448,7 @@ export const RetroPage = () => {
           onZoomChange={setZoom}
           presence={<PresenceBar board={board} isConnected={isConnected} participants={participants} />}
           teamId={board.teamId}
+          templateName={board.template?.name}
           title={board.title}
           zoom={zoom}
         />
@@ -569,13 +570,14 @@ export const RetroPage = () => {
                     renameClusterMutation.mutate({clusterId, title})
                   }
                   onRevealNote={(noteId, revealed) => noteRevealMutation.mutate({noteId, revealed})}
-                  onRenameColumn={(title) => renameColumnMutation.mutate({columnId: column.id, title})}
+                  onRenameColumn={(title) => updateColumnMutation.mutate({columnId: column.id, title})}
                   onTurnIntoAction={(text) => {
                     setActionDraft({nonce: Date.now(), text});
                     setIsActionsOpen(true);
                   }}
                   onUngroupNote={(noteId) => ungroupMutation.mutate(noteId)}
                   onUpdateNote={(noteId, text) => updateNoteMutation.mutate({noteId, text})}
+                  onUpdatePrompt={(prompt) => updateColumnMutation.mutate({columnId: column.id, prompt})}
                   onVote={(targetId, delta) => voteMutation.mutate({delta, targetId})}
                   ranks={ranks}
                   showTotals={board.votesRevealed}

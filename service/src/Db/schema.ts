@@ -119,6 +119,7 @@ interface TeamsTable {
   name: string;
   createdBy: string;
   createdAt: string;
+  defaultTemplateId: string | null;
 }
 
 interface MembershipsTable {
@@ -141,6 +142,9 @@ interface RetrosTable {
   timerRemainingMs: number | null;
   timerTotalMs: number | null;
   createdAt: string;
+  templateId: string | null;
+  templateName: string | null;
+  defaultTimerSeconds: number | null;
 }
 
 interface ColumnsTable {
@@ -148,6 +152,29 @@ interface ColumnsTable {
   retroId: string;
   title: string;
   position: number;
+  prompt: string | null;
+}
+
+interface RetroTemplatesTable {
+  id: string;
+  orgId: string;
+  teamId: string;
+  name: string;
+  nameKey: string;
+  description: string | null;
+  maxVotes: number | null;
+  timerSeconds: number | null;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface RetroTemplateColumnsTable {
+  templateId: string;
+  position: number;
+  title: string;
+  prompt: string | null;
 }
 
 interface ClustersTable {
@@ -220,4 +247,6 @@ export interface Database {
   votes: VotesTable;
   actions: ActionsTable;
   actionReviews: ActionReviewsTable;
+  retroTemplates: RetroTemplatesTable;
+  retroTemplateColumns: RetroTemplateColumnsTable;
 }

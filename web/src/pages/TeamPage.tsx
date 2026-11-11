@@ -406,6 +406,10 @@ export const TeamPage = () => {
             </Button>
           ) : null}
 
+          <Button component={Link} to={`/teams/${teamId}/templates`} variant="outlined">
+            Templates
+          </Button>
+
           {isAdmin ? (
             <Button onClick={() => setIsStarting(true)} variant="contained">
               New retrospective
@@ -423,7 +427,7 @@ export const TeamPage = () => {
         </Link>
       </Stack>
 
-      {isStarting ? <NewRetroDialog onClose={() => setIsStarting(false)} teamId={teamId as string} /> : null}
+      {isStarting ? <NewRetroDialog onClose={() => setIsStarting(false)} teamIds={[teamId as string]} /> : null}
 
       <Dialog onClose={closeMemberDialog} open={isAddingMember} size="small">
         <DialogTitle>Add members</DialogTitle>

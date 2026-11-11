@@ -2,6 +2,7 @@ import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import NotesRoundedIcon from '@mui/icons-material/NotesRounded';
 import {
   Box,
   Button,
@@ -18,6 +19,8 @@ import {useState} from 'react';
 import type {Column} from '@/api/types';
 import {CardStack} from '@/components/CardStack';
 import {isGroupOnlyDrag} from '@/utils/noteDrag';
+
+const PROMPT_MAX_LENGTH = 140;
 
 export const BoardColumn = ({
   authorFilter,
@@ -47,6 +50,7 @@ export const BoardColumn = ({
   onTurnIntoAction,
   onUngroupNote,
   onUpdateNote,
+  onUpdatePrompt,
   onVote,
   ranks,
   showTotals,
@@ -79,6 +83,7 @@ export const BoardColumn = ({
   onTurnIntoAction: (text: string) => void;
   onUngroupNote: (noteId: string) => void;
   onUpdateNote: (noteId: string, text: string) => void;
+  onUpdatePrompt: (prompt: string | null) => void;
   onVote: (targetId: string, delta: 1 | -1) => void;
   ranks: Map<string, number>;
   showTotals: boolean;
@@ -87,6 +92,7 @@ export const BoardColumn = ({
   const [draft, setDraft] = useState('');
   const [isOver, setIsOver] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
+  const [isEditingPrompt, setIsEditingPrompt] = useState(false);
 
   const submit = () => {
     const text = draft.trim();
@@ -161,7 +167,7 @@ export const BoardColumn = ({
             </Stack>
           )}
 
-          {canEditColumn && !isRenaming ? (
+          {canEditColumn && !isRenaming && !isEditingPrompt ? (
             <Stack direction="row" spacing={0.5}>
               {onMoveColumn ? (
                 <>
@@ -204,6 +210,18 @@ export const BoardColumn = ({
                   </IconButton>
                 </span>
               </Tooltip>
+              <Tooltip title="Edit the prompt">
+                <span>
+                  <IconButton
+                    aria-label="Edit prompt"
+                    disabled={isBusy}
+                    onClick={() => setIsEditingPrompt(true)}
+                    size="small"
+                  >
+                    <NotesRoundedIcon fontSize="inherit" />
+                  </IconButton>
+                </span>
+              </Tooltip>
               {canRemove ? (
                 <Tooltip title="Permanently delete this column">
                   <span>
@@ -221,6 +239,34 @@ export const BoardColumn = ({
             </Stack>
           ) : null}
         </Stack>
+
+        {isEditingPrompt ? (
+          <InlineEditor
+            allowEmpty
+            label="Column prompt"
+            maxLength={PROMPT_MAX_LENGTH}
+            onClose={() => setIsEditingPrompt(false)}
+            onSave={(text) => onUpdatePrompt(text || null)}
+            placeholder="What goes in this column?"
+            value={column.prompt ?? ''}
+          />
+        ) : column.prompt ? (
+          <Tooltip title={column.prompt}>
+            <Typography
+              color="textSecondary"
+              sx={{
+                display: '-webkit-box',
+                overflow: 'hidden',
+                overflowWrap: 'anywhere',
+                WebkitBoxOrient: 'vertical',
+                WebkitLineClamp: 2,
+              }}
+              variant="textXs"
+            >
+              {column.prompt}
+            </Typography>
+          </Tooltip>
+        ) : null}
 
         {column.cards.map((card) => (
           <CardStack

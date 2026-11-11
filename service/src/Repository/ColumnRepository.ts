@@ -7,10 +7,19 @@ export class ColumnRepository {
   public async findOneById(retroId: string, columnId: string): Promise<ColumnRow | undefined> {
     return this.db
       .selectFrom('columns')
-      .select(['id', 'title', 'position'])
+      .select(['id', 'title', 'position', 'prompt'])
       .where('retroId', '=', retroId)
       .where('id', '=', columnId)
       .executeTakeFirst();
+  }
+
+  public async findAllByRetroId(retroId: string): Promise<ColumnRow[]> {
+    return this.db
+      .selectFrom('columns')
+      .select(['id', 'title', 'position', 'prompt'])
+      .where('retroId', '=', retroId)
+      .orderBy('position')
+      .execute();
   }
 
   public async findIdsByRetroId(retroId: string): Promise<string[]> {
@@ -44,14 +53,22 @@ export class ColumnRepository {
     return row?.last === null || row?.last === undefined ? 0 : Number(row.last) + 1;
   }
 
-  public async create(input: {id: string; position: number; retroId: string; title: string}) {
-    await this.db.insertInto('columns').values(input).execute();
+  /** Takes the caller's transaction when the column is part of a larger write. */
+  public async create(
+    input: {id: string; position: number; prompt?: string | null; retroId: string; title: string},
+    executor: Db = this.db,
+  ) {
+    await executor.insertInto('columns').values(input).execute();
   }
 
-  public async rename(retroId: string, columnId: string, title: string): Promise<void> {
+  public async update(
+    retroId: string,
+    columnId: string,
+    changes: {prompt?: string | null; title?: string},
+  ): Promise<void> {
     await this.db
       .updateTable('columns')
-      .set({title})
+      .set(changes)
       .where('retroId', '=', retroId)
       .where('id', '=', columnId)
       .execute();

@@ -15,6 +15,7 @@ import {PlatformManager} from '~/Manager/PlatformManager';
 import {ProfileManager} from '~/Manager/ProfileManager';
 import {RetroManager} from '~/Manager/RetroManager';
 import {ReviewManager} from '~/Manager/ReviewManager';
+import {RetroTemplateManager} from '~/Manager/RetroTemplateManager';
 import {SetupManager} from '~/Manager/SetupManager';
 import {TeamManager} from '~/Manager/TeamManager';
 import {VoteManager} from '~/Manager/VoteManager';
@@ -30,6 +31,7 @@ import {NoteRepository} from '~/Repository/NoteRepository';
 import {OrgRepository} from '~/Repository/OrgRepository';
 import {OrgStatsRepository} from '~/Repository/OrgStatsRepository';
 import {RetroRepository} from '~/Repository/RetroRepository';
+import {RetroTemplateRepository} from '~/Repository/RetroTemplateRepository';
 import {SessionRepository} from '~/Repository/SessionRepository';
 import {TeamRepository} from '~/Repository/TeamRepository';
 import {UserRepository} from '~/Repository/UserRepository';
@@ -52,6 +54,7 @@ export interface Container {
   profileManager: ProfileManager;
   retroManager: RetroManager;
   reviewManager: ReviewManager;
+  retroTemplateManager: RetroTemplateManager;
   setupManager: SetupManager;
   teamManager: TeamManager;
   voteManager: VoteManager;
@@ -80,6 +83,13 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
   const hub = new SessionHub(db, boardRepository);
   const mailer = createMailer();
 
+  const retroTemplateManager = new RetroTemplateManager(
+    new RetroTemplateRepository(),
+    columnRepository,
+    accessChecker,
+    roleChecker,
+  );
+
   const retroManager = new RetroManager(
     retroRepository,
     columnRepository,
@@ -88,6 +98,7 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
     accessChecker,
     roleChecker,
     voteRepository,
+    retroTemplateManager,
   );
 
   const invitationManager = new InvitationManager(
@@ -174,6 +185,7 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
       retroRepository,
       accessChecker,
     ),
+    retroTemplateManager,
     setupManager: new SetupManager(db, orgRepository, userRepository, authManager),
     teamManager: new TeamManager(teamRepository, membershipRepository, roleChecker),
     voteManager: new VoteManager(voteRepository, boardRepository, accessChecker, retroManager),

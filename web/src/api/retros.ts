@@ -24,14 +24,13 @@ export const DEFAULT_MAX_VOTES = 3;
 
 export const VOTE_OPTIONS = Array.from({length: 10}, (_, index) => index + 1);
 
-// An empty `columns` asks for a blank board; leaving it out keeps the default template.
+// A template, or an explicit list of columns (an empty one is a blank board), never both.
+// Leaving both out starts from the team's default template.
 export const createRetro = (
   teamId: string,
   title: string,
-  columns?: string[],
-  maxVotes?: number,
-) =>
-  request<Board>(`/teams/${teamId}/retros`, {body: {columns, maxVotes, title}, method: 'POST'});
+  options: {columns?: string[]; maxVotes?: number; templateId?: string} = {},
+) => request<Board>(`/teams/${teamId}/retros`, {body: {...options, title}, method: 'POST'});
 
 export const fetchBoard = (retroId: string) => request<Board>(`/retros/${retroId}`);
 
@@ -45,11 +44,17 @@ export const updateRetro = (
   },
 ) => request<Board>(`/retros/${retroId}`, {body: changes, method: 'PATCH'});
 
-export const addColumn = (retroId: string, title: string) =>
-  request<Board>(`/retros/${retroId}/columns`, {body: {title}, method: 'POST'});
+export const addColumn = (retroId: string, title: string, prompt?: string | null) =>
+  request<Board>(`/retros/${retroId}/columns`, {body: {prompt, title}, method: 'POST'});
+
+export const updateColumn = (
+  retroId: string,
+  columnId: string,
+  changes: {prompt?: string | null; title?: string},
+) => request<Board>(`/retros/${retroId}/columns/${columnId}`, {body: changes, method: 'PATCH'});
 
 export const renameColumn = (retroId: string, columnId: string, title: string) =>
-  request<Board>(`/retros/${retroId}/columns/${columnId}`, {body: {title}, method: 'PATCH'});
+  updateColumn(retroId, columnId, {title});
 
 export const reorderColumns = (retroId: string, columnIds: string[]) =>
   request<Board>(`/retros/${retroId}/columns/order`, {body: {columnIds}, method: 'PUT'});

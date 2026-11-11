@@ -22,6 +22,8 @@ this page is the bug.
 | **Facilitator** | The person driving a retro's phases. Exactly one at a time. |
 | **Review** | Going over, in a retro, the actions it carries over: did we do what we decided? |
 | **Outcome** | What a review decided for one action: **Done**, **Drop** or **Keep** (still relevant, carried over again). |
+| **Template** | A retro format: columns with their prompts, a vote budget and a suggested timer. `BUILTIN` (shipped in code, read-only, `builtin:<slug>`) or `TEAM` (owned by one team, a UUID). A retro **copies** its template at creation. |
+| **Prompt** | One line under a column title telling people what goes in it. |
 
 ---
 
@@ -43,11 +45,13 @@ sessions       (token_hash, user_id, expires_at, created_at)
 invitations    (id, org_id, email, role, token_hash, invited_by,
                 expires_at, accepted_at, revoked_at)
 
-teams          (id, org_id, name, created_by, created_at)
+teams          (id, org_id, name, created_by, created_at, default_template_id NULL)
 memberships    (team_id, user_id, is_admin, created_at)
 retros         (id, team_id, org_id, title, phase, created_by, facilitator_id,
-                max_votes DEFAULT 5, timer_ends_at, timer_remaining_ms, created_at)
-columns        (id, retro_id, title, position)
+                max_votes DEFAULT 5, timer_ends_at, timer_remaining_ms, timer_total_ms,
+                created_at, template_id NULL, template_name NULL,
+                default_timer_seconds NULL)
+columns        (id, retro_id, title, position, prompt NULL)
 notes          (id, retro_id, column_id, cluster_id NULL, author_id,
                 text, revealed DEFAULT false, created_at)
 clusters       (id, retro_id, column_id, title NULL)
@@ -56,7 +60,14 @@ actions        (id, team_id, org_id, retro_id, text, status,
                 assignee_id NULL, created_at, closed_at NULL)
 action_reviews (id, org_id, team_id, action_id, retro_id, outcome, comment NULL,
                 reviewed_by NULL, reviewed_at)   UNIQUE (action_id, retro_id)
+retro_templates        (id, org_id, team_id, name, name_key, description NULL,
+                        max_votes NULL, timer_seconds NULL, created_by, updated_by,
+                        created_at, updated_at)
+retro_template_columns (template_id, position, title, prompt NULL)
 ```
+
+`teams.default_template_id` and `retros.template_id` carry no foreign key: they may hold a
+`builtin:*` reference (ADR-004 D4).
 
 There is no connections table: the `RetroSession` actor holds them in memory, so presence
 is never something that has to be cleaned up after a crash.
@@ -84,6 +95,11 @@ through a join. None of them is copied into the row that refers to them.
 - Every copy is a staleness bug waiting to happen: rename a retro and its actions would show
   the old title forever.
 - `member_count` is a `COUNT(*)` for the same reason.
+
+**One exception, the template snapshot.** `retros.template_name`, `default_timer_seconds`
+and `columns.prompt` are copies of the template the retro was created from. That is history,
+not a cache: renaming, editing or deleting the template must not rewrite a past retro
+(ADR-004).
 
 The one thing a join must never change is section 4: the anonymity projection is applied
 **after** the join, never before.
@@ -167,8 +183,8 @@ Four levels, on three different scopes.
 | Role | Source | Powers |
 |---|---|---|
 | **Team member** | `memberships` | See and take part in the team's retros |
-| **Team admin** | `memberships.is_admin`, or being an org admin | Create and delete retros, rename the team, promote team admins; **add and remove members, by their own `is_admin` only** |
-| **Org admin** | `org_members.role = 'admin'` | Everything a team admin can do, on **every** team; manage org admins; list every team and its roster; **delete a team**; read organisation stats. **Cannot read a board of a team they have not joined, and cannot add themselves to one**: what they see of a team's content is counters and dates only, never a note's text, a title, an author or anybody's votes |
+| **Team admin** | `memberships.is_admin`, or being an org admin | Create and delete retros, rename the team, promote team admins, manage the team's templates and its default template; **add and remove members, by their own `is_admin` only** |
+| **Org admin** | `org_members.role = 'admin'` | Everything a team admin can do, on **every** team; manage org admins; list every team and its roster; **delete a team**; read organisation stats. **Cannot read a board of a team they have not joined, and cannot add themselves to one**: what they see of a team's content is counters and dates only, never a note's text, a title, an author or anybody's votes. **Cannot read the templates of a team they have not joined** |
 | **Facilitator** | Retro creator, then transferable | Change phase, title, timer, votes per person, columns; moderate notes |
 
 **A profile is its owner's alone.** Everybody edits their own name and avatar, nobody else's:
@@ -191,8 +207,8 @@ effect immediately, not in twelve hours. Sessions are opaque rows, so revocation
   the caller's own `memberships.is_admin`. An org admin passing that check could add
   themselves to any team and read its boards, which is exactly the boundary teams exist to
   hold. Administering a team and seeing inside it are separate powers.
-- Creating a retro checks membership **before** the role, so an org admin who is not in the
-  team is refused before anything is written.
+- Creating a retro, and every template write, checks membership **before** the role, so an
+  org admin who is not in the team is refused (`403`) before anything is written.
 - Deleting a team, its delete summary and the organisation stats use `checkOrgAdmin`, not
   `isTeamAdmin`: a team admin cannot delete their own team. The team's existence is checked
   first, so a team of another organization is `404`.
@@ -227,10 +243,16 @@ member.
 ### Retro
 
 - Creation is restricted to **team admins**. The creator becomes the facilitator.
-- Default columns when none are given: `Start`, `Stop`, `Continue`. An explicit empty list
-  creates a **blank** retro with no column; it cannot leave `BRAINSTORM` (nor be archived)
-  until at least one column exists (`409`).
-- `maxVotes` defaults to 5, can be set at creation (1 to 10), and changed by the facilitator
+- A retro starts from a `templateId` **or** from explicit `columns`, never both (`400`).
+  - `templateId`: a `builtin:*`, or a template of **this** team. Any other (another team,
+    another organization, deleted) is `404 "Template not found"`.
+  - `columns`: the given titles without prompts, and no template reference. An empty list
+    creates a **blank** retro with no column; it cannot leave `BRAINSTORM` (nor be archived)
+    until at least one column exists (`409`).
+  - Neither: the team's default template (see Templates).
+- The template is **copied** in one transaction with the retro: columns with their prompts,
+  `template {id, name}`, `defaultTimerSeconds`. The board never reads the template again.
+- `maxVotes` is `body.maxVotes ?? template.maxVotes ?? 5` (1 to 10), and changed by the facilitator
   **only in `BRAINSTORM` or `SHARE`** (`409` once voting has started).
 - Deletion: team admins only. Removes columns, notes, clusters and votes.
   **Actions survive**: they belong to the team.
@@ -239,6 +261,10 @@ member.
 
 - Editable only in `BRAINSTORM`, and only by the facilitator. Once notes are placed, renaming
   or removing a column moves the ground under the participants.
+- A column may carry a **prompt** (<= 140, empty means none), shown under its title to everyone
+  in every phase. It is set at creation or with `PATCH {title?, prompt?}` (at least one, `400`
+  otherwise), under the same rule as the title: `403` in `SHARE`, `VOTE`, `DISCUSS`, `409` in
+  `ARCHIVED`.
 - **A column holding notes cannot be deleted** (`409`).
 - Inline editing (note text, column title, group title) is validated with Enter, or with the
   check button; Shift+Enter adds a newline in a note; Escape cancels; leaving the field saves.
@@ -358,7 +384,8 @@ toggle beside the clock is stored per viewer in `localStorage`. A browser that b
 until the page was touched simply stays silent.
 
 The facilitator starts the timer from a picker: presets of 1, 3, 5 and 10 minutes, or a custom
-number of minutes. The picker remembers the last duration chosen.
+number of minutes. The picker remembers the last duration chosen. It opens on the
+template's suggested duration (`board.defaultTimerSeconds`), 5 minutes otherwise.
 
 `seconds` is bounded to `[5, 3600]`. Extending an already-overdue timer never yields a
 negative duration.
@@ -427,8 +454,41 @@ A team is the confidentiality boundary around a board. It is private to its memb
   receives the `error` event "This retro was deleted". `GET /teams/{id}/summary` gives the
   confirmation its counters, `{retroCount, actionCount}`, and nothing else.
 - The **My retros** page offers **New retro** to a team admin, with the same form as the team
-  page: one administered team starts directly, several ask which one first. Without an
-  administered team, the button is not shown.
+  page. The New retro dialog asks for the team when the user administers **and** belongs to
+  several; a team an org admin has not joined is not offered. Without such a team, the button
+  is not shown.
+
+### Templates
+
+- **Built-in**: 13 classics shipped in code (Start / Stop / Continue, Mad / Sad / Glad, 4L,
+  Sailboat, Starfish, KALM, DAKI, Hot-air balloon, Plus / Delta, Rose / Bud / Thorn,
+  Wrap-up + kudos, Pit Stop, Blank). Read-only: `PUT` or `DELETE` on one is `404`; a team
+  duplicates it to adapt it.
+- **Team templates** are read by the team's members and written by its admins only (`403`
+  otherwise). A user outside the team, org admins included, gets `403`.
+- A template has a name (unique in the team whatever the case, `409`; a team may reuse a
+  built-in name), an optional description, 0 to 8 columns with distinct titles (case
+  insensitive, `400`), an optional prompt per column, an optional `maxVotes` and an optional
+  suggested `timerSeconds`. Strings are trimmed.
+- **At most 50 templates per team** (`409 "Template limit reached"`).
+- **Edit** replaces the whole template. Last write wins; `updatedAt` and `updatedBy` say whose
+  version it is.
+- **Delete** is final. If it was the team default, the default goes back to Start / Stop /
+  Continue in the same transaction.
+- **Duplicate** (`POST .../templates/duplicate`, `{sourceTemplateId, name?}`): from a
+  built-in, or from a template of any team of the organization the caller belongs to. Any
+  other source answers `404`, so a team's templates are not disclosed to outsiders. Without a
+  name, the copy is called `"<source> (copy)"`, then `"(copy 2)"` and so on.
+- **Save as template** (`POST /retros/{retroId}/template`, `{name, description?}`): a team
+  admin, in any phase including `ARCHIVED`, copies the board's columns, prompts and
+  `maxVotes`, never its notes, and no timer. A board with more than 8 columns or two columns
+  of the same title is refused (`409`): rename or remove first. The board's dialog prefills
+  the name with the retro's template name, or its title, suffixed `(copy)`, `(copy 2)`... when
+  the team already has a template of that name.
+- **Team default** (`PUT /teams/{teamId}/default-template`, `{templateId | null}`): a built-in
+  or a template of this team (`404` otherwise); `null` goes back to Start / Stop / Continue.
+  The effective default is never null.
+- **Snapshot.** No template write changes an existing retro, and none is broadcast.
 
 ### Organisation stats
 
@@ -509,6 +569,13 @@ Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `413`, `
 | PUT | `/retros/{retroId}/facilitator` | `204` |
 | POST | `/retros/{retroId}/dice` | `200` `{rolls: [{userId, name, pictureUrl?, value}]}` — DISCUSS, own die, once |
 | DELETE | `/retros/{retroId}/dice` | `204` — DISCUSS, facilitator only |
+| GET | `/teams/{teamId}/templates` | `200` `{team: Template[], builtin: Template[], defaultTemplateId}` — team members |
+| POST | `/teams/{teamId}/templates` | `201` `Template` — team admin |
+| POST | `/teams/{teamId}/templates/duplicate` | `201` `Template` — team admin, `{sourceTemplateId, name?}` |
+| PUT | `/teams/{teamId}/templates/{templateId}` | `200` `Template` — team admin, full replacement |
+| DELETE | `/teams/{teamId}/templates/{templateId}` | `204` — team admin |
+| PUT | `/teams/{teamId}/default-template` | `200` `{defaultTemplateId}` — team admin, `{templateId \| null}` |
+| POST | `/retros/{retroId}/template` | `201` `Template` — team admin, `{name, description?}` |
 | GET | `/teams/{teamId}/actions` | `200` `Action[]`, most recent first |
 | POST | `/retros/{retroId}/actions` | `201` `Action` |
 | PATCH | `/teams/{teamId}/actions/{actionId}` | `200` `Action` |
@@ -552,12 +619,16 @@ ActionStats     { openCount, doneSinceLastRetro, droppedSinceLastRetro,
 Timer           { state: 'IDLE'|'RUNNING'|'PAUSED', endsAt?, remainingMs? }
 Note            { id, columnId, author: {id,name,pictureUrl?}, isMine, revealed, text, createdAt? }
 Card            { id, type: 'note'|'cluster', notes: Note[], myVotes, title?, totalVotes? }
-Column          { id, title, order, cards: Card[] }
+Column          { id, title, prompt: string | null, order, cards: Card[] }
 Board           { id, title, phase, teamId, createdBy, createdAt?, isFacilitator,
                   columns, maxVotes, myVotesLeft, myNotesRevealed, votesRevealed,
                   voteProgress: {[userId]: votesSpent},
                   timer, actions, carriedOverActions,
-                  review: {enabled, focusActionId, items: ReviewItem[]} }
+                  review: {enabled, focusActionId, items: ReviewItem[]},
+                  template: {id, name} | null, defaultTimerSeconds: number | null }
+Template        { id, scope: 'BUILTIN'|'TEAM', name, description: string | null,
+                  columns: [{title, prompt: string | null}], maxVotes: number | null,
+                  timerSeconds: number | null, updatedAt?, updatedBy?: {id, name} }
 ```
 
 ### Ordering, to preserve
@@ -673,6 +744,7 @@ Inbound actions: `subscribe`, `cursor`.
 | `/admin` | AdminPage | authenticated, org admin content: people, invitations, teams |
 | `/paddock` | PaddockPage | authenticated, platform admin only |
 | `/teams/:teamId` | TeamPage | authenticated |
+| `/teams/:teamId/templates` | TeamTemplatesPage | authenticated, team members; writes for team admins |
 | `/teams/:teamId/retros/:retroId` | RetroPage | authenticated |
 | `*` | redirect to `/teams` | — |
 
@@ -689,6 +761,12 @@ to the login screen.
 | Retro title | required, <= 80 |
 | Columns at creation | <= 8 columns, each title <= 40 |
 | Column title | required, <= 40 |
+| Column prompt | <= 140, trimmed, empty means none |
+| Template name | required, <= 60, trimmed, unique in the team (case insensitive) |
+| Template description | <= 200 |
+| Template columns | 0 to 8, distinct titles (case insensitive) |
+| Template `maxVotes` | integer, 1 to 10, or null |
+| Template `timerSeconds` | integer, 5 to 3600, or null |
 | Note text | required, <= 500 |
 | Cluster title | required, <= 60 |
 | Team name | required, <= 60, trimmed on rename |
@@ -720,6 +798,8 @@ to the login screen.
   given at the invitation.
 - An unconfirmed account taken over by Google takes the Google name: the name typed by
   whoever registered the address does not survive.
+- Editing or deleting a template never changes an existing retro.
+- A template outside the team (another team, another organization, deleted) returns `404`.
 
 ---
 

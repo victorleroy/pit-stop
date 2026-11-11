@@ -4,7 +4,11 @@ import {MemoryRouter} from 'react-router-dom';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {RetroHeader} from '@/components/RetroHeader';
 
-const renderHeader = ({canZoom = true, zoom = 1} = {}) => {
+const renderHeader = ({
+  canZoom = true,
+  templateName,
+  zoom = 1,
+}: {canZoom?: boolean; templateName?: string; zoom?: number} = {}) => {
   const onZoomChange = vi.fn();
   render(
     <MemoryRouter>
@@ -13,6 +17,7 @@ const renderHeader = ({canZoom = true, zoom = 1} = {}) => {
         onZoomChange={onZoomChange}
         presence={<span>Live</span>}
         teamId="team-1"
+        templateName={templateName}
         title="Sprint 42"
         zoom={zoom}
       />
@@ -53,5 +58,17 @@ describe('RetroHeader', () => {
 
     expect(screen.queryByRole('group', {name: 'Zoom'})).toBeNull();
     expect(screen.getByRole('heading', {name: 'Sprint 42'})).toBeTruthy();
+  });
+
+  it('names the template the retro was created from, when there is one', () => {
+    renderHeader({templateName: 'Sailboat'});
+
+    expect(screen.getByText('From template: Sailboat')).toBeTruthy();
+  });
+
+  it('says nothing about a template when the retro has none', () => {
+    renderHeader();
+
+    expect(screen.queryByText(/From template/)).toBeNull();
   });
 });

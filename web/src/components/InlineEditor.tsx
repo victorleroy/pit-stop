@@ -4,6 +4,7 @@ import {useRef, useState} from 'react';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
 
 export const InlineEditor = ({
+  allowEmpty = false,
   label,
   maxLength,
   multiline = false,
@@ -13,6 +14,8 @@ export const InlineEditor = ({
   sx,
   value,
 }: {
+  /** An empty text is a valid answer (it clears the value) rather than a cancel. */
+  allowEmpty?: boolean;
   label?: string;
   maxLength?: number;
   multiline?: boolean;
@@ -33,7 +36,7 @@ export const InlineEditor = ({
     const text = draft.trim();
     onClose();
 
-    if (commit && text && text !== value) {
+    if (commit && (text || allowEmpty) && text !== value) {
       onSave(text);
     }
   };

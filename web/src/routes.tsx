@@ -12,6 +12,7 @@ import {ResetPasswordPage} from '@/pages/ResetPasswordPage';
 import {SetupPage} from '@/pages/SetupPage';
 import {RetroPage} from '@/pages/RetroPage';
 import {TeamPage} from '@/pages/TeamPage';
+import {TeamTemplatesPage} from '@/pages/TeamTemplatesPage';
 import {TeamsPage} from '@/pages/TeamsPage';
 import {VerifyEmailPage} from '@/pages/VerifyEmailPage';
 
@@ -51,6 +52,7 @@ export const router = createBrowserRouter([
           {element: <PaddockPage />, path: 'paddock'},
           {element: <ProfilePage />, path: 'profile'},
           {element: <TeamPage />, path: 'teams/:teamId'},
+          {element: <TeamTemplatesPage />, path: 'teams/:teamId/templates'},
           {element: <RetroPage />, path: 'teams/:teamId/retros/:retroId'},
           {element: <Navigate replace to="/retros" />, path: '*'},
         ],

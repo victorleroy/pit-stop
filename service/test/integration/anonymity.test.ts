@@ -246,6 +246,41 @@ describe('anonymity', () => {
     ).resolves.toBeDefined();
   });
 
+  it('gives the column prompts and the template to everybody alike, in every phase', async () => {
+    const bob = await harness.createUser(author.orgId, 'Bob');
+    const {teamId} = await harness.container.retroManager.getBoard(author, retroId);
+
+    await harness.container.teamManager.addMember(author, teamId, bob.userId);
+    await harness.container.noteManager.create(other, retroId, columnId, 'alice note');
+
+    const metadataFor = async (auth: AuthContext) => {
+      const board = await harness.container.retroManager.getBoard(auth, retroId);
+
+      return {prompts: board.columns.map(({prompt}) => prompt), template: board.template};
+    };
+
+    for (const phase of ['BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS', 'ARCHIVED'] as const) {
+      if (phase !== 'BRAINSTORM') {
+        await setPhase(phase);
+      }
+
+      const [ofAuthor, ofParticipant, ofFacilitator] = await Promise.all(
+        [other, bob, author].map(metadataFor),
+      );
+
+      expect(ofAuthor).toEqual({
+        prompts: [
+          'Something we should try next sprint',
+          'Something that costs us more than it gives',
+          'Something that works and must stay',
+        ],
+        template: {id: 'builtin:start-stop-continue', name: 'Start / Stop / Continue'},
+      });
+      expect(ofParticipant).toEqual(ofAuthor);
+      expect(ofFacilitator).toEqual(ofAuthor);
+    }
+  });
+
   describe('vote progress', () => {
     const castOnFirstCard = async (auth: AuthContext) => {
       const board = await harness.container.retroManager.getBoard(auth, retroId);

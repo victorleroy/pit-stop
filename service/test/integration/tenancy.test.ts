@@ -126,4 +126,32 @@ describe('multi-tenant isolation', () => {
     // The paddock payload must never carry board content (ADR-001 D8).
     expect(JSON.stringify(orgs)).not.toContain('acme secret');
   });
+
+  it('never returns a template of another organisation', async () => {
+    const acmeTemplate = await harness.container.retroTemplateManager.create(acme, acmeTeamId, {
+      columns: [{prompt: 'acme secret', title: 'Ideas'}],
+      description: null,
+      maxVotes: null,
+      name: 'Acme format',
+      timerSeconds: null,
+    });
+    const globexTeamId = await harness.createTeam(globex);
+
+    await harness.container.retroTemplateManager.duplicate(globex, globexTeamId, 'builtin:kalm');
+
+    const rows = await globex.db.retroTemplates().selectAll().execute();
+
+    expect(rows.map(({name}) => name)).toEqual(['KALM (copy)']);
+    expect(
+      await globex.db.retroTemplates().selectAll().where('id', '=', acmeTemplate.id).execute(),
+    ).toEqual([]);
+    await expect(
+      harness.container.retroManager.create(globex, globexTeamId, 'Stolen', {
+        templateId: acmeTemplate.id,
+      }),
+    ).rejects.toMatchObject({status: 404});
+    await expect(
+      harness.container.retroTemplateManager.list(globex, acmeTeamId),
+    ).rejects.toMatchObject({status: 403});
+  });
 });

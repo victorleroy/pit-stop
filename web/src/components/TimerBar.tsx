@@ -115,12 +115,15 @@ const useRemainingMs = (timer: Timer, receivedAt: number) => {
  * and nothing at all when it is idle. Never a red countdown — this is not an alarm.
  */
 export const TimerControls = ({
+  defaultSeconds,
   isBusy,
   isFacilitator,
   onTimer,
   receivedAt,
   timer,
 }: {
+  /** The duration the template suggests, offered until the facilitator picks another. */
+  defaultSeconds?: number | null;
   isBusy: boolean;
   isFacilitator: boolean;
   onTimer: (action: TimerAction, seconds?: number) => void;
@@ -129,7 +132,7 @@ export const TimerControls = ({
   timer: Timer;
 }) => {
   const {isSteady, remainingMs} = useRemainingMs(timer, receivedAt);
-  const [duration, setDuration] = useState(DEFAULT_DURATION_SECONDS);
+  const [duration, setDuration] = useState(defaultSeconds ?? DEFAULT_DURATION_SECONDS);
   const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null);
   const [customMinutes, setCustomMinutes] = useState('');
   const isOver = timer.state !== 'IDLE' && remainingMs === 0;

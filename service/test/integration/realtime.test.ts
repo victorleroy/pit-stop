@@ -5,6 +5,7 @@ import {errorHandler} from '~/Http/errorHandler';
 import type {Variables} from '~/Http/middleware/auth';
 import {retroRoutes} from '~/Http/routes/retros';
 import {teamRoutes} from '~/Http/routes/teams';
+import {templateRoutes} from '~/Http/routes/templates';
 import {createSocketAttacher, tokenFromProtocols} from '~/Realtime/attachSocket';
 import type {AuthContext} from '~/Security/AuthContext';
 
@@ -405,5 +406,73 @@ describe('live retros', () => {
         [member.userId, 1],
       ]);
     });
+  });
+
+  it('sends a changed prompt to every connection, and nothing for a template write', async () => {
+    const connect = async (auth: AuthContext) => {
+      const socket = Object.assign(new EventEmitter(), {
+        close: jest.fn(),
+        OPEN: 1,
+        readyState: 1,
+        sent: [] as string[],
+        send(payload: string) {
+          this.sent.push(payload);
+        },
+      });
+
+      await createSocketAttacher(harness.container)(socket as never, await sessionToken(auth));
+      socket.emit('message', JSON.stringify({action: 'subscribe', retroId}));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      return socket;
+    };
+    const request = (path: string, method: string, body?: unknown) => {
+      const app = new Hono<{Variables: Variables}>();
+
+      app.onError(errorHandler);
+      app.use('*', async (context, next) => {
+        context.set('auth', owner);
+        await next();
+      });
+      app.route('/', retroRoutes(harness.container));
+      app.route('/', templateRoutes(harness.container));
+
+      return app.request(path, {
+        ...(body === undefined
+          ? {}
+          : {body: JSON.stringify(body), headers: {'content-type': 'application/json'}}),
+        method,
+      });
+    };
+    const lastPrompt = (socket: {sent: string[]}) =>
+      socket.sent
+        .map((raw) => JSON.parse(raw))
+        .filter((event) => event.type === 'board.updated')
+        .at(-1).board.columns[0].prompt;
+
+    const sockets = [await connect(owner), await connect(member)];
+    const {columns} = await harness.container.retroManager.getBoard(owner, retroId);
+    const patched = await request(`/retros/${retroId}/columns/${columns[0]!.id}`, 'PATCH', {
+      prompt: 'Be specific',
+    });
+
+    expect(patched.status).toBe(200);
+    sockets.forEach((socket) => expect(lastPrompt(socket)).toBe('Be specific'));
+
+    const before = sockets.map((socket) => socket.sent.length);
+    const created = await request(`/teams/${teamId}/templates`, 'POST', {columns: [], name: 'A'});
+    const {id} = (await created.json()) as {id: string};
+
+    expect(created.status).toBe(201);
+    expect(
+      (await request(`/teams/${teamId}/templates/${id}`, 'PUT', {columns: [], name: 'B'})).status,
+    ).toBe(200);
+    expect(
+      (await request(`/teams/${teamId}/default-template`, 'PUT', {templateId: id})).status,
+    ).toBe(200);
+    expect((await request(`/teams/${teamId}/templates/${id}`, 'DELETE')).status).toBe(204);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    expect(sockets.map((socket) => socket.sent.length)).toEqual(before);
   });
 });

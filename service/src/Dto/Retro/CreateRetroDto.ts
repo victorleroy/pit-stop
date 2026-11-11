@@ -23,6 +23,12 @@ export class CreateRetroDto {
   @MaxLength(40, {each: true})
   public columns?: string[];
 
+  // builtin:<slug> or a template of the team; never together with `columns`.
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  public templateId?: string;
+
   @IsOptional()
   @IsInt()
   @Min(1)

@@ -2,7 +2,7 @@ import {Hono} from 'hono';
 import type {Container} from '~/container';
 import type {ActionReviewOutcome, RetroPhase} from '~/Db/schema';
 import {RenameClusterDto, GroupNoteDto} from '~/Dto/Retro/ClusterDto';
-import {CreateColumnDto, RenameColumnDto, ReorderColumnsDto} from '~/Dto/Retro/ColumnDto';
+import {CreateColumnDto, ReorderColumnsDto, UpdateColumnDto} from '~/Dto/Retro/ColumnDto';
 import {CreateRetroDto} from '~/Dto/Retro/CreateRetroDto';
 import {CreateNoteDto, UpdateNoteDto} from '~/Dto/Retro/NoteDto';
 import {UpdateRetroDto} from '~/Dto/Retro/UpdateRetroDto';
@@ -40,8 +40,11 @@ export const retroRoutes = (c: Container) => {
       context.get('auth'),
       context.req.param('teamId'),
       body.title,
-      body.columns,
-      body.maxVotes,
+      {
+        ...(body.columns === undefined ? {} : {columns: body.columns}),
+        ...(body.maxVotes === undefined ? {} : {maxVotes: body.maxVotes}),
+        ...(body.templateId === undefined ? {} : {templateId: body.templateId}),
+      },
     );
 
     return context.json(board, 201);
@@ -88,7 +91,7 @@ export const retroRoutes = (c: Container) => {
     const retroId = context.req.param('retroId');
     const body = await validateBody(context, CreateColumnDto);
     const board = await c.hub.run(retroId, () =>
-      c.retroManager.addColumn(context.get('auth'), retroId, body.title),
+      c.retroManager.addColumn(context.get('auth'), retroId, body.title, body.prompt ?? null),
     );
 
     return context.json(board, 201);
@@ -106,14 +109,12 @@ export const retroRoutes = (c: Container) => {
 
   app.patch('/retros/:retroId/columns/:columnId', async (context) => {
     const retroId = context.req.param('retroId');
-    const body = await validateBody(context, RenameColumnDto);
+    const body = await validateBody(context, UpdateColumnDto);
     const board = await c.hub.run(retroId, () =>
-      c.retroManager.renameColumn(
-        context.get('auth'),
-        retroId,
-        context.req.param('columnId'),
-        body.title,
-      ),
+      c.retroManager.updateColumn(context.get('auth'), retroId, context.req.param('columnId'), {
+        ...(body.title === undefined ? {} : {title: body.title}),
+        ...(body.prompt === undefined ? {} : {prompt: body.prompt}),
+      }),
     );
 
     return context.json(board);

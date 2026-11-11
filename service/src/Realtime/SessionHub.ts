@@ -20,6 +20,9 @@ const RETRO_COLUMNS = [
   'timerRemainingMs',
   'timerTotalMs',
   'createdAt',
+  'templateId',
+  'templateName',
+  'defaultTimerSeconds',
 ] as const;
 
 /**

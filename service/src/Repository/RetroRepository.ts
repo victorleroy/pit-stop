@@ -16,15 +16,21 @@ const RETRO_COLUMNS = [
   'timerRemainingMs',
   'timerTotalMs',
   'createdAt',
+  'templateId',
+  'templateName',
+  'defaultTimerSeconds',
 ] as const;
 
 export interface CreateRetroInput {
   createdBy: string;
+  defaultTimerSeconds?: number | null;
   id: string;
   /** Left out, the column default (5) applies. */
   maxVotes?: number;
   orgId: string;
   teamId: string;
+  templateId?: string | null;
+  templateName?: string | null;
   title: string;
 }
 
@@ -84,18 +90,22 @@ export class RetroRepository {
     return rows.map(({id}) => id);
   }
 
-  public async create(input: CreateRetroInput): Promise<void> {
-    await this.db
+  /** Takes the caller's transaction: a retro and its columns are written together. */
+  public async create(input: CreateRetroInput, executor: Db = this.db): Promise<void> {
+    await executor
       .insertInto('retros')
       .values({
         createdAt: new Date().toISOString(),
         createdBy: input.createdBy,
+        defaultTimerSeconds: input.defaultTimerSeconds ?? null,
         facilitatorId: input.createdBy,
         id: input.id,
         ...(input.maxVotes === undefined ? {} : {maxVotes: input.maxVotes}),
         orgId: input.orgId,
         phase: 'BRAINSTORM',
         teamId: input.teamId,
+        templateId: input.templateId ?? null,
+        templateName: input.templateName ?? null,
         title: input.title,
       })
       .execute();

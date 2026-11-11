@@ -1,6 +1,3 @@
-import MenuItem from '@mui/material/MenuItem';
-import Menu from '@mui/material/Menu';
-import type {MouseEvent} from 'react';
 import {useState} from 'react';
 import {
   Button,
@@ -38,18 +35,9 @@ export const MyRetrosPage = () => {
   });
 
   const {data: teams} = useQuery({queryFn: fetchTeams, queryKey: ['teams']});
-  const adminTeams = (teams ?? []).filter(({isAdmin}) => isAdmin);
-  const [pickerAnchor, setPickerAnchor] = useState<HTMLElement>();
-  const [newRetroTeamId, setNewRetroTeamId] = useState<string>();
-
-  // Only a team admin starts a retro: one team starts directly, several ask which one first.
-  const onNewRetro = (event: MouseEvent<HTMLButtonElement>) => {
-    if (adminTeams.length > 1) {
-      setPickerAnchor(event.currentTarget);
-    } else if (adminTeams[0]) {
-      setNewRetroTeamId(adminTeams[0].id);
-    }
-  };
+  // An org admin sees every team but only starts a retro in one they belong to.
+  const adminTeams = (teams ?? []).filter(({isAdmin, isMember}) => isAdmin && isMember);
+  const [isStarting, setIsStarting] = useState(false);
 
   const live = (retros ?? []).filter(({phase}) => phase !== 'ARCHIVED');
   const archived = (retros ?? []).filter(({phase}) => phase === 'ARCHIVED');
@@ -121,34 +109,16 @@ export const MyRetrosPage = () => {
     <Stack spacing={4}>
       {adminTeams.length > 0 ? (
         <Stack sx={{alignItems: 'flex-end'}}>
-          <Button onClick={onNewRetro} variant="contained">
+          <Button onClick={() => setIsStarting(true)} variant="contained">
             New retro
           </Button>
         </Stack>
       ) : null}
 
-      <Menu
-        anchorEl={pickerAnchor}
-        onClose={() => setPickerAnchor(undefined)}
-        open={Boolean(pickerAnchor)}
-      >
-        {adminTeams.map((team) => (
-          <MenuItem
-            key={team.id}
-            onClick={() => {
-              setPickerAnchor(undefined);
-              setNewRetroTeamId(team.id);
-            }}
-          >
-            {team.name}
-          </MenuItem>
-        ))}
-      </Menu>
-
-      {newRetroTeamId ? (
+      {isStarting ? (
         <NewRetroDialog
-          onClose={() => setNewRetroTeamId(undefined)}
-          teamId={newRetroTeamId}
+          onClose={() => setIsStarting(false)}
+          teamIds={adminTeams.map(({id}) => id)}
         />
       ) : null}
 

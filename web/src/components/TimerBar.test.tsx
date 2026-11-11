@@ -109,3 +109,29 @@ describe('TimerControls duration', () => {
     expect((screen.getByRole('button', {name: 'Start'}) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe('TimerControls default duration', () => {
+  afterEach(() => cleanup());
+
+  const renderIdle = (defaultSeconds?: number | null) =>
+    render(
+      <TimerControls
+        defaultSeconds={defaultSeconds}
+        isBusy={false}
+        isFacilitator
+        onTimer={vi.fn()}
+        receivedAt={Date.now()}
+        timer={{state: 'IDLE'} as Timer}
+      />,
+    );
+
+  it('starts from the duration the template suggests', () => {
+    renderIdle(600);
+    expect(screen.getByLabelText('Choose the timer duration').textContent).toContain('10:00');
+  });
+
+  it('falls back to five minutes without one', () => {
+    renderIdle(null);
+    expect(screen.getByLabelText('Choose the timer duration').textContent).toContain('5:00');
+  });
+});

@@ -22,13 +22,12 @@ import type {BoardRepository} from '~/Repository/BoardRepository';
 import type {ColumnRepository} from '~/Repository/ColumnRepository';
 import type {MembershipRepository} from '~/Repository/MembershipRepository';
 import type {RetroRepository, UpdateRetroInput} from '~/Repository/RetroRepository';
+import type {RetroTemplateManager} from '~/Manager/RetroTemplateManager';
 import type {VoteRepository} from '~/Repository/VoteRepository';
 import type {AuthContext} from '~/Security/AuthContext';
 import {checkRetroAllowance} from '~/Security/Plans';
 import {RetroAccessChecker} from '~/Security/RetroAccessChecker';
 import type {RoleChecker} from '~/Security/RoleChecker';
-
-const DEFAULT_COLUMNS = ['Start', 'Stop', 'Continue'];
 
 /**
  * The board's structure is settled while people write and never after: once notes are placed,
@@ -55,6 +54,7 @@ export class RetroManager {
     private readonly accessChecker: RetroAccessChecker,
     private readonly roleChecker: RoleChecker,
     private readonly voteRepository: VoteRepository,
+    private readonly templateManager: RetroTemplateManager,
   ) {}
 
   public async listByTeam(auth: AuthContext, teamId: string): Promise<RetroSummaryModel[]> {
@@ -107,12 +107,16 @@ export class RetroManager {
       .sort((left, right) => (right.createdAt ?? "").localeCompare(left.createdAt ?? ""));
   }
 
+  /**
+   * A retro starts from a template, or from an explicit list of columns, never both; with
+   * neither, from the team default. The template is copied here and never read again
+   * (ADR 0004): editing it later does not touch this retro.
+   */
   public async create(
     auth: AuthContext,
     teamId: string,
     title: string,
-    columnTitles?: string[],
-    maxVotes?: number,
+    options: {columns?: string[]; maxVotes?: number; templateId?: string} = {},
   ): Promise<BoardModel> {
     // Membership first, then the role: an org admin passes the role check on every team, and
     // without this the retro would be written before the board read refused to return it.
@@ -120,24 +124,45 @@ export class RetroManager {
     await this.roleChecker.checkTeamAdmin(auth, teamId);
     await checkRetroAllowance(this.retroRepository, auth.orgId, auth.orgStatus);
 
+    if (options.columns && options.templateId !== undefined) {
+      throw new BadRequestHttpError('Send a template or columns, not both');
+    }
+
+    // An explicit empty list is the blank board: the facilitator builds the columns.
+    const template = options.columns
+      ? undefined
+      : await this.templateManager.resolve(auth, teamId, options.templateId);
+    const columns = template
+      ? template.columns
+      : (options.columns ?? []).map((columnTitle) => ({prompt: null, title: columnTitle}));
+    const maxVotes = options.maxVotes ?? template?.maxVotes ?? undefined;
+
     const id = uuid();
-    // An explicit empty list is the blank template: the facilitator builds the columns.
-    const titles = columnTitles ?? DEFAULT_COLUMNS;
 
-    await this.retroRepository.create({
-      createdBy: auth.userId,
-      id,
-      ...(maxVotes === undefined ? {} : {maxVotes}),
-      orgId: auth.orgId,
-      teamId,
-      title,
+    // One transaction: a failure leaves neither a retro without its columns nor orphan columns.
+    await auth.db.unscoped.transaction().execute(async (trx) => {
+      await this.retroRepository.create(
+        {
+          createdBy: auth.userId,
+          defaultTimerSeconds: template?.timerSeconds ?? null,
+          id,
+          ...(maxVotes === undefined ? {} : {maxVotes}),
+          orgId: auth.orgId,
+          teamId,
+          templateId: template?.id ?? null,
+          templateName: template?.name ?? null,
+          title,
+        },
+        trx,
+      );
+
+      for (const [position, column] of columns.entries()) {
+        await this.columnRepository.create(
+          {id: uuid(), position, prompt: column.prompt, retroId: id, title: column.title},
+          trx,
+        );
+      }
     });
-
-    await Promise.all(
-      titles.map((columnTitle, position) =>
-        this.columnRepository.create({id: uuid(), position, retroId: id, title: columnTitle}),
-      ),
-    );
 
     return this.getBoard(auth, id);
   }
@@ -169,6 +194,7 @@ export class RetroManager {
       columns: RetroManager.buildColumns(columns, notes, clusters, votes, retro.phase, userId),
       createdAt: retro.createdAt,
       createdBy: retro.createdBy,
+      defaultTimerSeconds: retro.defaultTimerSeconds,
       id: retro.id,
       isFacilitator: retro.facilitatorId === userId,
       maxVotes: retro.maxVotes,
@@ -181,6 +207,10 @@ export class RetroManager {
         items: RetroManager.buildReviewItems(retro, actions, actionReviews),
       },
       teamId: retro.teamId,
+      template:
+        retro.templateId && retro.templateName
+          ? {id: retro.templateId, name: retro.templateName}
+          : null,
       timer: RetroManager.toTimerModel(retro),
       title: retro.title,
       voteProgress: retro.phase === 'VOTE' ? RetroManager.countVotesByUser(votes) : {},
@@ -397,23 +427,33 @@ export class RetroManager {
     await this.boardRepository.deleteBoard(retroId);
   }
 
-  public async addColumn(auth: AuthContext, retroId: string, title: string): Promise<BoardModel> {
+  public async addColumn(
+    auth: AuthContext,
+    retroId: string,
+    title: string,
+    prompt: string | null = null,
+  ): Promise<BoardModel> {
     const {retro} = await this.accessChecker.checkFacilitatorAccess(auth, retroId);
     RetroAccessChecker.checkPhaseAllows(retro.phase, COLUMN_PHASES);
 
     const position = await this.columnRepository.nextPosition(retroId);
 
-    await this.columnRepository.create({id: uuid(), position, retroId, title});
+    await this.columnRepository.create({id: uuid(), position, prompt, retroId, title});
 
     return this.getBoard(auth, retroId);
   }
 
-  public async renameColumn(
+  /** The prompt follows the title: settled while people write, by the facilitator alone. */
+  public async updateColumn(
     auth: AuthContext,
     retroId: string,
     columnId: string,
-    title: string,
+    changes: {prompt?: string | null; title?: string},
   ): Promise<BoardModel> {
+    if (changes.title === undefined && changes.prompt === undefined) {
+      throw new BadRequestHttpError('Send a title or a prompt');
+    }
+
     const {retro} = await this.accessChecker.checkFacilitatorAccess(auth, retroId);
     RetroAccessChecker.checkPhaseAllows(retro.phase, COLUMN_PHASES);
 
@@ -423,7 +463,10 @@ export class RetroManager {
       throw new NotFoundHttpError(`Column "${columnId}" not found`);
     }
 
-    await this.columnRepository.rename(retroId, columnId, title);
+    await this.columnRepository.update(retroId, columnId, {
+      ...(changes.title === undefined ? {} : {title: changes.title}),
+      ...(changes.prompt === undefined ? {} : {prompt: changes.prompt}),
+    });
 
     return this.getBoard(auth, retroId);
   }
@@ -557,6 +600,7 @@ export class RetroManager {
             : cards,
           id: column.id,
           order: column.position,
+          prompt: column.prompt,
           title: column.title,
         };
       });

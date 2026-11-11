@@ -1,3 +1,4 @@
+import BookmarkAddOutlinedIcon from '@mui/icons-material/BookmarkAddOutlined';
 import ChecklistOutlinedIcon from '@mui/icons-material/ChecklistOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
@@ -18,9 +19,12 @@ import {
   Tooltip,
   Typography,
 } from '@/ui';
+import {useQuery} from '@tanstack/react-query';
 import {Fragment, useState} from 'react';
+import {fetchTeams} from '@/api/teams';
 import {VOTE_OPTIONS} from '@/api/retros';
 import type {Board, RetroPhase, TimerAction} from '@/api/types';
+import {SaveAsTemplateDialog} from '@/components/SaveAsTemplateDialog';
 import {TimerControls} from '@/components/TimerBar';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
 import {boardAuthors} from '@/utils/authorFilter';
@@ -92,6 +96,12 @@ export const BoardToolbar = ({
   receivedAt: number;
 }) => {
   const [newColumn, setNewColumn] = useState('');
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  // The board exposes no admin flag: the teams the user sees say it. An org admin who is
+  // not a member of the team is admin without being a member, and cannot save its templates.
+  const {data: teams} = useQuery({queryFn: fetchTeams, queryKey: ['teams']});
+  const myTeam = teams?.find(({id}) => id === board.teamId);
+  const canSaveAsTemplate = Boolean(myTeam?.isAdmin && myTeam.isMember);
   const columnInputRef = useAutoFocus(isAddingColumn);
 
   const closeColumnDialog = () => {
@@ -131,6 +141,7 @@ export const BoardToolbar = ({
         isBusy={isTimerBusy}
         isFacilitator={board.isFacilitator}
         onTimer={onTimer}
+        defaultSeconds={board.defaultTimerSeconds}
         receivedAt={receivedAt}
         timer={board.timer}
       />
@@ -300,7 +311,25 @@ export const BoardToolbar = ({
     </Button>
   );
 
-  const blocks = [timerBlock, myBlock, filterBlock, actionsBlock, facilitatorBlock].filter(Boolean);
+  const templateBlock = canSaveAsTemplate ? (
+    <Button
+      onClick={() => setIsSavingTemplate(true)}
+      size="small"
+      startIcon={<BookmarkAddOutlinedIcon />}
+      variant="text"
+    >
+      Save as template
+    </Button>
+  ) : null;
+
+  const blocks = [
+    timerBlock,
+    myBlock,
+    filterBlock,
+    actionsBlock,
+    templateBlock,
+    facilitatorBlock,
+  ].filter(Boolean);
 
   return (
     <Card elevation={0} sx={{overflow: 'hidden'}}>
@@ -486,6 +515,15 @@ export const BoardToolbar = ({
             </Button>
           </DialogActions>
         </Dialog>
+
+        {canSaveAsTemplate ? (
+          <SaveAsTemplateDialog
+            board={board}
+            key={isSavingTemplate ? 'open' : 'closed'}
+            onClose={() => setIsSavingTemplate(false)}
+            open={isSavingTemplate}
+          />
+        ) : null}
 
         <Typography color="textSecondary" variant="textXs">
           {PHASE_HINTS[board.phase]}

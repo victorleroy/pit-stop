@@ -1,42 +1,90 @@
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import MenuItem from '@mui/material/MenuItem';
-import {Button, Dialog, Select, Stack, TextField, Typography} from '@/ui';
-import {useMutation, useQueryClient} from '@tanstack/react-query';
+import Radio from '@mui/material/Radio';
+import RadioGroup from '@mui/material/RadioGroup';
+import Skeleton from '@mui/material/Skeleton';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import {useTheme} from '@mui/material/styles';
+import {Button, Chip, Dialog, Select, Stack, TextField, Typography} from '@/ui';
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {useState} from 'react';
-import {useNavigate} from 'react-router-dom';
+import {Link, useNavigate} from 'react-router-dom';
+import {ApiError} from '@/api/client';
 import {createRetro, DEFAULT_MAX_VOTES, VOTE_OPTIONS} from '@/api/retros';
+import {fetchTeams} from '@/api/teams';
+import {fetchTeamTemplates, teamTemplatesKey} from '@/api/templates';
+import type {Template} from '@/api/types';
 import {useToast} from '@/contexts/ToastContext';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
 
-/** Ready-made column sets: teams rarely run the same format twice in a row. */
-const TEMPLATES = [
-  {columns: ['Start', 'Stop', 'Continue'], label: 'Start / Stop / Continue'},
-  {columns: ['Mad', 'Sad', 'Glad'], label: 'Mad / Sad / Glad'},
-  {columns: ['Liked', 'Learned', 'Lacked', 'Longed for'], label: '4L'},
-  {columns: ['What worked', 'What got stuck', 'Ideas', 'Kudos'], label: 'Wrap-up + kudos'},
-  // For a format of its own: the facilitator lays the columns out on the board first.
-  {columns: [], label: 'Blank'},
-];
+const TemplateOption = ({isDefault, template}: {isDefault: boolean; template: Template}) => (
+  <FormControlLabel
+    control={<Radio size="small" />}
+    label={
+      <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
+        <Typography variant="textM">{template.name}</Typography>
+        {isDefault ? <Chip color="primary" label="Default" size="small" /> : null}
+      </Stack>
+    }
+    sx={{mx: 0}}
+    value={template.id}
+  />
+);
 
-// Only an unknown label falls back to the default set: the empty columns of Blank are a
-// choice, sent as such.
-const columnsOf = (label: string) =>
-  TEMPLATES.find((item) => item.label === label)?.columns ?? TEMPLATES[0].columns;
-
-export const NewRetroDialog = ({onClose, teamId}: {onClose: () => void; teamId: string}) => {
+export const NewRetroDialog = ({
+  initialTeamId,
+  onClose,
+  teamIds,
+}: {
+  initialTeamId?: string;
+  onClose: () => void;
+  teamIds: string[];
+}) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const isMobile = useMediaQuery(useTheme().breakpoints.down('sm'));
   const [title, setTitle] = useState('');
-  const [template, setTemplate] = useState(TEMPLATES[0].label);
-  const [maxVotes, setMaxVotes] = useState(DEFAULT_MAX_VOTES);
+  const [teamId, setTeamId] = useState(initialTeamId ?? teamIds[0]);
+  const [pickedId, setPickedId] = useState<string>();
+  const [votesPicked, setVotesPicked] = useState<number>();
+  const [isPreviewOpen, setIsPreviewOpen] = useState(true);
   const titleInputRef = useAutoFocus(true);
+  const hasSeveralTeams = teamIds.length > 1;
+
+  const {data: teams} = useQuery({
+    enabled: hasSeveralTeams,
+    queryFn: fetchTeams,
+    queryKey: ['teams'],
+  });
+
+  const {
+    data: templates,
+    isError,
+    isLoading,
+    refetch,
+  } = useQuery({queryFn: () => fetchTeamTemplates(teamId), queryKey: teamTemplatesKey(teamId)});
+
+  const all = templates ? [...templates.team, ...templates.builtin] : [];
+  const selected =
+    all.find(({id}) => id === pickedId) ?? all.find(({id}) => id === templates?.defaultTemplateId);
+  const maxVotes = votesPicked ?? selected?.maxVotes ?? DEFAULT_MAX_VOTES;
 
   const createMutation = useMutation({
-    mutationFn: () => createRetro(teamId, title.trim(), columnsOf(template), maxVotes),
-    onError: (cause: Error) => toast.error(cause.message),
+    mutationFn: () =>
+      createRetro(teamId, title.trim(), {maxVotes, templateId: (selected as Template).id}),
+    onError: (cause: Error) => {
+      toast.error(cause.message);
+
+      if (cause instanceof ApiError && cause.status === 404) {
+        setPickedId(undefined);
+        setVotesPicked(undefined);
+        void refetch();
+      }
+    },
     onSuccess: (board) => {
       onClose();
       void queryClient.invalidateQueries({queryKey: ['teams', teamId, 'retros']});
@@ -46,16 +94,81 @@ export const NewRetroDialog = ({onClose, teamId}: {onClose: () => void; teamId: 
   });
 
   const start = () => {
-    if (!title.trim()) return;
+    if (!title.trim() || !selected) return;
 
     createMutation.mutate();
   };
 
+  const pick = (templateId: string) => {
+    setPickedId(templateId);
+    setVotesPicked(undefined);
+  };
+
+  const changeTeam = (nextTeamId: string) => {
+    setTeamId(nextTeamId);
+    setPickedId(undefined);
+    setVotesPicked(undefined);
+  };
+
+  const group = (label: string, items: Template[]) =>
+    items.length === 0 ? null : (
+      <Stack spacing={0.25}>
+        <Typography color="textSecondary" variant="textXs">
+          {label}
+        </Typography>
+        {items.map((template) => (
+          <TemplateOption
+            isDefault={template.id === templates?.defaultTemplateId}
+            key={template.id}
+            template={template}
+          />
+        ))}
+      </Stack>
+    );
+
+  const preview = selected ? (
+    <Stack aria-live="polite" id="template-preview" spacing={0.75}>
+      {selected.description ? (
+        <Typography color="textSecondary" variant="textS">
+          {selected.description}
+        </Typography>
+      ) : null}
+      {selected.columns.length === 0 ? (
+        <Typography color="textSecondary" variant="textXs">
+          No column yet: you add them on the board before people write.
+        </Typography>
+      ) : (
+        <Stack component="ul" spacing={0.25} sx={{m: 0, pl: 2.5}}>
+          {selected.columns.map((column) => (
+            <Typography component="li" key={column.title} variant="textXs">
+              {column.prompt ? `${column.title} — ${column.prompt}` : column.title}
+            </Typography>
+          ))}
+        </Stack>
+      )}
+    </Stack>
+  ) : null;
+
   return (
-    <Dialog onClose={onClose} open size="small">
+    <Dialog fullScreen={isMobile} onClose={onClose} open size="small">
       <DialogTitle>New retrospective</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{pt: 1}}>
+          {hasSeveralTeams ? (
+            <Select
+              fullWidth
+              inputProps={{'aria-label': 'Team'}}
+              onChange={(event) => changeTeam(event.target.value as string)}
+              size="small"
+              value={teamId}
+            >
+              {teamIds.map((id) => (
+                <MenuItem key={id} value={id}>
+                  {teams?.find((team) => team.id === id)?.name ?? id}
+                </MenuItem>
+              ))}
+            </Select>
+          ) : null}
           <TextField
             fullWidth
             inputRef={titleInputRef}
@@ -71,32 +184,69 @@ export const NewRetroDialog = ({onClose, teamId}: {onClose: () => void; teamId: 
             size="small"
             value={title}
           />
-          <Stack spacing={0.75}>
-            <Select
-              fullWidth
-              inputProps={{'aria-label': 'Template'}}
-              onChange={(event) => setTemplate(event.target.value as string)}
-              size="small"
-              value={template}
-            >
-              {TEMPLATES.map(({label}) => (
-                <MenuItem key={label} value={label}>
-                  {label}
-                </MenuItem>
-              ))}
-            </Select>
-            <Typography color="textSecondary" variant="textXs">
-              {columnsOf(template).length === 0
-                ? 'No column yet: you add them on the board before people write.'
-                : `Columns: ${columnsOf(template).join(' · ')}. You can rename them or add more while people write.`}
-            </Typography>
+          <Stack spacing={1}>
+            <Stack direction="row" sx={{alignItems: 'baseline', justifyContent: 'space-between'}}>
+              <Typography variant="textS">Template</Typography>
+              <Typography
+                color="primary"
+                component={Link}
+                onClick={onClose}
+                sx={{textDecoration: 'none'}}
+                to={`/teams/${teamId}/templates`}
+                variant="textXs"
+              >
+                Manage templates
+              </Typography>
+            </Stack>
+            {isLoading ? (
+              <Stack aria-label="Loading templates" spacing={1}>
+                <Skeleton height={28} variant="rounded" />
+                <Skeleton height={28} variant="rounded" />
+                <Skeleton height={28} variant="rounded" />
+              </Stack>
+            ) : null}
+            {isError ? (
+              <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
+                <Typography color="error" variant="textS">
+                  Could not load the templates.
+                </Typography>
+                <Button onClick={() => void refetch()} size="small" variant="outlined">
+                  Retry
+                </Button>
+              </Stack>
+            ) : null}
+            {templates ? (
+              <RadioGroup
+                aria-describedby="template-preview"
+                aria-label="Template"
+                onChange={(event) => pick(event.target.value)}
+                sx={{maxHeight: {sm: 260, xs: 'none'}, overflowY: 'auto'}}
+                value={selected?.id ?? ''}
+              >
+                <Stack spacing={1}>
+                  {group('Your team', templates.team)}
+                  {group('Classics', templates.builtin)}
+                </Stack>
+              </RadioGroup>
+            ) : null}
+            {isMobile && preview ? (
+              <Button
+                onClick={() => setIsPreviewOpen((open) => !open)}
+                size="small"
+                sx={{alignSelf: 'flex-start'}}
+                variant="text"
+              >
+                {isPreviewOpen ? 'Hide preview' : 'Show preview'}
+              </Button>
+            ) : null}
+            {isMobile && !isPreviewOpen ? null : preview}
           </Stack>
           <Stack spacing={0.75}>
             <Typography variant="textS">Votes per person</Typography>
             <Select
               fullWidth
               inputProps={{'aria-label': 'Votes per person'}}
-              onChange={(event) => setMaxVotes(Number(event.target.value))}
+              onChange={(event) => setVotesPicked(Number(event.target.value))}
               size="small"
               value={maxVotes}
             >
@@ -117,7 +267,7 @@ export const NewRetroDialog = ({onClose, teamId}: {onClose: () => void; teamId: 
           Cancel
         </Button>
         <Button
-          disabled={!title.trim() || createMutation.isPending}
+          disabled={!title.trim() || !selected || createMutation.isPending}
           onClick={start}
           variant="contained"
         >

@@ -24,6 +24,7 @@ export const RetroHeader = ({
   onZoomChange,
   presence,
   teamId,
+  templateName,
   title,
   zoom,
 }: {
@@ -32,6 +33,8 @@ export const RetroHeader = ({
   onZoomChange: (zoom: number) => void;
   presence: ReactNode;
   teamId: string;
+  /** The template the retro was created from, as it was named then. */
+  templateName?: string;
   title: string;
   zoom: number;
 }) => (
@@ -61,6 +64,18 @@ export const RetroHeader = ({
     >
       {title}
     </Typography>
+
+    {templateName ? (
+      <Typography
+        color="textSecondary"
+        noWrap
+        sx={{display: {xs: 'none', sm: 'block'}, flexShrink: 1, maxWidth: 240, minWidth: 0}}
+        title={`From template: ${templateName}`}
+        variant="textS"
+      >
+        From template: {templateName}
+      </Typography>
+    ) : null}
 
     {/* Beside the title when there is room; on a phone it takes the line under the band. */}
     <Box sx={{flexBasis: {xs: '100%', md: 'auto'}, flexShrink: 0, order: {xs: 1, md: 0}}}>
