@@ -328,9 +328,9 @@ member.
 - A counter reaching zero is deleted, not stored as `0`.
 - `myVotesLeft = max(0, maxVotes - sum of my votes)`, counted across all cards.
 - During `VOTE` the board carries `voteProgress`, the number of votes each person has spent,
-  so the room sees who is done: each connected participant shows `used/maxVotes` and the
-  presence bar counts `x/y done voting` (done = whole budget spent). Only the connected
-  participants are counted.
+  so the room sees who is done: each connected participant shows `used/maxVotes` in its
+  avatar's tooltip, and an avatar whose whole budget is spent gets a green outline. The
+  presence bar is only avatars, with no counter text.
 
 ### Actions
 

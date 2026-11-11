@@ -34,6 +34,19 @@ describe('PresenceBar', () => {
     expect(order.getByRole('img', {name: 'Bob is rolling'})).toBeTruthy();
   });
 
+  it('shows only the avatars while connected, and a chip only when the socket is down', () => {
+    const {unmount} = render(<PresenceBar board={board} isConnected participants={[alice, bob]} />);
+
+    expect(screen.queryByText('Live')).toBeNull();
+    expect(screen.queryByText(/online/)).toBeNull();
+    expect(screen.queryByText('Reconnecting…')).toBeNull();
+    unmount();
+
+    render(<PresenceBar board={board} isConnected={false} participants={[alice, bob]} />);
+
+    expect(screen.getByText('Reconnecting…')).toBeTruthy();
+  });
+
   it('keeps the presence as it came, without dice, outside DISCUSS', () => {
     render(<PresenceBar board={board} isConnected participants={[alice, bob]} />);
 

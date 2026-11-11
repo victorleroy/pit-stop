@@ -75,12 +75,9 @@ export const PresenceBar = ({
 
   return (
     <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
-      <Chip
-        color={isConnected ? 'success' : 'default'}
-        label={isConnected ? 'Live' : 'Reconnecting…'}
-        size="small"
-        variant="outlined"
-      />
+      {isConnected ? null : (
+        <Chip color="default" label="Reconnecting…" size="small" variant="outlined" />
+      )}
 
       <Stack
         aria-label={dice ? 'Speaking order' : undefined}
@@ -168,12 +165,6 @@ export const PresenceBar = ({
           );
         })}
       </Stack>
-
-      {participants.length > 0 ? (
-        <Typography color="textSecondary" variant="textXs">
-          {progress ? `${progress.done}/${progress.total} done voting` : `${participants.length} online`}
-        </Typography>
-      ) : null}
     </Stack>
   );
 };
