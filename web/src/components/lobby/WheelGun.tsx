@@ -33,7 +33,11 @@ export const SERVICED_MS = 400;
 const SPARK_PARTICLES = 6;
 const PLUS_ONE_MS = 1_200;
 
-const ARIA_LABEL = 'Wheel Gun game, press 1, 2 or 3 to fit the furthest free wheel of that lane';
+const WRENCH_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><text x="2" y="26" font-size="26">🔧</text></svg>',
+)}") 6 6, pointer`;
+
+const ARIA_LABEL ='Wheel Gun game, press 1, 2 or 3 to fit the furthest free wheel of that lane';
 
 type Game = ReturnType<typeof useLobbyGame>;
 
@@ -436,7 +440,7 @@ export const WheelGun = ({
           onPointerDown={onPointerDown}
           ref={canvasRef}
           role="img"
-          style={{display: 'block', height, touchAction: 'manipulation', width: '100%'}}
+          style={{cursor: WRENCH_CURSOR, display: 'block', height, touchAction: 'manipulation', width: '100%'}}
           tabIndex={0}
         />
       </Box>
