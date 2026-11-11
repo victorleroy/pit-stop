@@ -142,4 +142,45 @@ describe('anonymity', () => {
       harness.container.noteManager.update(other, retroId, note.id, {columnId: target}),
     ).resolves.toBeDefined();
   });
+
+  describe('vote progress', () => {
+    const castOnFirstCard = async (auth: AuthContext) => {
+      const board = await harness.container.retroManager.getBoard(auth, retroId);
+
+      await harness.container.voteManager.cast(auth, retroId, board.columns[0]!.cards[0]!.id, 1);
+    };
+
+    it('is empty before the vote', async () => {
+      expect((await harness.container.retroManager.getBoard(other, retroId)).voteProgress).toEqual({});
+
+      await setPhase('SHARE');
+
+      expect((await harness.container.retroManager.getBoard(other, retroId)).voteProgress).toEqual({});
+    });
+
+    it('tells everybody how many votes each person spent during VOTE, never on what', async () => {
+      await setPhase('SHARE');
+      await setPhase('VOTE');
+      await castOnFirstCard(author);
+      await castOnFirstCard(author);
+
+      const board = await harness.container.retroManager.getBoard(other, retroId);
+
+      expect(board.voteProgress).toEqual({[author.userId]: 2});
+      expect(board.columns[0]!.cards[0]!.myVotes).toBe(0);
+      expect(board.columns[0]!.cards[0]!.totalVotes).toBeUndefined();
+    });
+
+    it('is empty again once the vote is over', async () => {
+      await setPhase('SHARE');
+      await setPhase('VOTE');
+      await castOnFirstCard(author);
+
+      await setPhase('DISCUSS');
+      expect((await harness.container.retroManager.getBoard(other, retroId)).voteProgress).toEqual({});
+
+      await setPhase('ARCHIVED');
+      expect((await harness.container.retroManager.getBoard(other, retroId)).voteProgress).toEqual({});
+    });
+  });
 });

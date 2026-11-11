@@ -126,6 +126,7 @@ export interface Board extends RetroSummary {
   myVotesLeft: number;
   teamId: string;
   timer: Timer;
+  voteProgress: Record<string, number>;
   votesRevealed: boolean;
 }
 

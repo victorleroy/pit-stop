@@ -156,8 +156,20 @@ export class RetroManager {
       teamId: retro.teamId,
       timer: RetroManager.toTimerModel(retro),
       title: retro.title,
+      voteProgress: retro.phase === 'VOTE' ? RetroManager.countVotesByUser(votes) : {},
       votesRevealed: VOTES_REVEALED_PHASES.includes(retro.phase),
     };
+  }
+
+  /** How many votes each person spent, never on what: the room can see who is done voting. */
+  private static countVotesByUser(votes: BoardData['votes']): Record<string, number> {
+    const used: Record<string, number> = {};
+
+    for (const {count, userId} of votes) {
+      used[userId] = (used[userId] ?? 0) + count;
+    }
+
+    return used;
   }
 
   public async updateRetro(

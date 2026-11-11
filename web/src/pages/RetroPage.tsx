@@ -353,7 +353,7 @@ export const RetroPage = () => {
             {board.title}
           </Typography>
           <Stack sx={{flexShrink: 0, pt: {xs: 0.5, sm: 1.5}}}>
-            <PresenceBar isConnected={isConnected} participants={participants} />
+            <PresenceBar board={board} isConnected={isConnected} participants={participants} />
           </Stack>
         </Stack>
         <Link

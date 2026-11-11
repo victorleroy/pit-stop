@@ -1,36 +1,58 @@
 import {Avatar, Chip, Stack, Tooltip, Typography} from '@/ui';
-import type {Participant} from '@/api/types';
+import type {Board, Participant} from '@/api/types';
 import {initials} from '@/utils/initials';
+import {voteProgress} from '@/utils/voteProgress';
 
 export const PresenceBar = ({
+  board,
   isConnected,
   participants,
 }: {
+  board: Board;
   isConnected: boolean;
   participants: Participant[];
-}) => (
-  <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
-    <Chip
-      color={isConnected ? 'success' : 'default'}
-      label={isConnected ? 'Live' : 'Reconnecting…'}
-      size="small"
-      variant="outlined"
-    />
+}) => {
+  const progress = board.phase === 'VOTE' ? voteProgress(board, participants) : undefined;
 
-    <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
-      {participants.map((participant) => (
-        <Tooltip key={participant.userId} title={participant.name}>
-          <Avatar size="small" src={participant.pictureUrl}>
-            {initials(participant.name)}
-          </Avatar>
-        </Tooltip>
-      ))}
+  return (
+    <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
+      <Chip
+        color={isConnected ? 'success' : 'default'}
+        label={isConnected ? 'Live' : 'Reconnecting…'}
+        size="small"
+        variant="outlined"
+      />
+
+      <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
+        {participants.map((participant) => (
+          <Tooltip
+            key={participant.userId}
+            title={
+              progress
+                ? `${participant.name} · ${progress.used(participant.userId)}/${board.maxVotes} votes`
+                : participant.name
+            }
+          >
+            <Avatar
+              size="small"
+              src={participant.pictureUrl}
+              sx={
+                progress?.used(participant.userId) === board.maxVotes
+                  ? {outline: '2px solid', outlineColor: 'success.main', outlineOffset: '1px'}
+                  : undefined
+              }
+            >
+              {initials(participant.name)}
+            </Avatar>
+          </Tooltip>
+        ))}
+      </Stack>
+
+      {participants.length > 0 ? (
+        <Typography color="textSecondary" variant="textXs">
+          {progress ? `${progress.done}/${progress.total} done voting` : `${participants.length} online`}
+        </Typography>
+      ) : null}
     </Stack>
-
-    {participants.length > 0 ? (
-      <Typography color="textSecondary" variant="textXs">
-        {participants.length} online
-      </Typography>
-    ) : null}
-  </Stack>
-);
+  );
+};

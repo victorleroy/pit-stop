@@ -62,5 +62,7 @@ export interface BoardModel extends RetroSummaryModel {
   myVotesLeft: number;
   teamId: string;
   timer: TimerModel;
+  /** Votes spent per userId, only during VOTE (empty otherwise). Never what they went to. */
+  voteProgress: Record<string, number>;
   votesRevealed: boolean;
 }

@@ -118,6 +118,7 @@ This is the product's central promise. It lives in **one pure function**,
 | **Note author** | Everybody, always | `author.id` and `author.name` are always present |
 | **Vote totals** | Everybody | Only in `DISCUSS` and `ARCHIVED` |
 | **Own votes** | Self | Only in `VOTE`, `DISCUSS`, `ARCHIVED`; otherwise `myVotes: 0` |
+| **Votes spent per person** | Everybody | Only in `VOTE`: `voteProgress[userId]` = how many votes they cast, never on which card; `{}` in every other phase |
 
 > **The product protects the content, not the presence.** Everyone sees that Victor wrote
 > three notes; nobody reads them until he shares them.
@@ -238,6 +239,10 @@ member.
 - Exceeding `maxVotes` is `409`. Going below zero on a card is `409`.
 - A counter reaching zero is deleted, not stored as `0`.
 - `myVotesLeft = max(0, maxVotes - sum of my votes)`, counted across all cards.
+- During `VOTE` the board carries `voteProgress`, the number of votes each person has spent,
+  so the room sees who is done: each connected participant shows `used/maxVotes` and the
+  presence bar counts `x/y done voting` (done = whole budget spent). Only the connected
+  participants are counted.
 
 ### Actions
 
@@ -395,6 +400,7 @@ Card            { id, type: 'note'|'cluster', notes: Note[], myVotes, title?, to
 Column          { id, title, order, cards: Card[] }
 Board           { id, title, phase, teamId, createdBy, createdAt?, isFacilitator,
                   columns, maxVotes, myVotesLeft, myNotesRevealed, votesRevealed,
+                  voteProgress: {[userId]: votesSpent},
                   timer, actions, carriedOverActions }
 ```
 
