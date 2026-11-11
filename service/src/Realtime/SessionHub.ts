@@ -146,6 +146,19 @@ export class SessionHub implements PresenceReader {
     return this.sessions.size;
   }
 
+  /** The retros somebody is looking at right now; the hub does not know their team. */
+  public liveRetroIds(): string[] {
+    return [...this.sessions.keys()];
+  }
+
+  /**
+   * Re-broadcasts boards a write elsewhere has changed. Each goes through its own retro's
+   * queue: a bare notifyBoardChanged could overtake a command in flight and send an older read last.
+   */
+  public async refreshRetros(retroIds: Iterable<string>): Promise<void> {
+    await Promise.all([...retroIds].map((retroId) => this.run(retroId, async () => undefined)));
+  }
+
   private async loadRetro(retroId: string): Promise<RetroRow | undefined> {
     return this.db
       .selectFrom('retros')

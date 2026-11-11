@@ -61,6 +61,18 @@ export class RetroManager {
     return retros.map((retro) => RetroManager.toSummary(retro, auth.userId));
   }
 
+  /**
+   * The team's retros among the given ones, typically the live ones: a write that changes the
+   * boards of a whole team refreshes these. The caller has checked access to the team.
+   */
+  public async findTeamRetroIds(
+    auth: AuthContext,
+    teamId: string,
+    retroIds: string[],
+  ): Promise<string[]> {
+    return this.retroRepository.findIdsByTeamId(auth.db, teamId, retroIds);
+  }
+
   /** Every retro of every team the caller belongs to, most recent first. */
   public async listMine(auth: AuthContext): Promise<TeamRetroSummaryModel[]> {
     const memberships = await this.membershipRepository.findAllByUserId(auth.userId, auth.orgId);

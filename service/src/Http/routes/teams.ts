@@ -6,6 +6,7 @@ import {AddTeamMemberDto, CreateTeamDto, RenameTeamDto} from '~/Dto/Team/CreateT
 import type {Variables} from '~/Http/middleware/auth';
 import {validateBody} from '~/Http/middleware/validate';
 import type {ActionStatus} from '~/Db/schema';
+import {logger} from '~/logger';
 
 export const teamRoutes = (c: Container) => {
   const app = new Hono<{Variables: Variables}>();
@@ -113,6 +114,15 @@ export const teamRoutes = (c: Container) => {
     // Editing an action changes the board of the retro it came from: it goes through that
     // retro's queue, like every other board mutation, which also broadcasts the new board.
     const action = retroId ? await c.hub.run(retroId, update) : await update();
+    // It also changes every live board of the team that carries it over (BEHAVIOUR.md section 8).
+    // The edit has committed: a failed refresh must not turn it into an error.
+    try {
+      const live = await c.retroManager.findTeamRetroIds(auth, teamId, c.hub.liveRetroIds());
+
+      await c.hub.refreshRetros(live.filter((id) => id !== retroId));
+    } catch (error: unknown) {
+      logger.error({err: error, teamId}, 'Team boards refresh failed');
+    }
 
     return context.json(action);
   });

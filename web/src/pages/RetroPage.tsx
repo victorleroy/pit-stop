@@ -606,7 +606,6 @@ export const RetroPage = () => {
           {board.carriedOverActions.length > 0 ? (
             <ActionList
               actions={board.carriedOverActions}
-              canComplete={false}
               canCreate={false}
               emptyLabel=""
               isBusy={isBusy}

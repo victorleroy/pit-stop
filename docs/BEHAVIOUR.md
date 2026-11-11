@@ -496,6 +496,11 @@ Inbound actions: `subscribe`, `cursor`.
   current speaking order to the new connection when one was drawn.
 - Access refused on subscribe sends `{type: 'error'}` without closing the socket.
 - A dead connection is pruned on the first failed send.
+- **An action edit refreshes every live board of its team.** The edit runs in the queue of
+  the retro the action came from (outside any queue when that retro was deleted), then every
+  other retro of the team somebody is connected to is re-broadcast through its own queue
+  (`SessionHub.liveRetroIds()` narrowed to the team, then `SessionHub.refreshRetros(ids)`), so
+  the board that carries the action over never shows a stale status.
 
 ---
 
@@ -519,7 +524,8 @@ Inbound actions: `subscribe`, `cursor`.
 - The retro's actions (this retro's and those carried over) live in a panel on the right,
   opened from the toolbar's `Actions · n` button, `n` being the open actions. On a wide screen
   the panel sits beside the board, which narrows; on a phone it slides over it. Turning a card
-  into an action opens the panel.
+  into an action opens the panel. A carried-over action can be closed (**Drop** or **Done**)
+  from the panel, without going to the team page.
 - The board can be **zoomed out from 100% down to 50%**, by steps of 10%, from the toolbar
   (zoom out, reset by clicking the percentage, zoom in) or with Ctrl+wheel / a trackpad pinch
   over the board. Only the columns scale; the toolbar and the cursors of others keep their size.

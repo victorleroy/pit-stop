@@ -68,6 +68,22 @@ export class RetroRepository {
       .execute();
   }
 
+  /** Narrows a list of retro ids, typically the live ones, to those of one team. */
+  public async findIdsByTeamId(scoped: ScopedDb, teamId: string, retroIds: string[]): Promise<string[]> {
+    if (!retroIds.length) {
+      return [];
+    }
+
+    const rows = await scoped
+      .retros()
+      .select('retros.id')
+      .where('retros.id', 'in', retroIds)
+      .where('retros.teamId', '=', teamId)
+      .execute();
+
+    return rows.map(({id}) => id);
+  }
+
   public async create(input: CreateRetroInput): Promise<void> {
     await this.db
       .insertInto('retros')
