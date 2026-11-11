@@ -529,9 +529,15 @@ Inbound actions: `subscribe`, `cursor`.
   the panel sits beside the board, which narrows; on a phone it slides over it. Turning a card
   into an action opens the panel. A carried-over action can be closed (**Drop** or **Done**)
   from the panel, without going to the team page.
-- The board can be **zoomed from 50% to 150%**, by steps of 10%, from the toolbar
+- The retro opens on a single band: the way back to the team, the title (cut with an ellipsis
+  when too long, never wrapped) and, on the right, the zoom. The presence sits beside the title
+  on a wide screen and on its own line under the band on a phone. The band is the same in every
+  phase, archived included.
+- The board can be **zoomed from 50% to 150%**, by steps of 10%, from the band above it
   (zoom out, reset by clicking the percentage, zoom in) or with Ctrl+wheel / a trackpad pinch
-  over the board. Only the columns scale; the toolbar and the cursors of others keep their size.
+  over the board. The zoom group shows once the board has a column, phone included, where
+  zooming out is the only way to see more than one column at a time. Only the columns scale;
+  the band, the toolbar and the cursors of others keep their size.
   The zoom is per viewer, kept in `localStorage` under `pit-stop.board-zoom`, and falls back to
   100% when storage is unavailable; a stored value outside the range is clamped to it.
 - **Filter by person**: once at least two people wrote on the board, the toolbar offers a

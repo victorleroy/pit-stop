@@ -13,7 +13,7 @@ import {
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import type {PointerEvent as ReactPointerEvent, ReactNode} from 'react';
 import {useEffect, useRef, useState} from 'react';
-import {Link, useNavigate, useParams} from 'react-router-dom';
+import {useNavigate, useParams} from 'react-router-dom';
 import {
   addColumn,
   castVote,
@@ -49,6 +49,7 @@ import {useAuth} from '@/contexts/AuthContext';
 import {useToast} from '@/contexts/ToastContext';
 import {BoardToolbar} from '@/components/BoardToolbar';
 import {PresenceBar} from '@/components/PresenceBar';
+import {RetroHeader} from '@/components/RetroHeader';
 import {SpeakingOrder} from '@/components/SpeakingOrder';
 import {useBoardSocket} from '@/hooks/useBoardSocket';
 import {SLIPSTREAM} from '@/ui/theme';
@@ -425,19 +426,14 @@ export const RetroPage = () => {
       <ConfirmDialog onClose={() => setConfirmRequest(undefined)} request={confirmRequest} />
 
       <Stack spacing={1}>
-        {/* A long title wraps beside the presence, which keeps its corner instead of dropping
-            between the title and the way back. */}
-        <Stack direction="row" spacing={2} sx={{alignItems: 'flex-start'}}>
-          <Typography
-            sx={{flexGrow: 1, fontSize: {xs: '1.75rem', sm: undefined}, minWidth: 0, overflowWrap: 'anywhere'}}
-            variant="displayS"
-          >
-            {board.title}
-          </Typography>
-          <Stack sx={{flexShrink: 0, pt: {xs: 0.5, sm: 1.5}}}>
-            <PresenceBar board={board} isConnected={isConnected} participants={participants} />
-          </Stack>
-        </Stack>
+        <RetroHeader
+          canZoom={board.columns.length > 0}
+          onZoomChange={setZoom}
+          presence={<PresenceBar board={board} isConnected={isConnected} participants={participants} />}
+          teamId={board.teamId}
+          title={board.title}
+          zoom={zoom}
+        />
         {board.phase === 'DISCUSS' && isConnected ? (
           <SpeakingOrder
             isBusy={rollDieMutation.isPending || resetDiceMutation.isPending}
@@ -449,14 +445,6 @@ export const RetroPage = () => {
             rolls={rolls}
           />
         ) : null}
-        <Link
-          style={{color: 'inherit', textDecoration: 'none', width: 'fit-content'}}
-          to={`/teams/${board.teamId}`}
-        >
-          <Typography color="textSecondary" variant="textS">
-            ← Back to the team
-          </Typography>
-        </Link>
       </Stack>
 
       <BoardToolbar
@@ -475,10 +463,8 @@ export const RetroPage = () => {
         onReveal={() => revealMutation.mutate()}
         onTakeFacilitation={() => takeFacilitationMutation.mutate()}
         onTimer={(action, seconds) => timerMutation.mutate({action, seconds})}
-        onZoomChange={setZoom}
         openActionCount={countOpenActions(board)}
         receivedAt={dataUpdatedAt}
-        zoom={zoom}
       />
 
       {board.columns.length === 0 ? (
