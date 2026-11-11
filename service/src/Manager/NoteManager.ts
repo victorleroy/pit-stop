@@ -12,6 +12,9 @@ import {RetroAccessChecker} from '~/Security/RetroAccessChecker';
 /** Writing happens during the brainstorm, and what is written there stays as written. */
 const WRITABLE_PHASES: RetroPhase[] = ['BRAINSTORM'];
 
+/** A note added while sharing is read aloud by its author, so it is born shared. */
+const CREATABLE_PHASES: RetroPhase[] = ['BRAINSTORM', 'SHARE'];
+
 /** Moving a note into a group, or throwing away a duplicate, goes on while sharing. */
 const MODERATION_PHASES: RetroPhase[] = ['BRAINSTORM', 'SHARE'];
 
@@ -33,7 +36,7 @@ export class NoteManager {
     text: string,
   ): Promise<BoardModel> {
     const {retro} = await this.accessChecker.checkRetroAccess(auth, retroId);
-    RetroAccessChecker.checkPhaseAllows(retro.phase, WRITABLE_PHASES);
+    RetroAccessChecker.checkPhaseAllows(retro.phase, CREATABLE_PHASES);
 
     const column = await this.columnRepository.findOneById(retroId, columnId);
 
@@ -41,7 +44,14 @@ export class NoteManager {
       throw new NotFoundHttpError(`Column "${columnId}" not found`);
     }
 
-    await this.noteRepository.create({authorId: auth.userId, columnId, id: uuid(), retroId, text});
+    await this.noteRepository.create({
+      authorId: auth.userId,
+      columnId,
+      id: uuid(),
+      retroId,
+      revealed: retro.phase === 'SHARE',
+      text,
+    });
 
     return this.retroManager.getBoard(auth, retroId);
   }

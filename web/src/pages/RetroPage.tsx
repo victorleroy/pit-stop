@@ -478,6 +478,7 @@ export const RetroPage = () => {
             <Stack direction="row" sx={{alignItems: 'flex-start', flexWrap: 'nowrap', gap: 2, zoom}}>
               {board.columns.map((column, index) => (
                 <BoardColumn
+                  canAddNote={['BRAINSTORM', 'SHARE'].includes(board.phase)}
                   canDecide={canDecide}
                   canEditColumn={board.isFacilitator && board.phase === 'BRAINSTORM'}
                   canGroup={canGroup}

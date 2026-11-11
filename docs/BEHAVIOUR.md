@@ -81,7 +81,7 @@ any other, including backwards.
 
 | Operation | BRAINSTORM | SHARE | VOTE | DISCUSS | ARCHIVED |
 |---|:--:|:--:|:--:|:--:|:--:|
-| Create a note | yes | | | | |
+| Create a note | yes | yes | | | |
 | Edit a note's **text** | yes | | | | |
 | Move or delete a note | yes | yes | | | |
 | Reveal or hide **own** notes, all or one | | yes | yes | yes | |
@@ -92,6 +92,9 @@ any other, including backwards.
 | Add, rename, delete a column | yes | | | | |
 | Create an action | | | | yes | |
 | Edit an action | yes | yes | yes | yes | yes |
+
+A note created during `SHARE` is created **already shared** (`revealed = true`): its author is
+reading it aloud. Its text stays frozen like every other note's once the brainstorm is over.
 
 **Two non-obvious rules that must not be lost:**
 

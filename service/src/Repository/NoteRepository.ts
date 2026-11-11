@@ -26,11 +26,12 @@ export class NoteRepository {
     columnId: string;
     id: string;
     retroId: string;
+    revealed: boolean;
     text: string;
   }): Promise<void> {
     await this.db
       .insertInto('notes')
-      .values({...input, createdAt: new Date().toISOString(), revealed: 0})
+      .values({...input, createdAt: new Date().toISOString(), revealed: input.revealed ? 1 : 0})
       .execute();
   }
 

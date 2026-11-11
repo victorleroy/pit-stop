@@ -18,6 +18,7 @@ import {CardStack} from '@/components/CardStack';
 import {isGroupOnlyDrag} from '@/utils/noteDrag';
 
 export const BoardColumn = ({
+  canAddNote,
   canDecide,
   canGroup,
   canEditColumn,
@@ -46,6 +47,7 @@ export const BoardColumn = ({
   showTotals,
   votesLeft,
 }: {
+  canAddNote: boolean;
   canDecide: boolean;
   canGroup: boolean;
   canEditColumn: boolean;
@@ -211,7 +213,7 @@ export const BoardColumn = ({
           />
         ))}
 
-        {canWrite ? (
+        {canAddNote ? (
           <Stack spacing={1}>
             <TextField
               fullWidth

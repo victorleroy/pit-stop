@@ -37,12 +37,43 @@ describe('phases', () => {
     expect(board.columns.map((column) => column.title)).toEqual(['Start', 'Stop', 'Continue']);
   });
 
-  it('allows writing only during the brainstorm', async () => {
+  it('allows adding a note only during the brainstorm and the share', async () => {
     await expect(addNote()).resolves.toBeDefined();
 
     await setPhase('SHARE');
+    await expect(addNote()).resolves.toBeDefined();
 
-    await expect(addNote()).rejects.toThrow('not allowed during the "SHARE" phase');
+    for (const phase of ['VOTE', 'DISCUSS'] as const) {
+      await setPhase(phase);
+      await expect(addNote()).rejects.toThrow(`not allowed during the "${phase}" phase`);
+    }
+
+    await setPhase('ARCHIVED');
+    await expect(addNote()).rejects.toMatchObject({status: 409});
+  });
+
+  it('creates a note withheld during the brainstorm and already shared during the share', async () => {
+    await harness.container.noteManager.create(member, retroId, columnId, 'written');
+    await setPhase('SHARE');
+    await harness.container.noteManager.create(member, retroId, columnId, 'said aloud');
+
+    const seenByOther = await harness.container.retroManager.getBoard(facilitator, retroId);
+
+    expect(seenByOther.columns[0]!.cards.map((card) => card.notes[0]!.text).sort()).toEqual([
+      '',
+      'said aloud',
+    ]);
+  });
+
+  it('keeps the text of a note added while sharing frozen', async () => {
+    await setPhase('SHARE');
+
+    const board = await addNote('said aloud');
+    const noteId = board.columns[0]!.cards[0]!.notes[0]!.id;
+
+    await expect(
+      harness.container.noteManager.update(facilitator, retroId, noteId, {text: 'rewritten'}),
+    ).rejects.toThrow('not allowed during the "SHARE" phase');
   });
 
   it('allows grouping only while sharing', async () => {
