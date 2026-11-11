@@ -5,7 +5,7 @@ import type {ComponentProps} from 'react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {WheelGun} from '@/components/lobby/WheelGun';
 import {theme} from '@/ui/theme';
-import {playWrenchClack, saveTimerMuted} from '@/utils/timerSound';
+import {playWrenchClack, readTimerMuted, saveTimerMuted} from '@/utils/timerSound';
 
 vi.mock('@/utils/timerSound', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/utils/timerSound')>()),
@@ -96,9 +96,13 @@ describe('WheelGun', () => {
     fireEvent.keyDown(screen.getByRole('img'), {key: '1'});
     expect(playWrenchClack).not.toHaveBeenCalled();
 
-    saveTimerMuted(false);
+    fireEvent.click(screen.getByRole('button', {name: 'Unmute sounds'}));
+    expect(readTimerMuted()).toBe(false);
     fireEvent.keyDown(screen.getByRole('img'), {key: '1'});
     expect(playWrenchClack).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', {name: 'Mute sounds'}));
+    expect(readTimerMuted()).toBe(true);
   });
 
   it('gives the focus back on Escape', () => {

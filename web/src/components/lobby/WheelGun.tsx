@@ -7,9 +7,11 @@ import type {Participant} from '@/api/types';
 import {GameScoreboard} from '@/components/lobby/GameScoreboard';
 import type {GameEffect, useLobbyGame} from '@/hooks/useLobbyGame';
 import {wheelKey} from '@/hooks/useLobbyGame';
-import {Box, Stack, Typography} from '@/ui';
+import VolumeOffRoundedIcon from '@mui/icons-material/VolumeOffRounded';
+import VolumeUpRoundedIcon from '@mui/icons-material/VolumeUpRounded';
+import {Box, IconButton, Stack, Tooltip, Typography} from '@/ui';
 import type {TrackPalette} from '@/ui/theme';
-import {playWrenchClack, readTimerMuted, unlockTimerSound} from '@/utils/timerSound';
+import {playWrenchClack, readTimerMuted, saveTimerMuted, unlockTimerSound} from '@/utils/timerSound';
 import {userColour} from '@/utils/userColour';
 import type {Arena} from '@/utils/wheelGunModel';
 import {
@@ -261,6 +263,14 @@ export const WheelGun = ({
   const palette = useRef(paletteOf(theme));
   palette.current = paletteOf(theme);
   const [plusOne, setPlusOne] = useState(0);
+  const [isMuted, setIsMuted] = useState(readTimerMuted);
+  const isMutedRef = useRef(isMuted);
+  isMutedRef.current = isMuted;
+
+  const toggleMuted = () => {
+    saveTimerMuted(!isMuted);
+    setIsMuted(!isMuted);
+  };
 
   const gameRef = useRef(game);
   gameRef.current = game;
@@ -336,7 +346,7 @@ export const WheelGun = ({
   const fitted = (target: {carId: number; wheel: 'front' | 'rear'} | undefined) => {
     if (!target || !isConnected) return;
 
-    if (game.tap(target.carId, target.wheel) && !readTimerMuted() && document.visibilityState === 'visible') {
+    if (game.tap(target.carId, target.wheel) && !isMutedRef.current && document.visibilityState === 'visible') {
       playWrenchClack();
     }
   };
@@ -386,7 +396,12 @@ export const WheelGun = ({
           Wheel Gun
         </Typography>
 
-        <Box sx={{position: 'relative'}}>
+        <Box sx={{alignItems: 'center', display: 'flex', gap: 0.5, position: 'relative'}}>
+          <Tooltip title={isMuted ? 'Unmute sounds' : 'Mute sounds'}>
+            <IconButton aria-label={isMuted ? 'Unmute sounds' : 'Mute sounds'} onClick={toggleMuted} size="small">
+              {isMuted ? <VolumeOffRoundedIcon fontSize="small" /> : <VolumeUpRoundedIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
           <Typography sx={{fontVariantNumeric: 'tabular-nums'}} variant="textS">
             Pit stops: {game.teamStops}
           </Typography>
