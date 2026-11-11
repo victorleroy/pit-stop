@@ -18,7 +18,7 @@ export class TimerCommandDto {
 
   @IsOptional()
   @IsInt()
-  @Min(5)
+  @Min(-3600)
   @Max(3600)
   public seconds?: number;
 }

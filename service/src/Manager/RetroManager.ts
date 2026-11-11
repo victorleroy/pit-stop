@@ -47,6 +47,8 @@ const VOTE_WIPING_TARGETS: readonly string[] = ['BRAINSTORM', 'SHARE'];
 /** The phases a board without columns may enter: nothing in them needs a column yet. */
 const COLUMNLESS_TARGETS: readonly string[] = ['ICEBREAKER', 'REVIEW', 'BRAINSTORM'];
 
+const MIN_TIMER_SECONDS = 5;
+
 const VOTING_PHASES: RetroPhase[] = ['VOTE', 'DISCUSS', 'ARCHIVED'];
 
 /** Totals stay hidden while people are still voting, so nobody follows the crowd. */
@@ -386,6 +388,10 @@ export class RetroManager {
           throw new BadRequestHttpError('Starting the timer needs a duration');
         }
 
+        if (seconds < MIN_TIMER_SECONDS) {
+          throw new BadRequestHttpError('The timer lasts at least 5 seconds');
+        }
+
         return {
           timerEndsAt: deadline(seconds * 1000),
           timerRemainingMs: null,
@@ -414,21 +420,23 @@ export class RetroManager {
           throw new BadRequestHttpError('Extending the timer needs a duration');
         }
 
-        // The round grows with the extension, otherwise the bar would run past its own end.
-        const total = (retro.timerTotalMs ?? 0) + seconds * 1000;
+        const isPaused = retro.timerRemainingMs !== null;
 
-        if (retro.timerRemainingMs !== null) {
-          return {
-            timerRemainingMs: retro.timerRemainingMs + seconds * 1000,
-            timerTotalMs: total,
-          };
-        }
-
-        if (!retro.timerEndsAt) {
+        if (!isPaused && !retro.timerEndsAt) {
           throw new ConflictHttpError('There is no timer to extend');
         }
 
-        return {timerEndsAt: deadline(runningRemainingMs + seconds * 1000), timerTotalMs: total};
+        // A negative extension that exceeds what is left ends the round instead of going below zero.
+        const remainingMs = Math.max(
+          0,
+          (isPaused ? retro.timerRemainingMs! : runningRemainingMs) + seconds * 1000,
+        );
+        // The round follows the extension, otherwise the bar would run past its own end.
+        const total = Math.max(remainingMs, (retro.timerTotalMs ?? 0) + seconds * 1000);
+
+        return isPaused
+          ? {timerRemainingMs: remainingMs, timerTotalMs: total}
+          : {timerEndsAt: deadline(remainingMs), timerTotalMs: total};
       }
 
       case 'stop':

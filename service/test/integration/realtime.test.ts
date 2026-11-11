@@ -216,6 +216,29 @@ describe('live retros', () => {
     expect(run).toHaveBeenCalledWith(retroId, expect.any(Function));
   });
 
+  it('bounds the timer seconds to an hour either way over HTTP', async () => {
+    const app = new Hono<{Variables: Variables}>();
+
+    app.onError(errorHandler);
+    app.use('*', async (context, next) => {
+      context.set('auth', owner);
+      await next();
+    });
+    app.route('/', retroRoutes(harness.container));
+
+    const send = (timer: {action: string; seconds: number}) =>
+      app.request(`/retros/${retroId}`, {
+        body: JSON.stringify({timer}),
+        headers: {'content-type': 'application/json'},
+        method: 'PATCH',
+      });
+
+    expect((await send({action: 'start', seconds: 300})).status).toBe(200);
+    expect((await send({action: 'extend', seconds: -60})).status).toBe(200);
+    expect((await send({action: 'extend', seconds: -3601})).status).toBe(400);
+    expect((await send({action: 'extend', seconds: 3601})).status).toBe(400);
+  });
+
   /** Regression: DELETE /notes/:noteId was declared first and swallowed /notes/reveal. */
   it('lets an author take shared notes back over HTTP', async () => {
     const board = await harness.container.retroManager.getBoard(owner, retroId);

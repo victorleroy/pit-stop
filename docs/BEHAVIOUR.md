@@ -392,7 +392,7 @@ Two stored states, so the network never eats the clock:
 | `start` | `seconds` given (`400` otherwise) | `ends_at = now + seconds`; clear `remaining_ms` |
 | `pause` | running (`409` otherwise) | `remaining_ms = ends_at - now`; clear `ends_at` |
 | `resume` | paused (`409` otherwise) | `ends_at = now + remaining_ms`; clear `remaining_ms` |
-| `extend` | `seconds` given; a timer exists | adds to `remaining_ms` when paused, otherwise pushes `ends_at` |
+| `extend` | `seconds` given, positive or negative; a timer exists (`409` otherwise) | adds to `remaining_ms` when paused, otherwise moves `ends_at`; `total_ms` follows |
 | `stop` | — | clears both |
 
 Every participant hears a short chime (generated with the Web Audio API) when their local
@@ -404,8 +404,11 @@ The facilitator starts the timer from a picker: presets of 1, 3, 5 and 10 minute
 number of minutes. The picker remembers the last duration chosen. It opens on the
 template's suggested duration (`board.defaultTimerSeconds`), 5 minutes otherwise.
 
-`seconds` is bounded to `[5, 3600]`. Extending an already-overdue timer never yields a
-negative duration.
+`start` takes `seconds` in `[5, 3600]`; `extend` takes a non-zero `seconds` in `[-3600, 3600]`.
+The facilitator's `-1` and `+1` buttons send `-60` and `+60`; they exist only while a timer is
+running or paused. A cut larger than what is left ends the round instead: the remaining time
+clamps to `0` (a running clock reaches zero at once, chime included), never below. Extending an
+already-overdue timer never yields a negative duration.
 
 ### Waiting room game
 
@@ -869,7 +872,7 @@ to the login screen.
 | Uploaded avatar | <= 256 KB, WebP or JPEG by its bytes and its `Content-Type` |
 | Action text | required, <= 300 |
 | `vote.delta` | integer, exactly `1` or `-1` |
-| `timer.seconds` | integer, 5 to 3600 |
+| `timer.seconds` | integer, 5 to 3600 for `start`; -3600 to 3600 for `extend` |
 | `maxVotes` | integer, 1 to 10 |
 | `phase` | within the enumeration |
 | `action.status` | within `{OPEN, DONE, DROPPED}` |

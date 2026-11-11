@@ -135,3 +135,57 @@ describe('TimerControls default duration', () => {
     expect(screen.getByLabelText('Choose the timer duration').textContent).toContain('5:00');
   });
 });
+
+describe('TimerControls minutes', () => {
+  afterEach(() => cleanup());
+
+  const renderRunning = (timer: Timer, onTimer = vi.fn()) => {
+    render(
+      <TimerControls
+        isBusy={false}
+        isFacilitator
+        onTimer={onTimer}
+        receivedAt={Date.now()}
+        timer={timer}
+      />,
+    );
+    return onTimer;
+  };
+
+  it('removes a minute before adding one, whether running or paused', () => {
+    const onTimer = renderRunning(running);
+    const labels = screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'));
+
+    expect(labels.indexOf('Remove a minute from the timer')).toBeLessThan(
+      labels.indexOf('Add a minute to the timer'),
+    );
+
+    fireEvent.click(screen.getByLabelText('Remove a minute from the timer'));
+    fireEvent.click(screen.getByLabelText('Add a minute to the timer'));
+    expect(onTimer.mock.calls).toEqual([
+      ['extend', -60],
+      ['extend', 60],
+    ]);
+
+    cleanup();
+    renderRunning({state: 'PAUSED', remainingMs: 90000, totalMs: 120000} as Timer, onTimer);
+    fireEvent.click(screen.getByLabelText('Remove a minute from the timer'));
+    expect(onTimer).toHaveBeenLastCalledWith('extend', -60);
+  });
+
+  it('offers no minute control to a participant or on an idle timer', () => {
+    render(
+      <TimerControls
+        isBusy={false}
+        isFacilitator={false}
+        onTimer={vi.fn()}
+        receivedAt={Date.now()}
+        timer={running}
+      />,
+    );
+    expect(screen.queryByLabelText('Remove a minute from the timer')).toBeNull();
+    cleanup();
+    renderRunning({state: 'IDLE'} as Timer);
+    expect(screen.queryByLabelText('Remove a minute from the timer')).toBeNull();
+  });
+});

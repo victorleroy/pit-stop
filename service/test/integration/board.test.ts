@@ -438,6 +438,47 @@ describe('board', () => {
       expect(extended.timer.remainingMs).toBeGreaterThan(paused.timer.remainingMs!);
     });
 
+    it('takes time off a running clock', async () => {
+      await timer('start', 300);
+      const board = await timer('extend', -60);
+
+      expect(board.timer.state).toBe('RUNNING');
+      expect(board.timer.remainingMs).toBeGreaterThan(235_000);
+      expect(board.timer.remainingMs).toBeLessThanOrEqual(240_000);
+      expect(board.timer.totalMs).toBe(240_000);
+    });
+
+    it('takes time off the frozen duration when paused', async () => {
+      await timer('start', 300);
+      const paused = await timer('pause');
+      const shortened = await timer('extend', -60);
+
+      expect(shortened.timer.state).toBe('PAUSED');
+      expect(shortened.timer.remainingMs).toBe(paused.timer.remainingMs! - 60_000);
+    });
+
+    it('ends the round instead of going below zero when less than the cut is left', async () => {
+      await timer('start', 30);
+      const board = await timer('extend', -60);
+
+      expect(board.timer.state).toBe('RUNNING');
+      expect(board.timer.remainingMs).toBe(0);
+      expect(board.timer.totalMs).toBe(0);
+
+      await timer('pause');
+      const frozen = await timer('extend', -60);
+
+      expect(frozen.timer.remainingMs).toBe(0);
+    });
+
+    it('refuses to shorten a timer that does not exist', async () => {
+      await expect(timer('extend', -60)).rejects.toThrow('no timer');
+    });
+
+    it('refuses to start with a negative duration', async () => {
+      await expect(timer('start', -60)).rejects.toThrow('at least 5 seconds');
+    });
+
     it('stops back to idle', async () => {
       await timer('start', 300);
 
