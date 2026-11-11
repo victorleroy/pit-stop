@@ -16,13 +16,12 @@ export const outlined = {
 } as const;
 
 /**
- * The retro's single band: the way back, the title, the presence and the dice, and the zoom
- * on the far right. A long title is cut with an ellipsis rather than wrapped, so the band
- * keeps one line on a phone, where the presence and the dice go to the line under it.
+ * The retro's single band: the way back, the title, the presence, and the zoom on the far
+ * right. A long title is cut with an ellipsis rather than wrapped, so the band keeps one line
+ * on a phone, where the presence goes to the line under it.
  */
 export const RetroHeader = ({
   canZoom,
-  dice,
   onZoomChange,
   presence,
   teamId,
@@ -32,7 +31,6 @@ export const RetroHeader = ({
 }: {
   /** Nothing to scale on a board without columns. */
   canZoom: boolean;
-  dice?: ReactNode;
   onZoomChange: (zoom: number) => void;
   presence: ReactNode;
   teamId: string;
@@ -95,7 +93,6 @@ export const RetroHeader = ({
       }}
     >
       <Box sx={{flexShrink: 0}}>{presence}</Box>
-      {dice}
     </Stack>
 
     {canZoom ? (

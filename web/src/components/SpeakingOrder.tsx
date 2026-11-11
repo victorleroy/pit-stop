@@ -1,20 +1,29 @@
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
-import {useState} from 'react';
-import {Box, Chip, IconButton, Popover, Stack, Tooltip, Typography} from '@/ui';
+import {Box, IconButton, Stack, Tooltip} from '@/ui';
 import type {DieRoll, Participant} from '@/api/types';
 import {DieFace, RollingDie} from '@/components/DieFace';
-import {CONTROL_HEIGHT, outlined} from '@/components/RetroHeader';
 import {speakingOrder} from '@/utils/speakingOrder';
 
-export const VISIBLE_RANKS = 3;
+export const DIE_SIZE = 40;
+const FACE_SIZE = 32;
+
+const dieBox = {
+  alignItems: 'center',
+  borderRadius: '12px',
+  display: 'inline-flex',
+  height: DIE_SIZE,
+  justifyContent: 'center',
+  width: DIE_SIZE,
+} as const;
 
 /**
- * The dice in the retro band: my own die to roll, then the order as it builds up, highest
- * first. Only the first few ranks show; the rest of the order opens from `+n`. The service
- * ranks the rolls; a die still spinning is left out of the order until it settles.
+ * My die, big, beside the phase it belongs to: rolled once, it spins, shows my face for a
+ * moment, then the face goes under my avatar in the presence, ranked. The order itself lives
+ * in the presence; here only a check once it is complete and the facilitator's reset.
  */
 export const SpeakingOrder = ({
+  held,
   isBusy,
   isFacilitator,
   myUserId,
@@ -24,6 +33,8 @@ export const SpeakingOrder = ({
   rolls,
   spinningIds,
 }: {
+  /** My roll, between the end of its spin and its place in the order. */
+  held?: DieRoll;
   isBusy: boolean;
   isFacilitator: boolean;
   myUserId?: string;
@@ -34,127 +45,87 @@ export const SpeakingOrder = ({
   rolls: DieRoll[];
   spinningIds: string[];
 }) => {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const {isComplete, order, waiting} = speakingOrder(rolls, participants);
-  const spinning = new Set(spinningIds);
-  const myRoll = order.find(({userId}) => userId === myUserId);
-  const isMyTurnToRoll = waiting.some(({userId}) => userId === myUserId);
-  const isMineSpinning = Boolean(myUserId && spinning.has(myUserId));
-  const rollingOthers = waiting.filter(({userId}) => userId !== myUserId && spinning.has(userId));
-  const stillToRoll = waiting.filter(({userId}) => !spinning.has(userId));
-  const hiddenCount = order.length - VISIBLE_RANKS;
+  const myRoll = held ?? order.find(({userId}) => userId === myUserId);
+  const isMyTurnToRoll = !held && waiting.some(({userId}) => userId === myUserId);
+  const isMineSpinning = Boolean(myUserId && spinningIds.includes(myUserId));
 
   return (
+    // On a phone the track leaves room for the die alone: the check and the reset go under it.
     <Stack
-      aria-label="Speaking order"
-      direction="row"
+      aria-label="Your die"
+      direction={{xs: 'column', sm: 'row'}}
       role="group"
-      sx={{alignItems: 'center', columnGap: 0.75, flexWrap: 'wrap', minWidth: 0, rowGap: 0.5}}
+      sx={{alignItems: 'center', gap: {xs: 0.25, sm: 0.5}}}
     >
       {myRoll ? (
         <Tooltip title={`You rolled ${myRoll.value}`}>
-          <Box sx={{display: 'inline-flex', p: '6px'}}>
-            <DieFace highlight size={22} value={myRoll.value} />
+          <Box
+            aria-label={`You rolled ${myRoll.value}`}
+            role="img"
+            sx={{
+              ...dieBox,
+              opacity: held ? 1 : 0.55,
+              transition: 'opacity 300ms ease',
+              '@media (prefers-reduced-motion: reduce)': {transition: 'none'},
+            }}
+          >
+            <DieFace highlight size={FACE_SIZE} value={myRoll.value} />
           </Box>
         </Tooltip>
       ) : isMyTurnToRoll ? (
-        <Tooltip title={isMineSpinning ? 'Rolling…' : 'Roll your die · highest speaks first'}>
+        <Tooltip title={isMineSpinning ? 'Rolling…' : 'Roll your die'}>
           <span>
             <IconButton
               aria-label={isMineSpinning ? 'Rolling your die' : 'Roll your die'}
               disabled={isBusy || isMineSpinning}
               onClick={onRoll}
-              size="small"
               sx={{
-                ...outlined,
+                ...dieBox,
+                bgcolor: 'background.paper',
+                border: '2px solid',
                 borderColor: 'primary.main',
-                borderRadius: '10px',
-                height: CONTROL_HEIGHT,
-                width: CONTROL_HEIGHT,
+                boxShadow: ({palette}) => `0 0 0 4px ${palette.primary.light}`,
+                p: 0,
                 '&:hover, &.Mui-focusVisible': {bgcolor: 'primary.light'},
-                '&.Mui-disabled': {bgcolor: 'background.paper', borderColor: 'divider'},
+                '&.Mui-disabled': {bgcolor: 'background.paper', borderColor: 'primary.main'},
               }}
             >
-              {isMineSpinning ? <RollingDie highlight size={22} /> : <DieFace highlight isMystery size={22} />}
+              {isMineSpinning ? (
+                <RollingDie highlight size={FACE_SIZE - 4} />
+              ) : (
+                <DieFace highlight isMystery size={FACE_SIZE - 4} />
+              )}
             </IconButton>
           </span>
         </Tooltip>
       ) : null}
 
-      {order.length ? (
-        <Stack component="ol" direction="row" sx={{alignItems: 'center', gap: 0.5, listStyle: 'none', m: 0, p: 0}}>
-          {order.slice(0, VISIBLE_RANKS).map((roll, index) => (
-            <Tooltip key={roll.userId} title={`${roll.name} rolled ${roll.value}`}>
-              <Chip
-                color={roll.userId === myUserId ? 'primary' : 'default'}
-                component="li"
-                label={`${index + 1}. ${roll.name}`}
+      <Stack direction="row" sx={{alignItems: 'center', gap: 0.25}}>
+        {isComplete ? (
+          <Tooltip title="Order complete">
+            <Box aria-label="Order complete" role="img" sx={{color: 'success.main', display: 'inline-flex'}}>
+              <CheckCircleRoundedIcon fontSize="small" />
+            </Box>
+          </Tooltip>
+        ) : null}
+
+        {isFacilitator && (rolls.length || spinningIds.length || held) ? (
+          <Tooltip title="Reset the dice">
+            <span>
+              <IconButton
+                aria-label="Reset the dice"
+                disabled={isBusy}
+                onClick={onReset}
                 size="small"
-                sx={{maxWidth: 120}}
-                variant="outlined"
-              />
-            </Tooltip>
-          ))}
-        </Stack>
-      ) : null}
-
-      {hiddenCount > 0 ? (
-        <Chip
-          aria-label="Show the full order"
-          label={`+${hiddenCount}`}
-          onClick={(event) => setAnchor(event.currentTarget)}
-          size="small"
-        />
-      ) : null}
-
-      {rollingOthers.map((participant) => (
-        <Tooltip key={participant.userId} title={`${participant.name} is rolling…`}>
-          <Box aria-label={`${participant.name} is rolling`} role="img" sx={{display: 'inline-flex'}}>
-            <RollingDie size={18} />
-          </Box>
-        </Tooltip>
-      ))}
-
-      {isComplete ? (
-        <Tooltip title="Order complete">
-          <Box aria-label="Order complete" role="img" sx={{color: 'success.main', display: 'inline-flex'}}>
-            <CheckCircleRoundedIcon fontSize="small" />
-          </Box>
-        </Tooltip>
-      ) : null}
-
-      {isFacilitator && (rolls.length || spinningIds.length) ? (
-        <Tooltip title="Reset the dice">
-          <span>
-            <IconButton aria-label="Reset the dice" disabled={isBusy} onClick={onReset} size="small">
-              <RestartAltRoundedIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-      ) : null}
-
-      <Popover
-        anchorEl={anchor}
-        anchorOrigin={{horizontal: 'left', vertical: 'bottom'}}
-        onClose={() => setAnchor(null)}
-        open={Boolean(anchor) && hiddenCount > 0}
-      >
-        <Stack spacing={1} sx={{maxWidth: 280, px: 2, py: 1.5}}>
-          <Typography variant="headingS">Speaking order</Typography>
-          <Stack aria-label="Full speaking order" component="ol" spacing={0.5} sx={{m: 0, pl: 2.5}}>
-            {order.map((roll) => (
-              <Typography component="li" key={roll.userId} variant="textS">
-                {roll.name} · {roll.value}
-              </Typography>
-            ))}
-          </Stack>
-          {stillToRoll.length ? (
-            <Typography color="textSecondary" variant="textXs">
-              Still to roll: {stillToRoll.map(({name}) => name).join(', ')}
-            </Typography>
-          ) : null}
-        </Stack>
-      </Popover>
+                sx={{p: 0.25}}
+              >
+                <RestartAltRoundedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        ) : null}
+      </Stack>
     </Stack>
   );
 };

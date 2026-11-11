@@ -41,7 +41,12 @@ const team = (isAdmin: boolean, isMember: boolean): Team => ({
   name: 'Core',
 });
 
-const renderToolbar = (teams: Team[], teamTemplateNames: string[] = []) => {
+const renderToolbar = (
+  teams: Team[],
+  teamTemplateNames: string[] = [],
+  overrides: Partial<Board> = {},
+  dice?: React.ReactNode,
+) => {
   vi.mocked(fetchTeams).mockResolvedValue(teams);
   vi.mocked(fetchTeamTemplates).mockResolvedValue({
     builtin: [],
@@ -55,7 +60,8 @@ const renderToolbar = (teams: Team[], teamTemplateNames: string[] = []) => {
         <MemoryRouter>
           <BoardToolbar
             authorFilter={[]}
-            board={board}
+            board={{...board, ...overrides}}
+            dice={dice}
             isAddingColumn={false}
             isBusy={false}
             isTimerBusy={false}
@@ -147,5 +153,24 @@ describe('BoardToolbar save as template', () => {
     expect(alert.textContent).toContain('A template with this name already exists');
     expect(screen.getByLabelText('Name')).toBeTruthy();
     expect(screen.queryByText('Template saved')).toBeNull();
+  });
+});
+
+describe('BoardToolbar dice', () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it('puts the die right after the Discuss step', () => {
+    renderToolbar([], [], {phase: 'DISCUSS'}, <button type="button">Roll your die</button>);
+
+    const discuss = screen.getByText('Discuss');
+    const die = screen.getByRole('button', {name: 'Roll your die'});
+
+    expect(discuss.compareDocumentPosition(die) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      die.compareDocumentPosition(screen.getByRole('button', {name: 'Actions · 0'})) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

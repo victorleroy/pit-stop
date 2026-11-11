@@ -435,7 +435,7 @@ lives in the retro's `RetroSession` and ends with it (ADR-006).
 
 ### Speaking order
 
-During DISCUSS only, everybody connected gets a die in the retro band and rolls their own, once
+During DISCUSS only, everybody connected gets a die in the toolbar and rolls their own, once
 (`POST /retros/{retroId}/dice`). The order builds up as the dice land, highest face first; equal
 faces are settled by a tie-breaker drawn with the roll and never sent. Every roll sends
 `dice.updated` with the ranked list to every connection. The facilitator can reset every die
@@ -445,23 +445,27 @@ otherwise), and outside DISCUSS both calls answer `403` (`409` on an archived re
 dice, and they are cleared when the retro leaves DISCUSS or the session ends. They reveal
 nothing presence does not already show.
 
-In the band, beside the presence (on its own line under the title on a phone), the dice take
-one compact row:
+The die sits in the toolbar, right after the **Discuss** step of the phase track; the order
+lives in the presence avatars of the band:
 
-- **My die**: before rolling, a die with a `?` face in a bordered button, tooltip "Roll your
-  die · highest speaks first". After the roll it shows my face.
-- **The spin**: a roll lasts 3 seconds on screen. The request leaves at the click, the die
+- **My die**: a big die (40 px) with a `?` face in a primary-coloured button, tooltip "Roll your
+  die". On a phone the track's steps narrow a little to keep it beside Discuss.
+- **The spin**: a roll lasts 1.5 seconds on screen. The request leaves at the click, the die
   tumbles through random faces and its button is disabled; the value the service sent is kept
-  hidden until the 3 seconds are over, then the die settles on it and the order updates.
-  Everybody else sees the roller's die spin for the same 3 seconds when `dice.updated` brings
-  the new roll. Dice already rolled when somebody joins (the snapshot sent on subscribe, marked
-  `snapshot: true`) show at once. With `prefers-reduced-motion`, there is no spin: the result
-  shows directly.
-- **The order**: small numbered chips (`1. Name`), mine highlighted, the face in a tooltip.
-  Only the first 3 show; the rest is behind a `+n` chip opening the full order and who is still
-  to roll.
-- A small check (tooltip "Order complete") once everybody connected rolled, and for the
-  facilitator a reset icon (tooltip "Reset the dice") once somebody rolled.
+  hidden until the 1.5 seconds are over. My face then stays on the big die for 1 second, after
+  which it drops under my avatar and the big die keeps it, dimmed (tooltip "You rolled n").
+  Everybody else sees a small die spin under the roller's avatar for the same 1.5 seconds when
+  `dice.updated` brings the new roll, then the result lands there. Dice already rolled when
+  somebody joins (the snapshot sent on subscribe, marked `snapshot: true`) show at once. With
+  `prefers-reduced-motion`, there is no spin, no hold and no movement: the result shows directly.
+- **The order**: the presence avatars reorder live as the rolls land: whoever rolled first, in
+  the service's ranking (highest face first, ties as the service broke them), then whoever has
+  not rolled yet, as they came. Under each ranked avatar a small badge gives the rank and the
+  face (tooltip "Name · rolled n · speaks 1st"). The avatars slide to their new place.
+- A small check (tooltip "Order complete") beside the die once everybody connected rolled, and
+  for the facilitator a small reset icon (tooltip "Reset the dice") once somebody rolled; on a
+  phone both sit under the die.
+- Outside DISCUSS there is no die, and the presence keeps its order without badges.
 
 ### Profile
 
@@ -803,9 +807,9 @@ epoch milliseconds; `points` in `game.hit` is the player's total, not a delta.
   dropped, open, and one bar per retro of the completion trend, labelled in words too. It is
   hidden while it has nothing to report.
 - The retro opens on a single band: the way back to the team, the title (cut with an ellipsis
-  when too long, never wrapped) and, on the right, the zoom. The presence, and in DISCUSS the
-  speaking-order dice, sit beside the title on a wide screen and on their own line under the
-  band on a phone. The band is the same in every
+  when too long, never wrapped) and, on the right, the zoom. The presence (in DISCUSS, in
+  speaking order) sits beside the title on a wide screen and on its own line under the band on
+  a phone. The band is the same in every
   phase, archived included.
 - The board can be **zoomed from 50% to 150%**, by steps of 10%, from the band above it
   (zoom out, reset by clicking the percentage, zoom in) or with Ctrl+wheel / a trackpad pinch

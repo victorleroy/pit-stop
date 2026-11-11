@@ -452,6 +452,7 @@ export const RetroPage = () => {
 
   const isLobby = board.phase === 'LOBBY';
   const isSettingUp = isLobby && board.isFacilitator && lobbyTab === 'setup';
+  const isRolling = board.phase === 'DISCUSS' && isConnected;
   const canEditColumns = COLUMN_EDIT_PHASES.includes(board.phase);
   const canWrite = board.phase === 'BRAINSTORM';
   const canModerate = ['BRAINSTORM', 'SHARE'].includes(board.phase);
@@ -489,9 +490,32 @@ export const RetroPage = () => {
 
       <RetroHeader
         canZoom={board.columns.length > 0}
+        onZoomChange={setZoom}
+        presence={
+          <PresenceBar
+            board={board}
+            dice={
+              isRolling
+                ? {rolls: dice.settled, spinningIds: dice.spinningIds.filter((userId) => userId !== user?.id)}
+                : undefined
+            }
+            isConnected={isConnected}
+            participants={participants}
+          />
+        }
+        teamId={board.teamId}
+        templateName={board.template?.name}
+        title={board.title}
+        zoom={zoom}
+      />
+
+      <BoardToolbar
+        authorFilter={authorFilter}
+        board={board}
         dice={
-          board.phase === 'DISCUSS' && isConnected ? (
+          isRolling ? (
             <SpeakingOrder
+              held={dice.held}
               isBusy={rollDieMutation.isPending || resetDiceMutation.isPending}
               isFacilitator={board.isFacilitator}
               myUserId={user?.id}
@@ -503,17 +527,6 @@ export const RetroPage = () => {
             />
           ) : null
         }
-        onZoomChange={setZoom}
-        presence={<PresenceBar board={board} isConnected={isConnected} participants={participants} />}
-        teamId={board.teamId}
-        templateName={board.template?.name}
-        title={board.title}
-        zoom={zoom}
-      />
-
-      <BoardToolbar
-        authorFilter={authorFilter}
-        board={board}
         isAddingColumn={isAddingColumn}
         isBusy={isBusy}
         isTimerBusy={timerMutation.isPending}

@@ -2,7 +2,7 @@
 import {act, renderHook} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {DieRoll} from '@/api/types';
-import {SPIN_MS, useDiceSpin} from '@/hooks/useDiceSpin';
+import {HOLD_MS, SPIN_MS, useDiceSpin} from '@/hooks/useDiceSpin';
 
 const alice = {name: 'Alice', userId: 'alice', value: 4};
 const bob = {name: 'Bob', userId: 'bob', value: 6};
@@ -18,7 +18,7 @@ describe('useDiceSpin', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('keeps a new roll out of the order until its die stops spinning', () => {
+  it('keeps a new roll out of the order for the 1.5 seconds its die spins', () => {
     const {rerender, result} = renderSpin([]);
 
     rerender({current: [bob]});
@@ -26,26 +26,45 @@ describe('useDiceSpin', () => {
     expect(result.current.settled).toEqual([]);
     expect(result.current.spinningIds).toEqual(['bob']);
 
-    act(() => vi.advanceTimersByTime(SPIN_MS - 1));
+    act(() => vi.advanceTimersByTime(1499));
     expect(result.current.settled).toEqual([]);
 
     act(() => vi.advanceTimersByTime(1));
     expect(result.current.settled).toEqual([bob]);
     expect(result.current.spinningIds).toEqual([]);
+    expect(result.current.held).toBeUndefined();
   });
 
-  it('spins my die from the click and keeps the value received meanwhile hidden', () => {
+  it('spins my die from the click, holds my face on it, then lets it join the order', () => {
     const {rerender, result} = renderSpin([]);
 
     act(() => result.current.spin('alice'));
-    act(() => vi.advanceTimersByTime(1000));
+    act(() => vi.advanceTimersByTime(500));
     rerender({current: [alice]});
 
     expect(result.current.spinningIds).toEqual(['alice']);
     expect(result.current.settled).toEqual([]);
+    expect(result.current.held).toBeUndefined();
 
-    act(() => vi.advanceTimersByTime(SPIN_MS - 1000));
+    act(() => vi.advanceTimersByTime(SPIN_MS - 500));
+    expect(result.current.spinningIds).toEqual([]);
+    expect(result.current.held).toEqual(alice);
+    expect(result.current.settled).toEqual([]);
+
+    act(() => vi.advanceTimersByTime(HOLD_MS));
+    expect(result.current.held).toBeUndefined();
     expect(result.current.settled).toEqual([alice]);
+  });
+
+  it('holds only my own die, never the rolls of others', () => {
+    const {rerender, result} = renderSpin([]);
+
+    act(() => result.current.spin('alice'));
+    rerender({current: [bob]});
+    act(() => vi.advanceTimersByTime(SPIN_MS));
+
+    expect(result.current.held).toBeUndefined();
+    expect(result.current.settled).toEqual([bob]);
   });
 
   it('stops my die when the roll fails', () => {
@@ -95,6 +114,9 @@ describe('useDiceSpin', () => {
     rerender({current: [alice]});
 
     expect(result.current.spinningIds).toEqual([]);
+    expect(result.current.held).toEqual(alice);
+
+    act(() => vi.advanceTimersByTime(HOLD_MS));
     expect(result.current.settled).toEqual([alice]);
   });
 
@@ -105,15 +127,24 @@ describe('useDiceSpin', () => {
     rerender({current: [alice]});
 
     expect(result.current.spinningIds).toEqual([]);
+    expect(result.current.held).toBeUndefined();
     expect(result.current.settled).toEqual([alice]);
   });
 
-  it('drops every spin on a reset', () => {
+  it('drops every spin and the held face on a reset', () => {
     const {rerender, result} = renderSpin([]);
 
     rerender({current: [bob]});
     rerender({current: []});
 
     expect(result.current.spinningIds).toEqual([]);
+
+    act(() => result.current.spin('alice'));
+    rerender({current: [alice]});
+    act(() => vi.advanceTimersByTime(SPIN_MS));
+    expect(result.current.held).toEqual(alice);
+
+    rerender({current: []});
+    expect(result.current.held).toBeUndefined();
   });
 });

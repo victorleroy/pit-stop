@@ -21,6 +21,7 @@ import {
 } from '@/ui';
 import {useQuery} from '@tanstack/react-query';
 import {Fragment, useState} from 'react';
+import type {ReactNode} from 'react';
 import {fetchTeams} from '@/api/teams';
 import {VOTE_OPTIONS} from '@/api/retros';
 import type {Board, RetroPhase, TimerAction} from '@/api/types';
@@ -61,6 +62,7 @@ const VOTE_SETTING_PHASES: RetroPhase[] = ['LOBBY', 'BRAINSTORM', 'SHARE'];
 export const BoardToolbar = ({
   authorFilter,
   board,
+  dice,
   isAddingColumn,
   isBusy,
   isTimerBusy,
@@ -79,6 +81,8 @@ export const BoardToolbar = ({
 }: {
   authorFilter: string[];
   board: Board;
+  /** In DISCUSS, the speaking-order die, right after the step it belongs to. */
+  dice?: ReactNode;
   /** Owned by the page, so an empty board can open the same dialog from its own button. */
   isAddingColumn: boolean;
   isBusy: boolean;
@@ -403,7 +407,8 @@ export const BoardToolbar = ({
                       cursor: canJump ? 'pointer' : 'default',
                       font: 'inherit',
                       p: 0,
-                      width: {xs: 64, sm: 92},
+                      // On a phone the die needs a little of the track's width beside Discuss.
+                      width: {xs: dice ? 58 : 64, sm: 92},
                     }}
                   >
                     {/*
@@ -455,6 +460,12 @@ export const BoardToolbar = ({
                 </Stack>
               );
             })}
+
+            {dice ? (
+              <Box sx={{alignSelf: {xs: 'flex-start', sm: 'center'}, flexShrink: 0, ml: {xs: 0.5, sm: 1}}}>
+                {dice}
+              </Box>
+            ) : null}
 
             {isArchived ? (
               <Chip color="primary" label={PHASE_LABELS.ARCHIVED} size="small" sx={{ml: 1}} />
