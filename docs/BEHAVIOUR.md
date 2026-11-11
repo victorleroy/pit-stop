@@ -438,6 +438,7 @@ Inbound actions: `subscribe`, `cursor`.
   move costs no write and no read.
 - Cursors are **not relayed during BRAINSTORM and VOTE** (they would show where others write
   or vote); the client does not draw them either. Every other phase relays them.
+- Each participant has one **stable colour** derived from their `userId` (hash into a fixed 12-colour palette, readable in light and dark theme). The cursor, its name label and the presence avatar fallback share it; it is computed client-side, nothing is stored.
 - Cursor coordinates are **board-relative**, as a fraction of its box: every screen differs.
 - `presence.updated` deduplicates by `userId` (several tabs are one person) and sorts by name.
 - On subscribe: access check, then `broadcastBoard` **and** `broadcastPresence`.

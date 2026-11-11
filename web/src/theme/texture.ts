@@ -82,15 +82,3 @@ export const SURFACE = {
   borderColor: 'divider',
   borderRadius: '18px',
 };
-
-/**
- * Cursors have to read against paper and against the wash, so they get their own saturated
- * palette rather than the pastels of the notes.
- */
-const CURSOR_PALETTE = ['#635BFF', '#FF5C9D', '#0E9F6E', '#FF7A45', '#8B5CF6', '#0FA5B8'];
-
-export const cursorColour = (key: string) =>
-  CURSOR_PALETTE[
-    [...key].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 7) %
-      CURSOR_PALETTE.length
-  ];

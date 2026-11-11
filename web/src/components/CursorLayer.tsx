@@ -1,6 +1,6 @@
 import {Box} from '@/ui';
 import type {Cursor} from '@/api/types';
-import {cursorColour} from '@/theme/texture';
+import {userColour} from '@/utils/userColour';
 
 /**
  * Pointers arrive eight times a second; the transition draws the frames in between, which is
@@ -19,7 +19,7 @@ export const CursorLayer = ({cursors}: {cursors: Cursor[]}) => (
     }}
   >
     {cursors.map(({name, userId, x, y}) => {
-      const colour = cursorColour(userId);
+      const colour = userColour(userId);
 
       return (
         <Box

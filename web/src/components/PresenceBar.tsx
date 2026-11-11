@@ -1,6 +1,7 @@
 import {Avatar, Chip, Stack, Tooltip, Typography} from '@/ui';
 import type {Board, Participant} from '@/api/types';
 import {initials} from '@/utils/initials';
+import {userColour} from '@/utils/userColour';
 import {voteProgress} from '@/utils/voteProgress';
 
 export const PresenceBar = ({
@@ -36,11 +37,15 @@ export const PresenceBar = ({
             <Avatar
               size="small"
               src={participant.pictureUrl}
-              sx={
-                progress?.used(participant.userId) === board.maxVotes
-                  ? {outline: '2px solid', outlineColor: 'success.main', outlineOffset: '1px'}
-                  : undefined
-              }
+              sx={{
+                bgcolor: userColour(participant.userId),
+                color: '#FFFFFF',
+                ...(progress?.used(participant.userId) === board.maxVotes && {
+                  outline: '2px solid',
+                  outlineColor: 'success.main',
+                  outlineOffset: '1px',
+                }),
+              }}
             >
               {initials(participant.name)}
             </Avatar>
