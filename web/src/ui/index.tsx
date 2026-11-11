@@ -16,6 +16,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import MuiDialog from '@mui/material/Dialog';
 import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
+import Popover from '@mui/material/Popover';
 import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
@@ -38,6 +39,7 @@ export {
   Container,
   IconButton,
   Paper,
+  Popover,
   Select,
   Stack,
   TextField,

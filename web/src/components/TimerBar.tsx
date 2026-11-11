@@ -4,7 +4,7 @@ import StopRoundedIcon from '@mui/icons-material/StopRounded';
 import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
 import VolumeOffRoundedIcon from '@mui/icons-material/VolumeOffRounded';
 import VolumeUpRoundedIcon from '@mui/icons-material/VolumeUpRounded';
-import {Box, Button, IconButton, Stack, Tooltip, Typography} from '@/ui';
+import {Box, Button, IconButton, Popover, Stack, TextField, Tooltip, Typography} from '@/ui';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import type {Timer, TimerAction} from '@/api/types';
 import {SLIPSTREAM} from '@/ui/theme';
@@ -12,7 +12,16 @@ import {playTimerChime, readTimerMuted, saveTimerMuted, unlockTimerSound} from '
 
 const DEFAULT_DURATION_SECONDS = 300;
 
+const PRESET_MINUTES = [1, 3, 5, 10];
+
+const MIN_SECONDS = 5;
+
+const MAX_SECONDS = 3600;
+
 const EXTEND_SECONDS = 60;
+
+const clampSeconds = (seconds: number) =>
+  Math.min(MAX_SECONDS, Math.max(MIN_SECONDS, Math.round(seconds)));
 
 const format = (ms: number) => {
   const total = Math.max(0, Math.ceil(ms / 1000));
@@ -120,6 +129,9 @@ export const TimerControls = ({
   timer: Timer;
 }) => {
   const {isSteady, remainingMs} = useRemainingMs(timer, receivedAt);
+  const [duration, setDuration] = useState(DEFAULT_DURATION_SECONDS);
+  const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null);
+  const [customMinutes, setCustomMinutes] = useState('');
   const isOver = timer.state !== 'IDLE' && remainingMs === 0;
   const [isMuted, setIsMuted] = useState(readTimerMuted);
   const isMutedRef = useRef(isMuted);
@@ -156,24 +168,79 @@ export const TimerControls = ({
   const left = totalMs > 0 ? Math.min(1, Math.max(0, remainingMs / totalMs)) : 0;
 
   if (timer.state === 'IDLE') {
-    return isFacilitator ? (
-      <Tooltip describeChild title="Start a 5 minute timer">
-        {/* A disabled button fires no events: the span keeps the tooltip working. */}
-        <span>
-          {/* The spoken name holds the visible digits, so "click 5:00" finds the button. */}
-          <Button
-            aria-label={`Start a ${format(DEFAULT_DURATION_SECONDS * 1000)} timer`}
-            disabled={isBusy}
-            onClick={() => onTimer('start', DEFAULT_DURATION_SECONDS)}
-            size="small"
-            startIcon={<TimerOutlinedIcon />}
-            variant="outlined"
-          >
-            {format(DEFAULT_DURATION_SECONDS * 1000)}
-          </Button>
-        </span>
-      </Tooltip>
-    ) : null;
+    if (!isFacilitator) return null;
+
+    const startWith = (seconds: number) => {
+      setDuration(seconds);
+      setPickerAnchor(null);
+      onTimer('start', seconds);
+    };
+    const minutes = Number(customMinutes);
+    const canStartCustom = customMinutes.trim() !== '' && minutes > 0;
+
+    return (
+      <>
+        <Tooltip describeChild title="Choose the timer duration">
+          {/* A disabled button fires no events: the span keeps the tooltip working. */}
+          <span>
+            {/* The spoken name is the action, so the picker opens whatever the digits say. */}
+            <Button
+              aria-label="Choose the timer duration"
+              disabled={isBusy}
+              onClick={(event) => setPickerAnchor(event.currentTarget)}
+              size="small"
+              startIcon={<TimerOutlinedIcon />}
+              variant="outlined"
+            >
+              {format(duration * 1000)}
+            </Button>
+          </span>
+        </Tooltip>
+
+        <Popover
+          anchorEl={pickerAnchor}
+          anchorOrigin={{horizontal: 'left', vertical: 'bottom'}}
+          onClose={() => setPickerAnchor(null)}
+          open={pickerAnchor !== null}
+          slotProps={{paper: {sx: {p: 1.5}}}}
+        >
+          <Stack spacing={1.5}>
+            <Stack direction="row" spacing={1}>
+              {PRESET_MINUTES.map((preset) => (
+                <Button
+                  key={preset}
+                  onClick={() => startWith(preset * 60)}
+                  size="small"
+                  variant="outlined"
+                >
+                  {`${preset} min`}
+                </Button>
+              ))}
+            </Stack>
+
+            <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
+              <TextField
+                inputProps={{min: 0, step: 'any'}}
+                label="Minutes"
+                onChange={(event) => setCustomMinutes(event.target.value)}
+                size="small"
+                sx={{width: 120}}
+                type="number"
+                value={customMinutes}
+              />
+              <Button
+                disabled={!canStartCustom}
+                onClick={() => startWith(clampSeconds(minutes * 60))}
+                size="small"
+                variant="contained"
+              >
+                Start
+              </Button>
+            </Stack>
+          </Stack>
+        </Popover>
+      </>
+    );
   }
 
   return (

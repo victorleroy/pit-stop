@@ -61,3 +61,51 @@ describe('TimerControls sound', () => {
     expect(screen.getByLabelText('Unmute the timer sound')).toBeTruthy();
   });
 });
+
+describe('TimerControls duration', () => {
+  afterEach(() => cleanup());
+
+  const renderIdle = (onTimer = vi.fn()) => {
+    render(
+      <TimerControls
+        isBusy={false}
+        isFacilitator
+        onTimer={onTimer}
+        receivedAt={Date.now()}
+        timer={{state: 'IDLE'} as Timer}
+      />,
+    );
+    return onTimer;
+  };
+
+  const openPicker = () => fireEvent.click(screen.getByLabelText('Choose the timer duration'));
+
+  it('starts the timer with the chosen preset', () => {
+    const onTimer = renderIdle();
+    openPicker();
+    fireEvent.click(screen.getByRole('button', {name: '3 min'}));
+    expect(onTimer).toHaveBeenCalledWith('start', 180);
+  });
+
+  it('clamps a custom duration to the service limits', () => {
+    const onTimer = renderIdle();
+    openPicker();
+    fireEvent.change(screen.getByLabelText('Minutes'), {target: {value: '90'}});
+    fireEvent.click(screen.getByRole('button', {name: 'Start'}));
+    expect(onTimer).toHaveBeenLastCalledWith('start', 3600);
+  });
+
+  it('keeps a custom duration above the minimum', () => {
+    const onTimer = renderIdle();
+    openPicker();
+    fireEvent.change(screen.getByLabelText('Minutes'), {target: {value: '0.01'}});
+    fireEvent.click(screen.getByRole('button', {name: 'Start'}));
+    expect(onTimer).toHaveBeenLastCalledWith('start', 5);
+  });
+
+  it('does not start a custom duration left empty', () => {
+    renderIdle();
+    openPicker();
+    expect((screen.getByRole('button', {name: 'Start'}) as HTMLButtonElement).disabled).toBe(true);
+  });
+});

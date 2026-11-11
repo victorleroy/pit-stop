@@ -295,6 +295,9 @@ countdown reaches zero, once per run: a board opened on an overdue timer stays s
 toggle beside the clock is stored per viewer in `localStorage`. A browser that blocks audio
 until the page was touched simply stays silent.
 
+The facilitator starts the timer from a picker: presets of 1, 3, 5 and 10 minutes, or a custom
+number of minutes. The picker remembers the last duration chosen.
+
 `seconds` is bounded to `[5, 3600]`. Extending an already-overdue timer never yields a
 negative duration.
 
