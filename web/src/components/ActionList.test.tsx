@@ -27,4 +27,60 @@ describe('ActionList', () => {
     fireEvent.click(screen.getByText('Drop'));
     expect(onStatusChange).toHaveBeenCalledWith('a', 'DROPPED');
   });
+
+  const renderEditable = (onTextChange = vi.fn()) => {
+    render(
+      <ActionList
+        actions={[action]}
+        canComplete={false}
+        canCreate={false}
+        emptyLabel=""
+        isBusy={false}
+        members={[]}
+        onStatusChange={vi.fn()}
+        onTextChange={onTextChange}
+        title="Actions"
+      />,
+    );
+    fireEvent.click(screen.getByLabelText('Edit this action'));
+    return onTextChange;
+  };
+
+  it('saves the edited text on Enter, trimmed', () => {
+    const onTextChange = renderEditable();
+    fireEvent.change(screen.getByLabelText('Action text'), {target: {value: '  Fix the CI  '}});
+    fireEvent.keyDown(screen.getByLabelText('Action text'), {key: 'Enter'});
+    expect(onTextChange).toHaveBeenCalledWith('a', 'Fix the CI');
+    expect(screen.queryByLabelText('Action text')).toBeNull();
+  });
+
+  it('saves with the check button', () => {
+    const onTextChange = renderEditable();
+    fireEvent.change(screen.getByLabelText('Action text'), {target: {value: 'Fix the CI'}});
+    fireEvent.click(screen.getByLabelText('Save this action'));
+    expect(onTextChange).toHaveBeenCalledWith('a', 'Fix the CI');
+  });
+
+  it('cancels on Escape without saving', () => {
+    const onTextChange = renderEditable();
+    fireEvent.change(screen.getByLabelText('Action text'), {target: {value: 'Other'}});
+    fireEvent.keyDown(screen.getByLabelText('Action text'), {key: 'Escape'});
+    expect(onTextChange).not.toHaveBeenCalled();
+    expect(screen.getByText('Fix CI')).toBeTruthy();
+  });
+
+  it('offers no edit without a text handler', () => {
+    render(
+      <ActionList
+        actions={[action]}
+        canCreate={false}
+        emptyLabel=""
+        isBusy={false}
+        members={[]}
+        onStatusChange={vi.fn()}
+        title="Actions"
+      />,
+    );
+    expect(screen.queryByLabelText('Edit this action')).toBeNull();
+  });
 });

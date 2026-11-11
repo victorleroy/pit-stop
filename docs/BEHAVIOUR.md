@@ -268,6 +268,9 @@ member.
 - Cards show the author name and avatar only, never a "wrote this" sentence; an avatar without picture shows the person's initials.
 - **Editing: at any time, independent of the phase.** Reviewing an action happens whenever
   the team wants.
+- **Editing the text** is inline in the action list (retro panel and team page): a pencil
+  button swaps the text for a field, **Enter** or the check button saves (trimmed, empty is
+  refused), **Escape** cancels. Every role of the table above may do it.
 - The assignee must be a **team member** (`409`).
 - `assigneeId: null` unassigns.
 - **Automatic carry-over:** every `OPEN` action from an **earlier** retro of the same team

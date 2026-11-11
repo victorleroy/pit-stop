@@ -275,8 +275,15 @@ export const TeamPage = () => {
   });
 
   const updateActionMutation = useMutation({
-    mutationFn: ({actionId, status}: {actionId: string; status: ActionStatus}) =>
-      updateAction(teamId as string, actionId, {status}),
+    mutationFn: ({
+      actionId,
+      status,
+      text,
+    }: {
+      actionId: string;
+      status?: ActionStatus;
+      text?: string;
+    }) => updateAction(teamId as string, actionId, {status, text}),
     onError: onFailure,
     onSuccess: () => queryClient.invalidateQueries({queryKey: ['teams', teamId, 'actions']}),
   });
@@ -586,6 +593,7 @@ export const TeamPage = () => {
         isBusy={updateActionMutation.isPending}
         members={members ?? []}
         onStatusChange={(actionId, status) => updateActionMutation.mutate({actionId, status})}
+        onTextChange={(actionId, text) => updateActionMutation.mutate({actionId, text})}
         title="Actions"
       />
 

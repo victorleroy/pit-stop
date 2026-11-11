@@ -288,11 +288,13 @@ export const RetroPage = () => {
       actionId,
       status,
       teamId,
+      text,
     }: {
       actionId: string;
-      status: ActionStatus;
+      status?: ActionStatus;
       teamId: string;
-    }) => updateAction(teamId, actionId, {status}),
+      text?: string;
+    }) => updateAction(teamId, actionId, {status, text}),
     onError: (cause: Error) => toast.error(cause.message),
     onSuccess: (_action, variables) => {
       void queryClient.invalidateQueries({queryKey});
@@ -385,6 +387,8 @@ export const RetroPage = () => {
   const canDecide = board.phase === 'DISCUSS';
   const onStatusChange = (actionId: string, status: ActionStatus) =>
     updateActionMutation.mutate({actionId, status, teamId: board.teamId});
+  const onTextChange = (actionId: string, text: string) =>
+    updateActionMutation.mutate({actionId, teamId: board.teamId, text});
 
   return (
     // The open panel takes the board's right edge, so the columns narrow instead of hiding under it.
@@ -558,6 +562,7 @@ export const RetroPage = () => {
             onCreate={(text, assigneeId) => createActionMutation.mutate({assigneeId, text})}
             onDraftApplied={() => setActionDraft(undefined)}
             onStatusChange={onStatusChange}
+            onTextChange={onTextChange}
             title="Actions from this retro"
           />
 
@@ -570,6 +575,7 @@ export const RetroPage = () => {
               isBusy={isBusy}
               members={members ?? []}
               onStatusChange={onStatusChange}
+              onTextChange={onTextChange}
               title="Actions from previous retros"
             />
           ) : null}
