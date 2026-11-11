@@ -427,7 +427,7 @@ export const RetroPage = () => {
             onPointerMove={onPointerMove}
             sx={{minWidth: '100%', position: 'relative', width: 'max-content'}}
           >
-            <CursorLayer cursors={cursors} />
+            {!canWrite && !canVote && <CursorLayer cursors={cursors} />}
 
             <Stack direction="row" sx={{alignItems: 'flex-start', flexWrap: 'nowrap', gap: 2}}>
               {board.columns.map((column, index) => (

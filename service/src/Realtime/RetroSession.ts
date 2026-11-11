@@ -3,6 +3,9 @@ import {RetroManager} from '~/Manager/RetroManager';
 import type {PresenceParticipant, WebSocketEvent} from '~/Model/WebSocketModel';
 import type {BoardRepository, RetroRow} from '~/Repository/BoardRepository';
 import {logger} from '~/logger';
+import type {RetroPhase} from '~/Db/schema';
+
+const CURSOR_HIDDEN_PHASES: RetroPhase[] = ['BRAINSTORM', 'VOTE'];
 
 export interface Connection {
   name: string;
@@ -28,6 +31,8 @@ export type Authorizer = (token: string, retroId: string) => Promise<boolean>;
  */
 export class RetroSession {
   private readonly connections = new Set<Connection>();
+
+  private phase: RetroPhase | undefined;
 
   public constructor(
     public readonly retroId: string,
@@ -76,6 +81,8 @@ export class RetroSession {
 
       return;
     }
+
+    this.phase = retro.phase;
 
     const data = await this.boardRepository.loadBoard(retro);
     const recipients = [...this.connections];
@@ -126,9 +133,14 @@ export class RetroSession {
 
   /**
    * Cursors never touch the store: they are relayed straight to the other connections, so a
-   * mouse move costs no write and no read.
+   * mouse move costs no write and no read. They are not relayed while people write or vote:
+   * where others write or vote must not show.
    */
   public relayCursor(origin: Connection, position?: {x: number; y: number}): void {
+    if (this.phase && CURSOR_HIDDEN_PHASES.includes(this.phase)) {
+      return;
+    }
+
     const event: WebSocketEvent = position
       ? {cursor: {name: origin.name, userId: origin.userId, ...position}, type: 'cursor.moved'}
       : {type: 'cursor.left', userId: origin.userId};

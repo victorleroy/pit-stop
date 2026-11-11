@@ -133,6 +133,53 @@ describe('live retros', () => {
     expect(boards.at(-1).board.id).toBe(otherRetroId);
   });
 
+  it('relays cursors in every phase except BRAINSTORM and VOTE', async () => {
+    const connect = async (auth: AuthContext) => {
+      const socket = Object.assign(new EventEmitter(), {
+        close: jest.fn(),
+        OPEN: 1,
+        readyState: 1,
+        sent: [] as string[],
+        send(payload: string) {
+          this.sent.push(payload);
+        },
+      });
+
+      await createSocketAttacher(harness.container)(socket as never, await sessionToken(auth));
+      socket.emit('message', JSON.stringify({action: 'subscribe', retroId}));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      return socket;
+    };
+    const mover = await connect(owner);
+    const watcher = await connect(member);
+    const received = () => watcher.sent.filter((raw) => raw.includes('cursor.moved')).length;
+    const move = async () => {
+      mover.emit('message', JSON.stringify({action: 'cursor', x: 0.5, y: 0.5}));
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    };
+    const enter = async (phase: 'BRAINSTORM' | 'SHARE' | 'VOTE' | 'DISCUSS' | 'ARCHIVED') => {
+      await harness.container.hub.run(retroId, () =>
+        harness.container.retroManager.updateRetro(owner, retroId, {phase}),
+      );
+    };
+    let expected = 0;
+
+    await move();
+    expect(received()).toBe(expected);
+
+    for (const [phase, visible] of [
+      ['SHARE', true],
+      ['VOTE', false],
+      ['DISCUSS', true],
+    ] as const) {
+      await enter(phase);
+      await move();
+      expected += visible ? 1 : 0;
+      expect(received()).toBe(expected);
+    }
+  });
+
   /** The session token travels in the subprotocol header, never in a URL a proxy logs. */
   it('reads the session token from the websocket subprotocols only', () => {
     expect(tokenFromProtocols('pit-stop, abc_DEF-123')).toBe('abc_DEF-123');

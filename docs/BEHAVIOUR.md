@@ -434,6 +434,8 @@ Inbound actions: `subscribe`, `cursor`.
   connection. The anonymity rules of section 4 are the only ones that ever reach a client.
 - Cursors **never touch storage**: they are relayed straight to the other connections. A mouse
   move costs no write and no read.
+- Cursors are **not relayed during BRAINSTORM and VOTE** (they would show where others write
+  or vote); the client does not draw them either. Every other phase relays them.
 - Cursor coordinates are **board-relative**, as a fraction of its box: every screen differs.
 - `presence.updated` deduplicates by `userId` (several tabs are one person) and sorts by name.
 - On subscribe: access check, then `broadcastBoard` **and** `broadcastPresence`.
