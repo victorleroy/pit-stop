@@ -444,7 +444,8 @@ Inbound actions: `subscribe`, `cursor`.
 - Cursors are **not relayed during BRAINSTORM and VOTE** (they would show where others write
   or vote); the client does not draw them either. Every other phase relays them.
 - Each participant has one **stable colour** derived from their `userId` (hash into a fixed 12-colour palette, readable in light and dark theme). The cursor, its name label and the presence avatar fallback share it; it is computed client-side, nothing is stored.
-- Cursor coordinates are **board-relative**, as a fraction of its box: every screen differs.
+- Cursor coordinates are **board-relative**, as a fraction of the box the columns take, zoom
+  included: every screen and every zoom level differs, the same fraction lands on the same note.
 - `presence.updated` deduplicates by `userId` (several tabs are one person) and sorts by name.
 - On subscribe: access check, then `broadcastBoard` **and** `broadcastPresence`.
 - Access refused on subscribe sends `{type: 'error'}` without closing the socket.
@@ -473,6 +474,11 @@ Inbound actions: `subscribe`, `cursor`.
   opened from the toolbar's `Actions · n` button, `n` being the open actions. On a wide screen
   the panel sits beside the board, which narrows; on a phone it slides over it. Turning a card
   into an action opens the panel.
+- The board can be **zoomed out from 100% down to 50%**, by steps of 10%, from the toolbar
+  (zoom out, reset by clicking the percentage, zoom in) or with Ctrl+wheel / a trackpad pinch
+  over the board. Only the columns scale; the toolbar and the cursors of others keep their size.
+  The zoom is per viewer, kept in `localStorage` under `pit-stop.board-zoom`, and falls back to
+  100% when storage is unavailable.
 
 ### Routes
 

@@ -45,6 +45,7 @@ import {BoardToolbar} from '@/components/BoardToolbar';
 import {PresenceBar} from '@/components/PresenceBar';
 import {useBoardSocket} from '@/hooks/useBoardSocket';
 import {SLIPSTREAM} from '@/ui/theme';
+import {readZoom, saveZoom, stepZoom} from '@/utils/boardZoom';
 import {countOpenActions} from '@/utils/openActions';
 
 // Only used while the websocket is down.
@@ -53,6 +54,9 @@ const FALLBACK_POLL_INTERVAL_MS = 5_000;
 const FADE_WIDTH = 56;
 
 const ACTIONS_WIDTH = 440;
+
+// A mouse notch is about 100 and a trackpad pinch sends many small deltas: one step per notch.
+const WHEEL_STEP = 50;
 
 const fade = (side: 'left' | 'right', isShown: boolean) => ({
   backgroundImage: `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, ${SLIPSTREAM.ground}, ${SLIPSTREAM.ground}00)`,
@@ -132,6 +136,32 @@ export const RetroPage = () => {
   const [actionDraft, setActionDraft] = useState<{nonce: number; text: string} | undefined>(
     undefined,
   );
+  // Per viewer: each screen picks its own, cursors stay fractions of the board whatever it is.
+  const [zoom, setZoom] = useState(readZoom);
+  const [boardElement, setBoardElement] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => saveZoom(zoom), [zoom]);
+
+  // Ctrl+wheel (and a trackpad pinch) zooms the board instead of the whole page.
+  useEffect(() => {
+    if (!boardElement) return undefined;
+
+    let pending = 0;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+
+      event.preventDefault();
+      pending += event.deltaY;
+      if (Math.abs(pending) < WHEEL_STEP) return;
+
+      const direction = pending < 0 ? 1 : -1;
+      pending = 0;
+      setZoom((current) => stepZoom(current, direction));
+    };
+
+    boardElement.addEventListener('wheel', onWheel, {passive: false});
+    return () => boardElement.removeEventListener('wheel', onWheel);
+  }, [boardElement]);
 
   const queryKey = ['retros', retroId, 'board'];
 
@@ -395,8 +425,10 @@ export const RetroPage = () => {
         onReveal={() => revealMutation.mutate()}
         onTakeFacilitation={() => takeFacilitationMutation.mutate()}
         onTimer={(action, seconds) => timerMutation.mutate({action, seconds})}
+        onZoomChange={setZoom}
         openActionCount={countOpenActions(board)}
         receivedAt={dataUpdatedAt}
+        zoom={zoom}
       />
 
       {board.columns.length === 0 ? (
@@ -423,17 +455,20 @@ export const RetroPage = () => {
         /*
          * The columns share the width and the board scrolls sideways when there are more
          * than the screen holds. The inner box spans the whole scrolled content, so cursor
-         * positions stay fractions of the full board rather than of the visible slice.
+         * positions stay fractions of the full board rather than of the visible slice. It
+         * hugs the columns, zoom included, so a fraction lands on the same note at any zoom;
+         * the cursors themselves stay outside the zoom, at their usual size.
          */
         <SideScroll>
           <Box
             onPointerLeave={hideCursor}
             onPointerMove={onPointerMove}
-            sx={{minWidth: '100%', position: 'relative', width: 'max-content'}}
+            ref={setBoardElement}
+            sx={{position: 'relative', width: 'max-content'}}
           >
             {!canWrite && !canVote && <CursorLayer cursors={cursors} />}
 
-            <Stack direction="row" sx={{alignItems: 'flex-start', flexWrap: 'nowrap', gap: 2}}>
+            <Stack direction="row" sx={{alignItems: 'flex-start', flexWrap: 'nowrap', gap: 2, zoom}}>
               {board.columns.map((column, index) => (
                 <BoardColumn
                   canDecide={canDecide}

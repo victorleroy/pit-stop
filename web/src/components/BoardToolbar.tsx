@@ -1,6 +1,8 @@
 import ChecklistOutlinedIcon from '@mui/icons-material/ChecklistOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import ZoomInOutlinedIcon from '@mui/icons-material/ZoomInOutlined';
+import ZoomOutOutlinedIcon from '@mui/icons-material/ZoomOutOutlined';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
@@ -12,6 +14,7 @@ import {
   Card,
   Chip,
   Dialog,
+  IconButton,
   Select,
   Stack,
   TextField,
@@ -23,6 +26,7 @@ import {VOTE_OPTIONS} from '@/api/retros';
 import type {Board, RetroPhase, TimerAction} from '@/api/types';
 import {TimerControls} from '@/components/TimerBar';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
+import {DEFAULT_ZOOM, ZOOM_LEVELS, stepZoom} from '@/utils/boardZoom';
 import {WASH_EDGE} from '@/theme/texture';
 
 const PHASE_LABELS: Record<RetroPhase, string> = {
@@ -64,8 +68,10 @@ export const BoardToolbar = ({
   onReveal,
   onTakeFacilitation,
   onTimer,
+  onZoomChange,
   openActionCount,
   receivedAt,
+  zoom,
 }: {
   board: Board;
   /** Owned by the page, so an empty board can open the same dialog from its own button. */
@@ -83,8 +89,10 @@ export const BoardToolbar = ({
   onReveal: () => void;
   onTakeFacilitation: () => void;
   onTimer: (action: TimerAction, seconds?: number) => void;
+  onZoomChange: (zoom: number) => void;
   /** When this board reached the client: what the timer's `remainingMs` was true at. */
   receivedAt: number;
+  zoom: number;
 }) => {
   const [newColumn, setNewColumn] = useState('');
   const columnInputRef = useAutoFocus(isAddingColumn);
@@ -264,7 +272,46 @@ export const BoardToolbar = ({
     </Button>
   );
 
-  const blocks = [timerBlock, myBlock, actionsBlock, facilitatorBlock].filter(Boolean);
+  const zoomBlock = hasColumns ? (
+    <Stack direction="row" sx={{alignItems: 'center'}}>
+      <Tooltip title="Zoom out">
+        <span>
+          <IconButton
+            aria-label="Zoom out"
+            disabled={zoom === ZOOM_LEVELS[0]}
+            onClick={() => onZoomChange(stepZoom(zoom, -1))}
+            size="small"
+          >
+            <ZoomOutOutlinedIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title="Reset the zoom">
+        <Button
+          onClick={() => onZoomChange(DEFAULT_ZOOM)}
+          size="small"
+          sx={{fontVariantNumeric: 'tabular-nums', minWidth: 52}}
+          variant="text"
+        >
+          {Math.round(zoom * 100)}%
+        </Button>
+      </Tooltip>
+      <Tooltip title="Zoom in">
+        <span>
+          <IconButton
+            aria-label="Zoom in"
+            disabled={zoom === ZOOM_LEVELS[ZOOM_LEVELS.length - 1]}
+            onClick={() => onZoomChange(stepZoom(zoom, 1))}
+            size="small"
+          >
+            <ZoomInOutlinedIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+    </Stack>
+  ) : null;
+
+  const blocks = [timerBlock, myBlock, zoomBlock, actionsBlock, facilitatorBlock].filter(Boolean);
 
   return (
     <Card elevation={0} sx={{overflow: 'hidden'}}>
