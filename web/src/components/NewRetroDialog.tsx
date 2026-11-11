@@ -256,9 +256,6 @@ export const NewRetroDialog = ({
                 </MenuItem>
               ))}
             </Select>
-            <Typography color="textSecondary" variant="textXs">
-              Fewer votes force a choice and keep the discussion on what matters most.
-            </Typography>
           </Stack>
         </Stack>
       </DialogContent>
