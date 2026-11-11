@@ -7,14 +7,13 @@ import {
   Card as CardSurface,
   IconButton,
   Stack,
-  TextField,
   Tooltip,
   Typography,
 } from '@/ui';
 import {useState} from 'react';
 import type {Card} from '@/api/types';
 import {NoteCard} from '@/components/NoteCard';
-import {useAutoFocus} from '@/hooks/useAutoFocus';
+import {InlineEditor} from '@/components/InlineEditor';
 import {SLIPSTREAM} from '@/ui/theme';
 import {isDraggedFromOtherColumn} from '@/utils/noteDrag';
 
@@ -116,8 +115,6 @@ export const CardStack = ({
   const [isOver, setIsOver] = useState(false);
   const [isRefused, setIsRefused] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(card.title ?? '');
-  const titleRef = useAutoFocus(isRenaming);
 
   const isCluster = card.type === 'cluster';
   // A note still face down has no text to hand over: only a card everyone can read becomes
@@ -127,15 +124,6 @@ export const CardStack = ({
   const actionText = isCluster
     ? card.title?.trim() || card.notes.map(({text}) => text.trim()).join(' / ')
     : (card.notes[0]?.text.trim() ?? '');
-
-  const saveTitle = () => {
-    const title = titleDraft.trim();
-    setIsRenaming(false);
-
-    if (title && title !== card.title) {
-      onRenameCluster(title);
-    }
-  };
 
   return (
     <CardSurface
@@ -208,14 +196,11 @@ export const CardStack = ({
         {isCluster ? (
           <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
             {isRenaming ? (
-              <TextField
-                fullWidth
-                inputRef={titleRef}
-                onBlur={saveTitle}
-                onChange={(event) => setTitleDraft(event.target.value)}
+              <InlineEditor
+                onClose={() => setIsRenaming(false)}
+                onSave={onRenameCluster}
                 placeholder="Name the group"
-                size="small"
-                value={titleDraft}
+                value={card.title ?? ''}
               />
             ) : (
               <Typography sx={{flexGrow: 1}} variant="textM">

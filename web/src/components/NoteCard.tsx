@@ -2,10 +2,10 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import NorthEastRoundedIcon from '@mui/icons-material/NorthEastRounded';
-import {Avatar, Box, IconButton, Stack, TextField, Tooltip, Typography} from '@/ui';
+import {Avatar, Box, IconButton, Stack, Tooltip, Typography} from '@/ui';
 import {useState} from 'react';
 import type {Note} from '@/api/types';
-import {useAutoFocus} from '@/hooks/useAutoFocus';
+import {InlineEditor} from '@/components/InlineEditor';
 import {initials} from '@/utils/initials';
 import {SLIPSTREAM} from '@/ui/theme';
 import {PAPER_SHADOW, PAPER_SHADOW_RAISED, noteColours} from '@/theme/texture';
@@ -39,8 +39,6 @@ export const NoteCard = ({
   onUpdate: (text: string) => void;
 }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState(note.text);
-  const draftRef = useAutoFocus(isEditing);
 
   const {ink, paper} = noteColours(columnIndex);
   const canHandle = canDrag && (note.isMine || isFacilitator);
@@ -50,15 +48,6 @@ export const NoteCard = ({
   const isPending = note.isMine && !note.revealed;
   // The facilitator moderates the board on top of their own notes.
   const mine = note.isMine || isFacilitator;
-
-  const save = () => {
-    const text = draft.trim();
-    setIsEditing(false);
-
-    if (text && text !== note.text) {
-      onUpdate(text);
-    }
-  };
 
   return (
     <Box
@@ -88,15 +77,12 @@ export const NoteCard = ({
     >
       <Stack spacing={0.75}>
         {isEditing ? (
-          <TextField
-            fullWidth
-            inputRef={draftRef}
+          <InlineEditor
             multiline
-            onBlur={save}
-            onChange={(event) => setDraft(event.target.value)}
-            size="small"
+            onClose={() => setIsEditing(false)}
+            onSave={onUpdate}
             sx={{'& .MuiInputBase-root': {bgcolor: 'rgba(255, 255, 255, 0.7)'}}}
-            value={draft}
+            value={note.text}
           />
         ) : isWithheld ? (
           <Stack aria-label="Not shared yet" spacing={0.75} sx={{py: 0.5}}>

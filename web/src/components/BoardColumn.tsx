@@ -10,7 +10,7 @@ import {
   Tooltip,
   Typography,
 } from '@/ui';
-import {useAutoFocus} from '@/hooks/useAutoFocus';
+import {InlineEditor} from '@/components/InlineEditor';
 import {noteColours} from '@/theme/texture';
 import {useState} from 'react';
 import type {Column} from '@/api/types';
@@ -72,8 +72,6 @@ export const BoardColumn = ({
   const [draft, setDraft] = useState('');
   const [isOver, setIsOver] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(column.title);
-  const titleRef = useAutoFocus(isRenaming);
 
   const submit = () => {
     const text = draft.trim();
@@ -82,15 +80,6 @@ export const BoardColumn = ({
 
     setDraft('');
     onAddNote(text);
-  };
-
-  const saveTitle = () => {
-    const title = titleDraft.trim();
-    setIsRenaming(false);
-
-    if (title && title !== column.title) {
-      onRenameColumn(title);
-    }
   };
 
   return (
@@ -131,13 +120,10 @@ export const BoardColumn = ({
       <Stack spacing={2.5}>
         <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
           {isRenaming ? (
-            <TextField
-              fullWidth
-              inputRef={titleRef}
-              onBlur={saveTitle}
-              onChange={(event) => setTitleDraft(event.target.value)}
-              size="small"
-              value={titleDraft}
+            <InlineEditor
+              onClose={() => setIsRenaming(false)}
+              onSave={onRenameColumn}
+              value={column.title}
             />
           ) : (
             <Stack direction="row" spacing={1} sx={{alignItems: 'center', flexGrow: 1, minWidth: 0}}>

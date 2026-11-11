@@ -210,6 +210,8 @@ member.
 - Editable only in `BRAINSTORM`, and only by the facilitator. Once notes are placed, renaming
   or removing a column moves the ground under the participants.
 - **A column holding notes cannot be deleted** (`409`).
+- Inline editing (note text, column title, group title) is validated with Enter, or with the
+  check button; Shift+Enter adds a newline in a note; Escape cancels; leaving the field saves.
 - `position` is assigned at creation from the current column count.
 
 ### Notes
