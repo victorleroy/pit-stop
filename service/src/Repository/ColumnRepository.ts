@@ -13,6 +13,16 @@ export class ColumnRepository {
       .executeTakeFirst();
   }
 
+  public async findIdsByRetroId(retroId: string): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom('columns')
+      .select('id')
+      .where('retroId', '=', retroId)
+      .execute();
+
+    return rows.map(({id}) => id);
+  }
+
   public async countByRetroId(retroId: string): Promise<number> {
     const row = await this.db
       .selectFrom('columns')
@@ -48,16 +58,16 @@ export class ColumnRepository {
   }
 
   public async reorder(retroId: string, columnIds: string[]): Promise<void> {
-    await Promise.all(
-      columnIds.map((id, position) =>
-        this.db
+    await this.db.transaction().execute(async (trx) => {
+      for (const [position, id] of columnIds.entries()) {
+        await trx
           .updateTable('columns')
           .set({position})
           .where('retroId', '=', retroId)
           .where('id', '=', id)
-          .execute(),
-      ),
-    );
+          .execute();
+      }
+    });
   }
 
   public async remove(retroId: string, columnId: string): Promise<void> {

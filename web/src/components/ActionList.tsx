@@ -8,17 +8,17 @@ import {
   TextField,
   Tooltip,
   Typography,
-} from "@/ui";
-import CheckIcon from "@mui/icons-material/Check";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
-import MenuItem from "@mui/material/MenuItem";
-import { useEffect, useRef, useState } from "react";
-import type { Action, ActionStatus, TeamMember } from "@/api/types";
+} from '@/ui';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import MenuItem from '@mui/material/MenuItem';
+import {useEffect, useRef, useState} from 'react';
+import type {Action, ActionStatus, TeamMember} from '@/api/types';
+import {InlineEditor} from '@/components/InlineEditor';
 
 const STATUS_LABELS: Record<ActionStatus, string> = {
-  DONE: "Done",
-  DROPPED: "Dropped",
-  OPEN: "Open",
+  DONE: 'Done',
+  DROPPED: 'Dropped',
+  OPEN: 'Open',
 };
 
 const ActionRow = ({
@@ -34,29 +34,23 @@ const ActionRow = ({
   onStatusChange: (status: ActionStatus) => void;
   onTextChange?: (text: string) => void;
 }) => {
-  const [draft, setDraft] = useState<string | null>(null);
-
-  const save = () => {
-    const trimmed = (draft ?? "").trim();
-
-    setDraft(null);
-    if (trimmed && trimmed !== action.text) onTextChange?.(trimmed);
-  };
+  const [isEditing, setIsEditing] = useState(false);
 
   return (
-    <Stack
-      direction="row"
-      spacing={2}
-      sx={{ alignItems: "center", flexWrap: "wrap" }}
-    >
-      <Stack spacing={0.5} sx={{ flexGrow: 1, minWidth: 220 }}>
-        {draft === null ? (
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+    <Stack direction="row" spacing={2} sx={{alignItems: 'center', flexWrap: 'wrap'}}>
+      <Stack spacing={0.5} sx={{flexGrow: 1, minWidth: 220}}>
+        {isEditing && onTextChange ? (
+          <InlineEditor
+            label="Action text"
+            maxLength={300}
+            onClose={() => setIsEditing(false)}
+            onSave={onTextChange}
+            value={action.text}
+          />
+        ) : (
+          <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
             <Typography
-              sx={{
-                textDecoration:
-                  action.status === "OPEN" ? "none" : "line-through",
-              }}
+              sx={{textDecoration: action.status === 'OPEN' ? 'none' : 'line-through'}}
               variant="textM"
             >
               {action.text}
@@ -65,7 +59,7 @@ const ActionRow = ({
               <Tooltip title="Edit this action">
                 <IconButton
                   aria-label="Edit this action"
-                  onClick={() => setDraft(action.text)}
+                  onClick={() => setIsEditing(true)}
                   size="small"
                 >
                   <EditOutlinedIcon fontSize="inherit" />
@@ -73,46 +67,21 @@ const ActionRow = ({
               </Tooltip>
             ) : null}
           </Stack>
-        ) : (
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
-            <TextField
-              autoFocus
-              fullWidth
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") save();
-                if (event.key === "Escape") setDraft(null);
-              }}
-              size="small"
-              slotProps={{
-                htmlInput: { "aria-label": "Action text", maxLength: 300 },
-              }}
-              value={draft}
-            />
-            <IconButton
-              aria-label="Save this action"
-              disabled={isBusy || !draft.trim()}
-              onClick={save}
-              size="small"
-            >
-              <CheckIcon fontSize="inherit" />
-            </IconButton>
-          </Stack>
         )}
         <Typography color="textSecondary" variant="textXs">
           {action.retroTitle}
-          {action.assignee ? ` · ${action.assignee.name}` : " · unassigned"}
+          {action.assignee ? ` · ${action.assignee.name}` : ' · unassigned'}
         </Typography>
       </Stack>
 
-      {!canComplete ? null : action.status === "OPEN" ? (
+      {!canComplete ? null : action.status === 'OPEN' ? (
         <Stack direction="row" spacing={1}>
           <Tooltip title="Abandon this action, keep it in history">
             <span>
               <Button
                 color="error"
                 disabled={isBusy}
-                onClick={() => onStatusChange("DROPPED")}
+                onClick={() => onStatusChange('DROPPED')}
                 size="small"
                 variant="text"
               >
@@ -122,29 +91,16 @@ const ActionRow = ({
           </Tooltip>
           <Tooltip title="Mark as done">
             <span>
-              <Button
-                disabled={isBusy}
-                onClick={() => onStatusChange("DONE")}
-                size="small"
-              >
+              <Button disabled={isBusy} onClick={() => onStatusChange('DONE')} size="small">
                 Done
               </Button>
             </span>
           </Tooltip>
         </Stack>
       ) : (
-        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-          <Chip
-            label={STATUS_LABELS[action.status]}
-            size="small"
-            variant="outlined"
-          />
-          <Button
-            disabled={isBusy}
-            onClick={() => onStatusChange("OPEN")}
-            size="small"
-            variant="text"
-          >
+        <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
+          <Chip label={STATUS_LABELS[action.status]} size="small" variant="outlined" />
+          <Button disabled={isBusy} onClick={() => onStatusChange('OPEN')} size="small" variant="text">
             Reopen
           </Button>
         </Stack>
@@ -174,7 +130,7 @@ export const ActionList = ({
    * A text handed over from the board to start an action from. The nonce changes on every
    * hand-over, so picking the same card twice still refills the field.
    */
-  draft?: { nonce: number; text: string };
+  draft?: {nonce: number; text: string};
   emptyLabel: string;
   isBusy: boolean;
   members: TeamMember[];
@@ -185,8 +141,8 @@ export const ActionList = ({
   onTextChange?: (actionId: string, text: string) => void;
   title: string;
 }) => {
-  const [text, setText] = useState("");
-  const [assigneeId, setAssigneeId] = useState("");
+  const [text, setText] = useState('');
+  const [assigneeId, setAssigneeId] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Prefill only: the team still rewords it, picks somebody and adds it themselves.
@@ -194,14 +150,14 @@ export const ActionList = ({
     if (!draft) return;
 
     setText(draft.text);
-    inputRef.current?.focus({ preventScroll: true });
-    inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    inputRef.current?.focus({preventScroll: true});
+    inputRef.current?.scrollIntoView({behavior: 'smooth', block: 'center'});
     onDraftApplied?.();
   }, [draft?.nonce]);
 
-  const open = actions.filter(({ status }) => status === "OPEN");
+  const open = actions.filter(({status}) => status === 'OPEN');
   // Dropped actions are settled too: they are not waiting on anybody any more.
-  const closed = actions.filter(({ status }) => status !== "OPEN");
+  const closed = actions.filter(({status}) => status !== 'OPEN');
 
   const section = (label: string, rows: Action[]) =>
     rows.length === 0 ? null : (
@@ -217,9 +173,7 @@ export const ActionList = ({
             isBusy={isBusy}
             key={action.id}
             onStatusChange={(status) => onStatusChange(action.id, status)}
-            onTextChange={
-              onTextChange && ((value) => onTextChange(action.id, value))
-            }
+            onTextChange={onTextChange && ((value) => onTextChange(action.id, value))}
           />
         ))}
       </Stack>
@@ -230,13 +184,13 @@ export const ActionList = ({
 
     if (!trimmed || !onCreate) return;
 
-    setText("");
-    setAssigneeId("");
+    setText('');
+    setAssigneeId('');
     onCreate(trimmed, assigneeId || undefined);
   };
 
   return (
-    <Card sx={{ p: 3 }}>
+    <Card sx={{p: 3}}>
       <Stack spacing={2}>
         <Typography variant="headingS">{title}</Typography>
 
@@ -246,29 +200,25 @@ export const ActionList = ({
           </Typography>
         ) : null}
 
-        {section("Left to do", open)}
-        {section("Done", closed)}
+        {section('Left to do', open)}
+        {section('Done', closed)}
 
         {canCreate && onCreate ? (
-          <Stack
-            direction="row"
-            spacing={2}
-            sx={{ alignItems: "flex-end", flexWrap: "wrap" }}
-          >
+          <Stack direction="row" spacing={2} sx={{alignItems: 'flex-end', flexWrap: 'wrap'}}>
             <TextField
               inputRef={inputRef}
               label="New action"
               onChange={(event) => setText(event.target.value)}
               placeholder="Split the CI into two jobs"
               size="small"
-              sx={{ flexGrow: 1, minWidth: 240 }}
+              sx={{flexGrow: 1, minWidth: 240}}
               value={text}
             />
             <Select
               displayEmpty
               onChange={(event) => setAssigneeId(event.target.value as string)}
               size="small"
-              sx={{ minWidth: 160 }}
+              sx={{minWidth: 160}}
               value={assigneeId}
             >
               <MenuItem value="">Nobody</MenuItem>
@@ -278,11 +228,7 @@ export const ActionList = ({
                 </MenuItem>
               ))}
             </Select>
-            <Button
-              disabled={!text.trim() || isBusy}
-              onClick={submit}
-              variant="contained"
-            >
+            <Button disabled={!text.trim() || isBusy} onClick={submit} variant="contained">
               Add
             </Button>
           </Stack>

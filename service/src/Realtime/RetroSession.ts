@@ -155,7 +155,7 @@ export class RetroSession {
    * where others write or vote must not show.
    */
   public relayCursor(origin: Connection, position?: {x: number; y: number}): void {
-    if (this.phase && CURSOR_HIDDEN_PHASES.includes(this.phase)) {
+    if (!this.phase || CURSOR_HIDDEN_PHASES.includes(this.phase)) {
       return;
     }
 

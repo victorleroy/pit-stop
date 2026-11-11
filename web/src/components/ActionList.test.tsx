@@ -57,7 +57,7 @@ describe('ActionList', () => {
   it('saves with the check button', () => {
     const onTextChange = renderEditable();
     fireEvent.change(screen.getByLabelText('Action text'), {target: {value: 'Fix the CI'}});
-    fireEvent.click(screen.getByLabelText('Save this action'));
+    fireEvent.click(screen.getByLabelText('Save'));
     expect(onTextChange).toHaveBeenCalledWith('a', 'Fix the CI');
   });
 

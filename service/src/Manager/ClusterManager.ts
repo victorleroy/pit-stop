@@ -73,6 +73,8 @@ export class ClusterManager {
     const clusterId = targetNote.clusterId ?? uuid();
 
     if (!targetNote.clusterId) {
+      ClusterManager.checkCanHandle(auth, targetNote, isFacilitator);
+
       await this.clusterRepository.create({columnId: note.columnId, id: clusterId, retroId});
       await this.noteRepository.update(retroId, targetNote.id, {clusterId});
     }

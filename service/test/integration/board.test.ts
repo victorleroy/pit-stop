@@ -176,6 +176,12 @@ describe('board', () => {
         ).rejects.toThrow('not been shared yet');
       });
 
+      it('refuses to group onto a note that is still face down', async () => {
+        await expect(
+          harness.container.clusterManager.group(member, retroId, mine, theirs),
+        ).rejects.toThrow('not been shared yet');
+      });
+
       it('refuses to take a face-down note out of a group', async () => {
         await harness.container.clusterManager.group(owner, retroId, theirs, mine);
 

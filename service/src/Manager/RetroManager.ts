@@ -357,8 +357,7 @@ export class RetroManager {
     const {retro} = await this.accessChecker.checkFacilitatorAccess(auth, retroId);
     RetroAccessChecker.checkPhaseAllows(retro.phase, COLUMN_PHASES);
 
-    const {columns} = await this.boardRepository.loadBoard(retro);
-    const current = new Set(columns.map(({id}) => id));
+    const current = new Set(await this.columnRepository.findIdsByRetroId(retroId));
 
     if (
       columnIds.length !== current.size ||

@@ -4,6 +4,8 @@ import {useRef, useState} from 'react';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
 
 export const InlineEditor = ({
+  label,
+  maxLength,
   multiline = false,
   onClose,
   onSave,
@@ -11,6 +13,8 @@ export const InlineEditor = ({
   sx,
   value,
 }: {
+  label?: string;
+  maxLength?: number;
   multiline?: boolean;
   onClose: () => void;
   onSave: (text: string) => void;
@@ -45,6 +49,7 @@ export const InlineEditor = ({
         onKeyDown={(event) => {
           if (event.key === 'Escape') {
             event.preventDefault();
+            event.stopPropagation();
             finish(false);
           } else if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
@@ -53,6 +58,7 @@ export const InlineEditor = ({
         }}
         placeholder={placeholder}
         size="small"
+        slotProps={{htmlInput: {'aria-label': label, maxLength}}}
         sx={sx}
         value={draft}
       />

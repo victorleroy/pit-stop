@@ -50,6 +50,7 @@ import {SpeakingOrder} from '@/components/SpeakingOrder';
 import {useBoardSocket} from '@/hooks/useBoardSocket';
 import {SLIPSTREAM} from '@/ui/theme';
 import {readZoom, saveZoom, stepZoom} from '@/utils/boardZoom';
+import {boardAuthors} from '@/utils/authorFilter';
 import {moveColumn} from '@/utils/columnOrder';
 import {countOpenActions} from '@/utils/openActions';
 
@@ -399,6 +400,9 @@ export const RetroPage = () => {
   const canGroup = board.phase === 'SHARE';
   const canVote = board.phase === 'VOTE';
   const canDecide = board.phase === 'DISCUSS';
+  const authors = boardAuthors(board);
+  const activeAuthorFilter =
+    authors.length > 1 ? authorFilter.filter((id) => authors.some((author) => author.id === id)) : [];
   const onStatusChange = (actionId: string, status: ActionStatus) =>
     updateActionMutation.mutate({actionId, status, teamId: board.teamId});
   const onTextChange = (actionId: string, text: string) =>
@@ -504,7 +508,7 @@ export const RetroPage = () => {
             <Stack direction="row" sx={{alignItems: 'flex-start', flexWrap: 'nowrap', gap: 2, zoom}}>
               {board.columns.map((column, index) => (
                 <BoardColumn
-                  authorFilter={authorFilter}
+                  authorFilter={activeAuthorFilter}
                   canAddNote={['BRAINSTORM', 'SHARE'].includes(board.phase)}
                   canDecide={canDecide}
                   canEditColumn={board.isFacilitator && board.phase === 'BRAINSTORM'}
