@@ -158,6 +158,24 @@ export const retroRoutes = (c: Container) => {
     return context.json(board);
   });
 
+  app.post('/retros/:retroId/notes/:noteId/reveal', async (context) => {
+    const retroId = context.req.param('retroId');
+    const board = await c.hub.run(retroId, () =>
+      c.noteManager.setRevealed(context.get('auth'), retroId, context.req.param('noteId'), true),
+    );
+
+    return context.json(board);
+  });
+
+  app.delete('/retros/:retroId/notes/:noteId/reveal', async (context) => {
+    const retroId = context.req.param('retroId');
+    const board = await c.hub.run(retroId, () =>
+      c.noteManager.setRevealed(context.get('auth'), retroId, context.req.param('noteId'), false),
+    );
+
+    return context.json(board);
+  });
+
   // Declared after /notes/reveal on purpose: the first matching route wins, and ":noteId"
   // would otherwise read "reveal" as a note id.
   app.delete('/retros/:retroId/notes/:noteId', async (context) => {

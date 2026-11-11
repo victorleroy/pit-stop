@@ -73,6 +73,15 @@ export class NoteRepository {
       .execute();
   }
 
+  public async setRevealed(retroId: string, noteId: string, revealed: boolean): Promise<void> {
+    await this.db
+      .updateTable('notes')
+      .set({revealed: revealed ? 1 : 0})
+      .where('retroId', '=', retroId)
+      .where('id', '=', noteId)
+      .execute();
+  }
+
   public async clearClusterFor(retroId: string, noteIds: string[]): Promise<void> {
     if (!noteIds.length) {
       return;

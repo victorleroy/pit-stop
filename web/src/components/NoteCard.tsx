@@ -2,6 +2,8 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import NorthEastRoundedIcon from '@mui/icons-material/NorthEastRounded';
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import {Avatar, Box, IconButton, Stack, Tooltip, Typography} from '@/ui';
 import {useState} from 'react';
 import type {Note} from '@/api/types';
@@ -16,12 +18,14 @@ export const NoteCard = ({
   canEdit,
   canGroup,
   canRemove,
+  canReveal,
   columnIndex,
   isBusy,
   isClustered,
   isFacilitator,
   note,
   onRemove,
+  onReveal,
   onUngroup,
   onUpdate,
 }: {
@@ -29,12 +33,14 @@ export const NoteCard = ({
   canEdit: boolean;
   canGroup: boolean;
   canRemove: boolean;
+  canReveal: boolean;
   columnIndex: number;
   isBusy: boolean;
   isClustered: boolean;
   isFacilitator: boolean;
   note: Note;
   onRemove: () => void;
+  onReveal: (revealed: boolean) => void;
   onUngroup: () => void;
   onUpdate: (text: string) => void;
 }) => {
@@ -175,6 +181,26 @@ export const NoteCard = ({
                     sx={{color: 'inherit', opacity: 0.6}}
                   >
                     <NorthEastRoundedIcon fontSize="inherit" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            ) : null}
+
+            {canReveal && note.isMine && !isEditing ? (
+              <Tooltip title={note.revealed ? 'Hide this note' : 'Share this note'}>
+                <span>
+                  <IconButton
+                    aria-label={note.revealed ? 'Hide this note' : 'Share this note'}
+                    disabled={isBusy}
+                    onClick={() => onReveal(!note.revealed)}
+                    size="small"
+                    sx={{color: 'inherit', opacity: 0.6}}
+                  >
+                    {note.revealed ? (
+                      <VisibilityOffOutlinedIcon fontSize="inherit" />
+                    ) : (
+                      <VisibilityOutlinedIcon fontSize="inherit" />
+                    )}
                   </IconButton>
                 </span>
               </Tooltip>

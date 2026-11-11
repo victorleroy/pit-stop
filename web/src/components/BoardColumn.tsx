@@ -23,6 +23,7 @@ export const BoardColumn = ({
   canEditColumn,
   canModerate,
   canRemove,
+  canReveal,
   canVote,
   canWrite,
   column,
@@ -36,6 +37,7 @@ export const BoardColumn = ({
   onRemoveNote,
   onRenameCluster,
   onRenameColumn,
+  onRevealNote,
   onTurnIntoAction,
   onUngroupNote,
   onUpdateNote,
@@ -49,6 +51,7 @@ export const BoardColumn = ({
   canEditColumn: boolean;
   canModerate: boolean;
   canRemove: boolean;
+  canReveal: boolean;
   canVote: boolean;
   canWrite: boolean;
   column: Column;
@@ -62,6 +65,7 @@ export const BoardColumn = ({
   onRemoveNote: (noteId: string) => void;
   onRenameCluster: (clusterId: string, title: string) => void;
   onRenameColumn: (title: string) => void;
+  onRevealNote: (noteId: string, revealed: boolean) => void;
   onTurnIntoAction: (text: string) => void;
   onUngroupNote: (noteId: string) => void;
   onUpdateNote: (noteId: string, text: string) => void;
@@ -185,6 +189,7 @@ export const BoardColumn = ({
             canDecide={canDecide}
             canGroup={canGroup}
             canModerate={canModerate}
+            canReveal={canReveal}
             columnIndex={index}
             canVote={canVote}
             canWrite={canWrite}
@@ -195,6 +200,7 @@ export const BoardColumn = ({
             onDropNote={(noteId) => onGroupNote(noteId, card.id)}
             onRemoveNote={onRemoveNote}
             onRenameCluster={(title) => onRenameCluster(card.id, title)}
+            onRevealNote={onRevealNote}
             onTurnIntoAction={onTurnIntoAction}
             onUngroupNote={onUngroupNote}
             onUpdateNote={onUpdateNote}

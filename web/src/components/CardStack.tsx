@@ -74,6 +74,7 @@ export const CardStack = ({
   canDecide = false,
   canGroup,
   canModerate,
+  canReveal,
   canVote,
   canWrite,
   card,
@@ -83,6 +84,7 @@ export const CardStack = ({
   onDropNote,
   onRemoveNote,
   onRenameCluster,
+  onRevealNote,
   onTurnIntoAction,
   onUngroupNote,
   onUpdateNote,
@@ -94,6 +96,7 @@ export const CardStack = ({
   canDecide?: boolean;
   canGroup: boolean;
   canModerate: boolean;
+  canReveal: boolean;
   canVote: boolean;
   canWrite: boolean;
   card: Card;
@@ -103,6 +106,7 @@ export const CardStack = ({
   onDropNote: (noteId: string) => void;
   onRemoveNote: (noteId: string) => void;
   onRenameCluster: (title: string) => void;
+  onRevealNote: (noteId: string, revealed: boolean) => void;
   onTurnIntoAction?: (text: string) => void;
   onUngroupNote: (noteId: string) => void;
   onUpdateNote: (noteId: string, text: string) => void;
@@ -227,6 +231,7 @@ export const CardStack = ({
             canEdit={canWrite}
             canGroup={canGroup}
             canRemove={canModerate}
+            canReveal={canReveal}
             columnIndex={columnIndex}
             isBusy={isBusy}
             isClustered={isCluster}
@@ -234,6 +239,7 @@ export const CardStack = ({
             key={note.id}
             note={note}
             onRemove={() => onRemoveNote(note.id)}
+            onReveal={(revealed) => onRevealNote(note.id, revealed)}
             onUngroup={() => onUngroupNote(note.id)}
             onUpdate={(text) => onUpdateNote(note.id, text)}
           />

@@ -84,7 +84,7 @@ any other, including backwards.
 | Create a note | yes | | | | |
 | Edit a note's **text** | yes | | | | |
 | Move or delete a note | yes | yes | | | |
-| Reveal or hide **own** notes | | yes | yes | yes | |
+| Reveal or hide **own** notes, all or one | | yes | yes | yes | |
 | Group, ungroup, rename a cluster | | yes | | | |
 | Cast a vote | | | yes | | |
 | See **own** votes | | | yes | yes | yes |
@@ -130,8 +130,11 @@ the tests lock down.
 **Sharing is reversible.** Someone who shared too early can take the text back, and nothing
 downstream depends on a note having been read once.
 
-**Sharing is author-global, not per note**: `setMineRevealed(retroId, revealed)` flips *all*
-of the caller's notes in that retro. It is idempotent.
+**Sharing is all at once or one note at a time**: `setMineRevealed(retroId, revealed)` flips
+*all* of the caller's notes in that retro; `setRevealed(retroId, noteId, revealed)` flips that
+one note only, and only its author may call it (`403` for anybody else, the facilitator
+included). Both are idempotent and allowed in the same phases. `myNotesRevealed` is `true` as
+soon as at least one of the caller's notes is shared.
 
 ---
 
@@ -381,6 +384,8 @@ Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `429`.
 | DELETE | `/retros/{retroId}/notes/{noteId}` | `200` `Board` |
 | POST | `/retros/{retroId}/notes/reveal` | `200` `Board` |
 | DELETE | `/retros/{retroId}/notes/reveal` | `200` `Board` |
+| POST | `/retros/{retroId}/notes/{noteId}/reveal` | `200` `Board` — author only |
+| DELETE | `/retros/{retroId}/notes/{noteId}/reveal` | `200` `Board` — author only |
 | POST | `/retros/{retroId}/notes/{noteId}/group` | `200` `Board` |
 | DELETE | `/retros/{retroId}/notes/{noteId}/group` | `200` `Board` |
 | PATCH | `/retros/{retroId}/clusters/{clusterId}` | `200` `Board` |

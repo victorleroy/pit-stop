@@ -68,6 +68,11 @@ export const revealMyNotes = (retroId: string) =>
 export const hideMyNotes = (retroId: string) =>
   request<Board>(`/retros/${retroId}/notes/reveal`, {method: 'DELETE'});
 
+export const setNoteRevealed = (retroId: string, noteId: string, revealed: boolean) =>
+  request<Board>(`/retros/${retroId}/notes/${noteId}/reveal`, {
+    method: revealed ? 'POST' : 'DELETE',
+  });
+
 export const groupNote = (retroId: string, noteId: string, targetId: string) =>
   request<Board>(`/retros/${retroId}/notes/${noteId}/group`, {
     body: {targetId},

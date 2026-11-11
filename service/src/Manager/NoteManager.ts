@@ -118,6 +118,31 @@ export class NoteManager {
     return this.retroManager.getBoard(auth, retroId);
   }
 
+  /** One note at a time, by its author only: the facilitator never shares on someone's behalf. */
+  public async setRevealed(
+    auth: AuthContext,
+    retroId: string,
+    noteId: string,
+    revealed: boolean,
+  ): Promise<BoardModel> {
+    const {retro} = await this.accessChecker.checkRetroAccess(auth, retroId);
+    RetroAccessChecker.checkPhaseAllows(retro.phase, REVEALABLE_PHASES);
+
+    const note = await this.noteRepository.findOneById(retroId, noteId);
+
+    if (!note) {
+      throw new NotFoundHttpError(`Note "${noteId}" not found`);
+    }
+
+    if (note.authorId !== auth.userId) {
+      throw new ForbiddenHttpError('Only the author can share or hide this note');
+    }
+
+    await this.noteRepository.setRevealed(retroId, noteId, revealed);
+
+    return this.retroManager.getBoard(auth, retroId);
+  }
+
   /**
    * The author edits their own notes; the facilitator can also clean up the board
    * (duplicates, off-topic, typos) without knowing who wrote what.

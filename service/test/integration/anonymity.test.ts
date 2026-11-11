@@ -127,6 +127,78 @@ describe('anonymity', () => {
     expect(texts.sort()).toEqual(['second', 'the secret']);
   });
 
+  describe('sharing one note at a time', () => {
+    const textsFor = async (auth: AuthContext) => {
+      const board = await harness.container.retroManager.getBoard(auth, retroId);
+
+      return board.columns[0]!.cards.flatMap((card) => card.notes.map(({text}) => text));
+    };
+
+    const firstNoteId = async () =>
+      (await harness.container.retroManager.getBoard(author, retroId)).columns[0]!.cards
+        .flatMap((card) => card.notes)
+        .find(({text}) => text === 'the secret')!.id;
+
+    it('refuses it during the brainstorm', async () => {
+      await expect(
+        harness.container.noteManager.setRevealed(author, retroId, await firstNoteId(), true),
+      ).rejects.toThrow('not allowed during the "BRAINSTORM" phase');
+      expect(await textsFor(other)).toEqual(['']);
+    });
+
+    for (const phase of ['SHARE', 'VOTE', 'DISCUSS'] as const) {
+      it(`gives out only that note during ${phase}, and takes it back`, async () => {
+        await harness.container.noteManager.create(author, retroId, columnId, 'still mine');
+        const noteId = await firstNoteId();
+        await setPhase(phase);
+
+        await harness.container.noteManager.setRevealed(author, retroId, noteId, true);
+
+        expect((await textsFor(other)).sort()).toEqual(['', 'the secret']);
+        expect(JSON.stringify(await harness.container.retroManager.getBoard(other, retroId))).not.toContain(
+          'still mine',
+        );
+
+        await harness.container.noteManager.setRevealed(author, retroId, noteId, false);
+
+        expect(await textsFor(other)).toEqual(['', '']);
+      });
+    }
+
+    it('refuses it on an archived retro', async () => {
+      const noteId = await firstNoteId();
+      await setPhase('ARCHIVED');
+
+      await expect(
+        harness.container.noteManager.setRevealed(author, retroId, noteId, true),
+      ).rejects.toThrow('Reopen the retro');
+      expect(await textsFor(other)).toEqual(['']);
+    });
+
+    it('is refused to anybody but the author, facilitator included', async () => {
+      const authorsNote = await firstNoteId();
+      await harness.container.noteManager.create(other, retroId, columnId, 'alice only');
+      const othersNote = (await harness.container.retroManager.getBoard(other, retroId)).columns[0]!.cards
+        .flatMap((card) => card.notes)
+        .find(({isMine}) => isMine)!.id;
+      await setPhase('SHARE');
+
+      await expect(
+        harness.container.noteManager.setRevealed(other, retroId, authorsNote, true),
+      ).rejects.toThrow('Only the author');
+      await expect(
+        harness.container.noteManager.setRevealed(author, retroId, othersNote, true),
+      ).rejects.toThrow('Only the author');
+
+      expect(JSON.stringify(await harness.container.retroManager.getBoard(other, retroId))).not.toContain(
+        'the secret',
+      );
+      expect(JSON.stringify(await harness.container.retroManager.getBoard(author, retroId))).not.toContain(
+        'alice only',
+      );
+    });
+  });
+
   it('reports myNotesRevealed only for the caller', async () => {
     await setPhase('SHARE');
     await harness.container.noteManager.setMineRevealed(author, retroId, true);

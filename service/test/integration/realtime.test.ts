@@ -233,4 +233,35 @@ describe('live retros', () => {
     expect(hidden.status).toBe(200);
     expect(((await hidden.json()) as {myNotesRevealed: boolean}).myNotesRevealed).toBe(false);
   });
+
+  it('shares and hides a single note over HTTP, through the hub', async () => {
+    const board = await harness.container.retroManager.getBoard(owner, retroId);
+
+    await harness.container.noteManager.create(member, retroId, board.columns[0]!.id, 'mine');
+    await harness.container.retroManager.updateRetro(owner, retroId, {phase: 'SHARE'});
+
+    const noteId = (await harness.container.retroManager.getBoard(member, retroId)).columns[0]!
+      .cards[0]!.notes[0]!.id;
+    const run = jest.spyOn(harness.container.hub, 'run');
+    const app = new Hono<{Variables: Variables}>();
+
+    app.use('*', async (context, next) => {
+      context.set('auth', member);
+      await next();
+    });
+    app.route('/', retroRoutes(harness.container));
+
+    const shared = await app.request(`/retros/${retroId}/notes/${noteId}/reveal`, {method: 'POST'});
+
+    expect(shared.status).toBe(200);
+    expect(run).toHaveBeenCalledWith(retroId, expect.any(Function));
+    expect((await harness.container.retroManager.getBoard(owner, retroId)).columns[0]!.cards[0]!
+      .notes[0]!.text).toBe('mine');
+
+    const hidden = await app.request(`/retros/${retroId}/notes/${noteId}/reveal`, {method: 'DELETE'});
+
+    expect(hidden.status).toBe(200);
+    expect((await harness.container.retroManager.getBoard(owner, retroId)).columns[0]!.cards[0]!
+      .notes[0]!.text).toBe('');
+  });
 });

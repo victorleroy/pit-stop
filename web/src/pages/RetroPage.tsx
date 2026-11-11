@@ -27,6 +27,7 @@ import {
   takeFacilitation,
   renameColumn,
   revealMyNotes,
+  setNoteRevealed,
   ungroupNote,
   updateAction,
   updateNote,
@@ -222,6 +223,11 @@ export const RetroPage = () => {
     mutationFn: () => hideMyNotes(retroId as string),
     ...boardMutationOptions,
   });
+  const noteRevealMutation = useMutation({
+    mutationFn: ({noteId, revealed}: {noteId: string; revealed: boolean}) =>
+      setNoteRevealed(retroId as string, noteId, revealed),
+    ...boardMutationOptions,
+  });
   const addColumnMutation = useMutation({
     mutationFn: (title: string) => addColumn(retroId as string, title),
     ...boardMutationOptions,
@@ -306,6 +312,7 @@ export const RetroPage = () => {
     takeFacilitationMutation,
     revealMutation,
     hideMutation,
+    noteRevealMutation,
     addColumnMutation,
     renameColumnMutation,
     removeColumnMutation,
@@ -475,6 +482,7 @@ export const RetroPage = () => {
                   canEditColumn={board.isFacilitator && board.phase === 'BRAINSTORM'}
                   canGroup={canGroup}
                   canRemove={board.columns.length > 1}
+                  canReveal={['SHARE', 'VOTE', 'DISCUSS'].includes(board.phase)}
                   canModerate={canModerate}
                   canVote={canVote}
                   canWrite={canWrite}
@@ -503,6 +511,7 @@ export const RetroPage = () => {
                   onRenameCluster={(clusterId, title) =>
                     renameClusterMutation.mutate({clusterId, title})
                   }
+                  onRevealNote={(noteId, revealed) => noteRevealMutation.mutate({noteId, revealed})}
                   onRenameColumn={(title) => renameColumnMutation.mutate({columnId: column.id, title})}
                   onTurnIntoAction={(text) => {
                     setActionDraft({nonce: Date.now(), text});
