@@ -45,6 +45,7 @@ const board = (isFacilitator: boolean) =>
     carriedOverActions: [],
     columns: [{cards: [], id: 'c1', order: 0, title: 'Start'}],
     facilitatorId: 'f',
+    icebreaker: null,
     id: 'r1',
     isFacilitator,
     maxVotes: 3,
@@ -136,5 +137,117 @@ describe('RetroPage in the waiting room', () => {
     fireEvent.click(screen.getByRole('tab', {name: 'Board setup'}));
 
     expect(gameActions()).toEqual(['game.join', 'game.leave']);
+  });
+});
+
+describe('RetroPage in the icebreaker', () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  const icebreakerBoard = (columns: Board['columns']) =>
+    ({
+      ...board(true),
+      columns,
+      icebreaker: {
+        answeredCount: 0,
+        answers: [],
+        answersRevealed: false,
+        question: {source: 'CUSTOM', text: 'Best lunch this week?'},
+        state: 'ASKED',
+      },
+      phase: 'ICEBREAKER',
+    }) as unknown as Board;
+
+  it('shows the question instead of the empty board, without cursors', async () => {
+    renderPage(icebreakerBoard([]));
+
+    expect(await screen.findByRole('heading', {name: 'Best lunch this week?'})).toBeTruthy();
+    expect(screen.queryByText('Add at least one column to start')).toBeNull();
+    expect(screen.queryByTestId('cursors')).toBeNull();
+    expect(screen.getByRole('button', {name: 'Move on to Brainstorm'})).toBeTruthy();
+  });
+
+  it('keeps the columns out of the way even when the board has some', async () => {
+    renderPage(icebreakerBoard([{cards: [], id: 'c1', order: 0, title: 'Start'}] as unknown as Board['columns']));
+
+    expect(await screen.findByRole('heading', {name: 'Best lunch this week?'})).toBeTruthy();
+    expect(screen.queryByText('Start', {selector: 'h3, h2, p, span'})).toBeNull();
+    expect(screen.queryByTestId('cursors')).toBeNull();
+  });
+});
+
+describe('RetroPage after the icebreaker', () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it('keeps the question one click away', async () => {
+    renderPage({
+      ...board(true),
+      icebreaker: {
+        answeredCount: 1,
+        answers: [{author: {id: 'f', name: 'Fay'}, mine: true, text: 'Pasta'}],
+        answersRevealed: true,
+        question: {source: 'CUSTOM', text: 'Best lunch this week?'},
+        state: 'ASKED',
+      },
+      phase: 'BRAINSTORM',
+    } as unknown as Board);
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Icebreaker: Best lunch this week?'}));
+
+    expect(await screen.findByText('Pasta')).toBeTruthy();
+  });
+
+  it('says so when the answers were never revealed', async () => {
+    renderPage({
+      ...board(true),
+      icebreaker: {
+        answeredCount: 1,
+        answers: [{author: {id: 'f', name: 'Fay'}, mine: true, text: 'Pasta'}],
+        answersRevealed: false,
+        question: {source: 'CUSTOM', text: 'Best lunch this week?'},
+        state: 'ASKED',
+      },
+      phase: 'BRAINSTORM',
+    } as unknown as Board);
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Icebreaker: Best lunch this week?'}));
+
+    expect(await screen.findByText('The answers were not revealed.')).toBeTruthy();
+    expect(screen.queryByText('Pasta')).toBeNull();
+  });
+});
+
+describe('RetroPage icebreaker preview in the waiting room', () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it('shows the facilitator the preview, and a participant nothing', async () => {
+    const withQuestion = (isFacilitator: boolean) =>
+      ({
+        ...board(isFacilitator),
+        icebreaker: {
+          answeredCount: 0,
+          answers: [],
+          answersRevealed: false,
+          question: isFacilitator ? {source: 'CUSTOM', text: 'Best lunch this week?'} : null,
+          state: 'WAITING',
+        },
+      }) as unknown as Board;
+
+    renderPage(withQuestion(true));
+    expect(await screen.findByText('Best lunch this week?')).toBeTruthy();
+    expect(screen.getAllByRole('button', {name: 'Start with the icebreaker'})).toHaveLength(2);
+
+    cleanup();
+    renderPage(withQuestion(false));
+    await screen.findByText('Welcome to the pit stop');
+    expect(screen.queryByText('Only you can see this')).toBeNull();
   });
 });

@@ -63,6 +63,14 @@ The review's focus is a column (`review_focus_action_id`), not live state in `Re
 the facilitator's place in the review survives a restart and a reconnection, and is projected
 in `board.updated` like the rest of the board.
 
+### D7: Asking the icebreaker is entering its phase
+
+There is no `ask` command: `PATCH {phase: 'ICEBREAKER'}` sets `icebreaker_asked_at` (and draws a
+question if there is none) in the same queued command. Before that the question is the
+facilitator's preview in `LOBBY`, which `projectBoard` withholds from everybody else. Question
+and answers are persisted columns and rows, projected like the rest of the board, so they
+survive a restart; the history of asked questions is derived from `retros`, not stored apart.
+
 ## Consequences
 
 - Retros created before the rebuild keep their phase and never see a waiting room.

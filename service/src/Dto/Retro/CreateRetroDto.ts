@@ -1,6 +1,7 @@
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -34,4 +35,9 @@ export class CreateRetroDto {
   @Min(1)
   @Max(10)
   public maxVotes?: number;
+
+  // Left out, the retro has no icebreaker; the web always sends the box it shows.
+  @IsOptional()
+  @IsBoolean()
+  public icebreaker?: boolean;
 }

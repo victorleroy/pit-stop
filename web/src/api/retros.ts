@@ -5,6 +5,7 @@ import type {
   ActionStatus,
   Board,
   DieRoll,
+  IcebreakerCommand,
   RetroPhase,
   RetroSummary,
   ReviewItem,
@@ -29,8 +30,17 @@ export const VOTE_OPTIONS = Array.from({length: 10}, (_, index) => index + 1);
 export const createRetro = (
   teamId: string,
   title: string,
-  options: {columns?: string[]; maxVotes?: number; templateId?: string} = {},
+  options: {columns?: string[]; icebreaker?: boolean; maxVotes?: number; templateId?: string} = {},
 ) => request<Board>(`/teams/${teamId}/retros`, {body: {...options, title}, method: 'POST'});
+
+export const sendIcebreakerCommand = (retroId: string, command: IcebreakerCommand) =>
+  request<Board>(`/retros/${retroId}/icebreaker`, {body: command, method: 'PATCH'});
+
+export const answerIcebreaker = (retroId: string, text: string) =>
+  request<Board>(`/retros/${retroId}/icebreaker/answer`, {body: {text}, method: 'PUT'});
+
+export const removeIcebreakerAnswer = (retroId: string) =>
+  request<Board>(`/retros/${retroId}/icebreaker/answer`, {method: 'DELETE'});
 
 export const fetchBoard = (retroId: string) => request<Board>(`/retros/${retroId}`);
 

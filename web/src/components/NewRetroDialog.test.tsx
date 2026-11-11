@@ -114,7 +114,33 @@ describe('NewRetroDialog', () => {
     await start();
 
     await waitFor(() =>
-      expect(createRetro).toHaveBeenCalledWith('t1', 'Sprint 12', {maxVotes: 7, templateId: 'u1'}),
+      expect(createRetro).toHaveBeenCalledWith('t1', 'Sprint 12', {
+        icebreaker: true,
+        maxVotes: 7,
+        templateId: 'u1',
+      }),
+    );
+  });
+
+  it('starts with an icebreaker by default and lets the team skip it', async () => {
+    vi.mocked(fetchTeamTemplates).mockResolvedValue(catalogue());
+    vi.mocked(createRetro).mockResolvedValue({id: 'b1'} as Awaited<ReturnType<typeof createRetro>>);
+    renderDialog();
+
+    await screen.findByRole('radio', {name: /Start \/ Stop \/ Continue/});
+    const checkbox = screen.getByRole('checkbox', {name: 'Start with an icebreaker'}) as HTMLInputElement;
+
+    expect(checkbox.checked).toBe(true);
+
+    fireEvent.click(checkbox);
+    await start();
+
+    await waitFor(() =>
+      expect(createRetro).toHaveBeenCalledWith('t1', 'Sprint 12', {
+        icebreaker: false,
+        maxVotes: 3,
+        templateId: 'builtin:start-stop-continue',
+      }),
     );
   });
 

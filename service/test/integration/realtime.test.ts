@@ -135,7 +135,7 @@ describe('live retros', () => {
     expect(boards.at(-1).board.id).toBe(otherRetroId);
   });
 
-  it('relays cursors in every phase except LOBBY, BRAINSTORM and VOTE', async () => {
+  it('relays cursors in every phase except LOBBY, ICEBREAKER, BRAINSTORM and VOTE', async () => {
     retroId = (await harness.container.retroManager.create(owner, teamId, 'Sprint 44')).id;
 
     const connect = async (auth: AuthContext) => {
@@ -162,7 +162,9 @@ describe('live retros', () => {
       mover.emit('message', JSON.stringify({action: 'cursor', x: 0.5, y: 0.5}));
       await new Promise((resolve) => setTimeout(resolve, 5));
     };
-    const enter = async (phase: 'BRAINSTORM' | 'SHARE' | 'VOTE' | 'DISCUSS' | 'ARCHIVED') => {
+    const enter = async (
+      phase: 'ICEBREAKER' | 'BRAINSTORM' | 'SHARE' | 'VOTE' | 'DISCUSS' | 'ARCHIVED',
+    ) => {
       await harness.container.hub.run(retroId, () =>
         harness.container.retroManager.updateRetro(owner, retroId, {phase}),
       );
@@ -173,6 +175,7 @@ describe('live retros', () => {
     expect(received()).toBe(expected);
 
     for (const [phase, visible] of [
+      ['ICEBREAKER', false],
       ['BRAINSTORM', false],
       ['SHARE', true],
       ['VOTE', false],

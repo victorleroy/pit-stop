@@ -23,6 +23,10 @@ const RETRO_COLUMNS = [
   'templateId',
   'templateName',
   'defaultTimerSeconds',
+  'icebreakerQuestionId',
+  'icebreakerCustomText',
+  'icebreakerAskedAt',
+  'icebreakerAnswersRevealed',
 ] as const;
 
 /**

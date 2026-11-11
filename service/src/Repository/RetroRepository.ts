@@ -19,11 +19,17 @@ const RETRO_COLUMNS = [
   'templateId',
   'templateName',
   'defaultTimerSeconds',
+  'icebreakerQuestionId',
+  'icebreakerCustomText',
+  'icebreakerAskedAt',
+  'icebreakerAnswersRevealed',
 ] as const;
 
 export interface CreateRetroInput {
   createdBy: string;
   defaultTimerSeconds?: number | null;
+  /** Drawn, not asked yet: the question is asked on entering ICEBREAKER. */
+  icebreakerQuestionId?: string | null;
   id: string;
   /** Left out, the column default (5) applies. */
   maxVotes?: number;
@@ -36,12 +42,23 @@ export interface CreateRetroInput {
 
 export interface UpdateRetroInput {
   facilitatorId?: string;
+  icebreakerAnswersRevealed?: number;
+  icebreakerAskedAt?: string | null;
+  icebreakerCustomText?: string | null;
+  icebreakerQuestionId?: string | null;
   maxVotes?: number;
   phase?: RetroPhase;
   timerEndsAt?: string | null;
   timerRemainingMs?: number | null;
   timerTotalMs?: number | null;
   title?: string;
+}
+
+export interface IcebreakerUsage {
+  askedAt: string | null;
+  phase: RetroPhase;
+  questionId: string;
+  retroId: string;
 }
 
 export class RetroRepository {
@@ -90,6 +107,31 @@ export class RetroRepository {
     return rows.map(({id}) => id);
   }
 
+  /**
+   * The bank questions of the team's retros: the history of what was asked, and what the other
+   * waiting rooms hold back. Derived from the retros themselves, never stored apart.
+   */
+  public async findIcebreakerUsage(scoped: ScopedDb, teamId: string): Promise<IcebreakerUsage[]> {
+    const rows = await scoped
+      .retros()
+      .select([
+        'retros.id',
+        'retros.phase',
+        'retros.icebreakerQuestionId as questionId',
+        'retros.icebreakerAskedAt as askedAt',
+      ])
+      .where('retros.teamId', '=', teamId)
+      .where('retros.icebreakerQuestionId', 'is not', null)
+      .execute();
+
+    return rows.map(({askedAt, id, phase, questionId}) => ({
+      askedAt,
+      phase,
+      questionId: questionId as string,
+      retroId: id,
+    }));
+  }
+
   /** Takes the caller's transaction: a retro and its columns are written together. */
   public async create(input: CreateRetroInput, executor: Db = this.db): Promise<void> {
     await executor
@@ -99,6 +141,7 @@ export class RetroRepository {
         createdBy: input.createdBy,
         defaultTimerSeconds: input.defaultTimerSeconds ?? null,
         facilitatorId: input.createdBy,
+        icebreakerQuestionId: input.icebreakerQuestionId ?? null,
         id: input.id,
         ...(input.maxVotes === undefined ? {} : {maxVotes: input.maxVotes}),
         orgId: input.orgId,

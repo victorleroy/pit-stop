@@ -103,6 +103,7 @@ describe('MyRetrosPage new retro', () => {
 
     await waitFor(() =>
       expect(createRetro).toHaveBeenCalledWith('t2', 'Sprint 12', {
+        icebreaker: true,
         maxVotes: 3,
         templateId: 'builtin:start-stop-continue',
       }),
@@ -143,5 +144,24 @@ describe('MyRetrosPage new retro', () => {
 
     expect(await screen.findByText('Waiting room')).toBeTruthy();
     expect(screen.queryByText('Archived')).toBeNull();
+  });
+
+  it('labels a retro in the icebreaker', async () => {
+    vi.mocked(fetchTeams).mockResolvedValue([]);
+    vi.mocked(fetchMyRetros).mockResolvedValue([
+      {id: 'r2', isFacilitator: false, phase: 'ICEBREAKER', teamId: 't1', teamName: 'Core', title: 'Sprint 14'},
+    ] as Awaited<ReturnType<typeof fetchMyRetros>>);
+
+    render(
+      <QueryClientProvider client={new QueryClient({defaultOptions: {queries: {retry: false}}})}>
+        <ToastProvider>
+          <MemoryRouter>
+            <MyRetrosPage />
+          </MemoryRouter>
+        </ToastProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('Icebreaker')).toBeTruthy();
   });
 });

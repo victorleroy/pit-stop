@@ -14,8 +14,10 @@ this page is the bug.
 |---|---|
 | **Organization** | A customer company, identified by an opaque `org_id`. An email domain is an optional auto-join rule, never an identity. |
 | **Team** | A group of people inside an organization. Owns retros and actions. |
-| **Retro** | A session. Moves through 6 phases. Holds columns, notes, clusters and votes. |
+| **Retro** | A session. Moves through 7 phases. Holds columns, notes, clusters and votes. |
 | **Waiting room** | The `LOBBY` phase: where a retro waits for its people before it starts. Every new retro opens there. |
+| **Icebreaker** | One light question at the start of a retro, the same for everyone, answered in one line or out loud. Drawn from a bank, or written by the facilitator. |
+| **Asked** | An icebreaker question is asked when the retro enters `ICEBREAKER`; before that, in the waiting room, it is the facilitator's preview. |
 | **Note** | A sticky. Has an author, a text, a column and a `revealed` flag. |
 | **Cluster** | A grouping of at least 2 notes inside a single column. |
 | **Card** | The unit of display and the target of a vote: either a standalone note or a cluster. |
@@ -53,6 +55,8 @@ retros         (id, team_id, org_id, title, phase DEFAULT 'LOBBY', created_by, f
                 created_at, template_id NULL, template_name NULL,
                 default_timer_seconds NULL, icebreaker_*, action_review,
                 review_focus_action_id NULL)
+icebreaker_answers (retro_id, user_id, text, created_at, updated_at)
+                   PRIMARY KEY (retro_id, user_id)
 columns        (id, retro_id, title, position, prompt NULL)
 notes          (id, retro_id, column_id, cluster_id NULL, author_id,
                 text, revealed DEFAULT false, created_at)
@@ -74,9 +78,15 @@ retro_template_columns (template_id, position, title, prompt NULL)
 There is no connections table: the `RetroSession` actor holds them in memory, so presence
 is never something that has to be cleaned up after a crash.
 
-Enumerations: `phase in {LOBBY, BRAINSTORM, SHARE, VOTE, DISCUSS, ARCHIVED}`. The database
-already accepts `ICEBREAKER` and `REVIEW`, and their columns, ahead of the features that use
-them (ADR-005); the API refuses them until then.
+Enumerations: `phase in {LOBBY, ICEBREAKER, BRAINSTORM, SHARE, VOTE, DISCUSS, ARCHIVED}`.
+The database already accepts `REVIEW`, and its columns, ahead of the feature that uses it
+(ADR-005); the API refuses it until then.
+
+The icebreaker lives in four columns of `retros`: `icebreaker_question_id` (a bank id) or
+`icebreaker_custom_text` (the facilitator's own question), never both; `icebreaker_asked_at`,
+set on entering `ICEBREAKER`; `icebreaker_answers_revealed`. Which questions a team was asked
+is **derived** from its retros (`asked_at` set, with that question id), never stored apart:
+deleting a retro takes its question out of the history.
 Other enumerations:
 `action.status in {OPEN, DONE, DROPPED}`, `action_review.outcome in {DONE, DROPPED, KEPT}`,
 `timer.state in {IDLE, RUNNING, PAUSED}`,
@@ -116,20 +126,22 @@ The one thing a join must never change is section 4: the anonymity projection is
 The facilitator alone changes the phase. No transition is constrained, **except back to
 `LOBBY`**: any phase can move to any other, including backwards.
 
-| Operation | LOBBY | BRAINSTORM | SHARE | VOTE | DISCUSS | ARCHIVED |
-|---|:--:|:--:|:--:|:--:|:--:|:--:|
-| Create a note | | yes | yes | | | |
-| Edit a note's **text** | | yes | | | | |
-| Move or delete a note | | yes | yes | | | |
-| Reveal or hide **own** notes, all or one | | | yes | yes | yes | |
-| Group, ungroup, rename a cluster | | | yes | | | |
-| Cast a vote | | | | yes | | |
-| See **own** votes | | | | yes | yes | yes |
-| See vote **totals** | | | | | yes | yes |
-| Add, rename, reorder, delete a column | yes | yes | | | | |
-| Create an action | | | | | yes | |
-| Edit an action | yes | yes | yes | yes | yes | yes |
-| Record or undo a review outcome | | yes | yes | yes | yes | |
+| Operation | LOBBY | ICEBREAKER | BRAINSTORM | SHARE | VOTE | DISCUSS | ARCHIVED |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| Create a note | | | yes | yes | | | |
+| Edit a note's **text** | | | yes | | | | |
+| Move or delete a note | | | yes | yes | | | |
+| Reveal or hide **own** notes, all or one | | | | yes | yes | yes | |
+| Group, ungroup, rename a cluster | | | | yes | | | |
+| Cast a vote | | | | | yes | | |
+| See **own** votes | | | | | yes | yes | yes |
+| See vote **totals** | | | | | | yes | yes |
+| Add, rename, reorder, delete a column | yes | | yes | | | | |
+| Create an action | | | | | | yes | |
+| Edit an action | yes | yes | yes | yes | yes | yes | yes |
+| Record or undo a review outcome | | | yes | yes | yes | yes | |
+| Change the icebreaker question (facilitator) | yes | yes | | | | | |
+| Answer the icebreaker, reveal or hide the answers | | yes | | | | | |
 
 An operation refused because of the phase answers `403`, except in `ARCHIVED` (`409`).
 
@@ -142,6 +154,7 @@ reading it aloud. Its text stays frozen like every other note's once the brainst
    Rationale: regrouping notes recomposes the cards, and a vote cast on a card that no longer
    exists is lost anyway. Better to restart the round than to strand votes. Judging the target
    alone means a detour through an opening phase cannot bring votes back into the sharing.
+   Going back to `ICEBREAKER` keeps the votes, so the vote budget cannot change there (`409`).
 
 2. **ARCHIVED is frozen but reversible.** Any change to an archived retro is refused (`409`)
    **except** a phase change. Reopening is always possible, to any phase but `LOBBY`. A review
@@ -154,7 +167,10 @@ reading it aloud. Its text stays frozen like every other note's once the brainst
    enter `BRAINSTORM` (and later `ICEBREAKER`, `REVIEW`), nothing further (`409`).
 
 The guards of a `PATCH` run in this order, inside the retro's queue: archived, back to
-`LOBBY`, `LOBBY → LOBBY` no-op, votes per person, columns, timer, vote wipe, write.
+`LOBBY`, `LOBBY → LOBBY` no-op, votes per person, columns, timer, vote wipe, entry effects,
+write. **Entering `ICEBREAKER` asks the question**: one is drawn if the retro has none, and
+`icebreaker_asked_at` is set if it is null, in the same command. Coming back later keeps the
+question, its date and its answers.
 
 ---
 
@@ -172,6 +188,10 @@ This is the product's central promise. It lives in **one pure function**,
 | **Vote totals** | Everybody | Only in `DISCUSS` and `ARCHIVED` |
 | **Own votes** | Self | Only in `VOTE`, `DISCUSS`, `ARCHIVED`; otherwise `myVotes: 0` |
 | **Votes spent per person** | Everybody | Only in `VOTE`: `voteProgress[userId]` = how many votes they cast, never on which card; `{}` in every other phase |
+| **Icebreaker question** | Facilitator | In `LOBBY`, before it is asked: the preview is theirs alone, `question: null` for everybody else |
+| | Everybody | Once asked. A question never asked disappears for everyone once the retro left `LOBBY` (`icebreaker: null`) |
+| **Icebreaker answer** | Everybody, always | `author` is always present: answers are signed |
+| | Its author, always | `text` is returned when `answersRevealed` **or** the caller is the author, `''` otherwise, the facilitator included |
 
 > **The product protects the content, not the presence.** Everyone sees that Victor wrote
 > three notes; nobody reads them until he shares them.
@@ -237,6 +257,9 @@ Three rules exist so that nobody can ever be locked out:
 3. You cannot demote yourself as team admin, unless you are an org admin (`409`).
 
 ### Facilitation takeover
+
+Taking the facilitation over in `LOBBY` also takes the icebreaker preview: the new facilitator
+sees the question, the former one no longer does.
 
 A subtle case. `takeFacilitation` allows the takeover when:
 
@@ -410,6 +433,31 @@ running or paused. A cut larger than what is left ends the round instead: the re
 clamps to `0` (a running clock reaches zero at once, chime included), never below. Extending an
 already-overdue timer never yields a negative duration; cutting one is `409` and its `-1` is
 disabled.
+
+### Icebreaker
+
+- `icebreaker` at creation is `body.icebreaker ?? false`: without it the retro has none. With
+  it, a question is drawn at creation and asked on entering `ICEBREAKER`.
+- The bank (`service/src/Icebreaker/questions.ts`, CC0-1.0) holds 60 bilingual questions
+  (`en`, `fr`), all light and playful (`FUN`): the icebreaker sets a good mood, it does not
+  check on the team or the sprint. Ids are
+  never reused; a question is retired with `active: false` and still shows in old retros.
+- **A draw** picks uniformly among the active questions the team was never asked, leaving out
+  those held by the team's other waiting rooms (`LOBBY`, not asked yet) and the current one.
+  When none is left, a new cycle starts: everything but the reserved and the current question,
+  then everything but the current one, then the whole bank. A question discarded by a new draw
+  is not "asked".
+- The facilitator draws another question (`draw`) or writes their own (`custom`, 1 to 200
+  characters after trimming, never part of the history), in `LOBBY` and `ICEBREAKER`. `draw`
+  on a retro without a question adds an icebreaker. Changing the question once asked
+  **deletes every answer** and hides the answers again.
+- Every member answers once, 1 to 140 characters after trimming, in `ICEBREAKER` only; a second
+  answer replaces the first, and removing it is idempotent. Answering is optional, and nothing
+  tells "did not answer" from "answered out loud".
+- The facilitator reveals or hides the answers (`revealAnswers`, `hideAnswers`) in
+  `ICEBREAKER` only. Neither the timer nor anything else reveals them, nor changes the phase.
+- Editorial guardrails of the bank: nothing about family, health, religion, politics or money;
+  answerable in one sentence; reviewed in the pull request (CONTRIBUTING.md).
 
 ### Waiting room game
 
@@ -617,9 +665,12 @@ Observed codes: `200`, `201`, `204`, `400`, `401`, `403`, `404`, `409`, `413`, `
 | PUT | `/teams/{teamId}/members/{userId}/admin` | `204` |
 | GET | `/me/retros` | `200` `TeamRetroSummary[]`, most recent first |
 | GET | `/teams/{teamId}/retros` | `200` `RetroSummary[]` |
-| POST | `/teams/{teamId}/retros` | `201` `Board` |
+| POST | `/teams/{teamId}/retros` | `201` `Board` — `icebreaker?: boolean`, default `false` |
 | GET | `/retros/{retroId}` | `200` `Board` |
 | PATCH | `/retros/{retroId}` | `200` `Board` — `409` on a `phase: 'LOBBY'` once started |
+| PATCH | `/retros/{retroId}/icebreaker` | `200` `Board` — facilitator, `{action: 'draw' \| 'custom' \| 'revealAnswers' \| 'hideAnswers', text?}` |
+| PUT | `/retros/{retroId}/icebreaker/answer` | `200` `Board` — own answer `{text}` |
+| DELETE | `/retros/{retroId}/icebreaker/answer` | `200` `Board` — own answer, idempotent |
 | DELETE | `/retros/{retroId}` | `204` |
 | POST | `/retros/{retroId}/columns` | `201` `Board` |
 | PUT | `/retros/{retroId}/columns/order` | `200` `Board` |
@@ -696,7 +747,12 @@ Board           { id, title, phase, teamId, createdBy, createdAt?, facilitatorId
                   voteProgress: {[userId]: votesSpent},
                   timer, actions, carriedOverActions,
                   review: {enabled, focusActionId, items: ReviewItem[]},
-                  template: {id, name} | null, defaultTimerSeconds: number | null }
+                  template: {id, name} | null, defaultTimerSeconds: number | null,
+                  icebreaker: Icebreaker | null }
+Icebreaker      { state: 'WAITING'|'ASKED', answersRevealed, answeredCount,
+                  question: null | {source: 'BANK', id, category, text: {en, fr}}
+                                 | {source: 'CUSTOM', text},
+                  answers: [{author: {id, name, pictureUrl?}, text, mine}] }
 Template        { id, scope: 'BUILTIN'|'TEAM', name, description: string | null,
                   columns: [{title, prompt: string | null}], maxVotes: number | null,
                   timerSeconds: number | null, updatedAt?, updatedBy?: {id, name} }
@@ -706,6 +762,7 @@ Template        { id, scope: 'BUILTIN'|'TEAM', name, description: string | null,
 
 - Columns by ascending `order`.
 - Notes inside a card by ascending `createdAt`.
+- Icebreaker answers by ascending `createdAt`; replacing an answer keeps its place.
 - Cards: **sorted by `totalVotes` descending only when totals are revealed**
   (`DISCUSS`, `ARCHIVED`); otherwise standalone notes first, then clusters.
 - An empty cluster is not rendered; a standalone note always is.
@@ -741,8 +798,8 @@ epoch milliseconds; `points` in `game.hit` is the player's total, not a delta.
   connection. The anonymity rules of section 4 are the only ones that ever reach a client.
 - Cursors **never touch storage**: they are relayed straight to the other connections. A mouse
   move costs no write and no read.
-- Cursors are **not relayed during LOBBY, BRAINSTORM and VOTE** (there is no board in the
-  waiting room, and elsewhere they would show where others write or vote); the client does not
+- Cursors are **not relayed during LOBBY, ICEBREAKER, BRAINSTORM and VOTE** (there is no
+  board in the waiting room nor during the icebreaker, and elsewhere they would show where others write or vote); the client does not
   draw them either. Every other phase relays them.
 - Each participant has one **stable colour** derived from their `userId` (hash into a fixed 12-colour palette, readable in light and dark theme). The cursor, its name label and the initials of every avatar (`UserAvatar`: presence, notes, member lists, header) share it; it is computed client-side, nothing is stored.
 - Cursor coordinates are **board-relative**, as a fraction of the box the columns take, zoom
@@ -869,6 +926,9 @@ to the login screen.
 | Template `maxVotes` | integer, 1 to 10, or null |
 | Template `timerSeconds` | integer, 5 to 3600, or null |
 | Note text | required, <= 500 |
+| Icebreaker question of the facilitator | 1 to 200 after trimming |
+| Icebreaker answer | 1 to 140 after trimming |
+| `icebreaker` at creation | boolean |
 | Cluster title | required, <= 60 |
 | Team name | required, <= 60, trimmed on rename |
 | Display name | 1 to 80 after trimming and collapsing spaces; no control or format character but the zero-width joiner |
@@ -902,6 +962,10 @@ to the login screen.
 - Editing or deleting a template never changes an existing retro.
 - A template outside the team (another team, another organization, deleted) returns `404`.
 - A retro never returns to `LOBBY`, archived or not.
+- An icebreaker question is not drawn again for the team until the bank is exhausted, then a
+  new cycle starts; two waiting rooms of a team never hold the same question.
+- A waiting room left straight for the brainstorm forgets its question and frees it.
+- A board without columns can go through `ICEBREAKER` and back to it, but not past `BRAINSTORM`.
 - Two tabs of one person score as **one** player and share their attempts.
 
 ---

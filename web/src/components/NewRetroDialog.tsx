@@ -1,6 +1,7 @@
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
+import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import MenuItem from '@mui/material/MenuItem';
 import Radio from '@mui/material/Radio';
@@ -52,6 +53,7 @@ export const NewRetroDialog = ({
   const [pickedId, setPickedId] = useState<string>();
   const [votesPicked, setVotesPicked] = useState<number>();
   const [isPreviewOpen, setIsPreviewOpen] = useState(true);
+  const [hasIcebreaker, setHasIcebreaker] = useState(true);
   const titleInputRef = useAutoFocus(true);
   const hasSeveralTeams = teamIds.length > 1;
 
@@ -75,7 +77,11 @@ export const NewRetroDialog = ({
 
   const createMutation = useMutation({
     mutationFn: () =>
-      createRetro(teamId, title.trim(), {maxVotes, templateId: (selected as Template).id}),
+      createRetro(teamId, title.trim(), {
+        icebreaker: hasIcebreaker,
+        maxVotes,
+        templateId: (selected as Template).id,
+      }),
     onError: (cause: Error) => {
       toast.error(cause.message);
 
@@ -257,6 +263,17 @@ export const NewRetroDialog = ({
               ))}
             </Select>
           </Stack>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={hasIcebreaker}
+                onChange={(event) => setHasIcebreaker(event.target.checked)}
+                size="small"
+              />
+            }
+            label="Start with an icebreaker"
+            sx={{mx: 0}}
+          />
         </Stack>
       </DialogContent>
       <DialogActions>

@@ -16,6 +16,7 @@ export const LobbyView = ({
   members,
   onStart,
   participants,
+  preview,
   retroTitle,
   startLabel = 'Start the retro',
   teamName,
@@ -29,10 +30,13 @@ export const LobbyView = ({
   members: TeamMember[] | undefined;
   onStart: () => void;
   participants: Participant[];
+  /** The facilitator's own card, under the welcome: nothing for everyone else. */
+  preview?: ReactNode;
   retroTitle: string;
   startLabel?: string;
   teamName?: string;
 }) => {
+  const hasPreview = Boolean(preview);
   const isWide = useMediaQuery(useTheme().breakpoints.up('md'));
   const facilitatorName = members?.find(({userId}) => userId === facilitatorId)?.name;
   // The socket opens before the first presence arrives, and a subscriber always counts itself.
@@ -46,11 +50,15 @@ export const LobbyView = ({
         display: 'grid',
         gap: 3,
         gridTemplateAreas: {
-          md: '"welcome game" "prime game" "presence game"',
-          xs: '"welcome" "presence" "game" "prime"',
+          md: hasPreview
+            ? '"welcome game" "preview game" "prime game" "presence game"'
+            : '"welcome game" "prime game" "presence game"',
+          xs: hasPreview
+            ? '"welcome" "preview" "presence" "game" "prime"'
+            : '"welcome" "presence" "game" "prime"',
         },
         gridTemplateColumns: {md: '2fr 3fr', xs: 'minmax(0, 1fr)'},
-        gridTemplateRows: {md: 'auto auto 1fr'},
+        gridTemplateRows: {md: hasPreview ? 'auto auto auto 1fr' : 'auto auto 1fr'},
         minWidth: 0,
       }}
     >
@@ -62,6 +70,8 @@ export const LobbyView = ({
           {[retroTitle, teamName].filter(Boolean).join(' · ')}
         </Typography>
       </Stack>
+
+      {preview ? <Box sx={{gridArea: 'preview', minWidth: 0}}>{preview}</Box> : null}
 
       <Box sx={{gridArea: 'prime', minWidth: 0}}>
         <PrimeDirective isCollapsible={!isWide} />

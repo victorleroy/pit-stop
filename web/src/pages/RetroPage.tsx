@@ -24,8 +24,10 @@ import {
   createNote,
   fetchBoard,
   groupNote,
+  answerIcebreaker,
   hideMyNotes,
   removeColumn,
+  removeIcebreakerAnswer,
   removeNote,
   renameCluster,
   resetDice,
@@ -33,6 +35,7 @@ import {
   takeFacilitation,
   reorderColumns,
   revealMyNotes,
+  sendIcebreakerCommand,
   setNoteRevealed,
   recordReviewOutcome,
   ungroupNote,
@@ -42,13 +45,23 @@ import {
   updateRetro,
 } from '@/api/retros';
 import {fetchTeamMembers, fetchTeams} from '@/api/teams';
-import type {ActionStatus, Board, GameEvent, RetroPhase, TimerAction} from '@/api/types';
+import type {
+  ActionStatus,
+  Board,
+  GameEvent,
+  IcebreakerCommand,
+  RetroPhase,
+  TimerAction,
+} from '@/api/types';
 import type {ConfirmRequest} from '@/components/ConfirmDialog';
 import {ConfirmDialog} from '@/components/ConfirmDialog';
 import {ActionList} from '@/components/ActionList';
 import {BoardColumn} from '@/components/BoardColumn';
 import {CursorLayer} from '@/components/CursorLayer';
 import {EmptyState} from '@/components/EmptyState';
+import {IcebreakerPreview} from '@/components/icebreaker/IcebreakerPreview';
+import {IcebreakerRecap} from '@/components/icebreaker/IcebreakerRecap';
+import {IcebreakerStage} from '@/components/icebreaker/IcebreakerStage';
 import {LobbyView} from '@/components/lobby/LobbyView';
 import {WheelGun} from '@/components/lobby/WheelGun';
 import {useAuth} from '@/contexts/AuthContext';
@@ -278,6 +291,18 @@ export const RetroPage = () => {
       updateRetro(retroId as string, {timer: {action, seconds}}),
     ...boardMutationOptions,
   });
+  const icebreakerMutation = useMutation({
+    mutationFn: (command: IcebreakerCommand) => sendIcebreakerCommand(retroId as string, command),
+    ...boardMutationOptions,
+  });
+  const answerMutation = useMutation({
+    mutationFn: (text: string) => answerIcebreaker(retroId as string, text),
+    ...boardMutationOptions,
+  });
+  const removeAnswerMutation = useMutation({
+    mutationFn: () => removeIcebreakerAnswer(retroId as string),
+    ...boardMutationOptions,
+  });
   const revealMutation = useMutation({
     mutationFn: () => revealMyNotes(retroId as string),
     ...boardMutationOptions,
@@ -392,6 +417,9 @@ export const RetroPage = () => {
     phaseMutation,
     maxVotesMutation,
     timerMutation,
+    icebreakerMutation,
+    answerMutation,
+    removeAnswerMutation,
     takeFacilitationMutation,
     revealMutation,
     hideMutation,
@@ -490,6 +518,11 @@ export const RetroPage = () => {
 
       <RetroHeader
         canZoom={board.columns.length > 0}
+        icebreaker={
+          board.icebreaker && !['LOBBY', 'ICEBREAKER'].includes(board.phase) ? (
+            <IcebreakerRecap icebreaker={board.icebreaker} />
+          ) : null
+        }
         onZoomChange={setZoom}
         presence={
           <PresenceBar
@@ -572,11 +605,36 @@ export const RetroPage = () => {
           members={members}
           onStart={() => phaseMutation.mutate(nextOpeningPhase(board) as RetroPhase)}
           participants={participants}
+          preview={
+            board.isFacilitator ? (
+              <IcebreakerPreview
+                icebreaker={board.icebreaker}
+                isBusy={icebreakerMutation.isPending}
+                isFacilitator={board.isFacilitator}
+                onCustom={(text) => icebreakerMutation.mutate({action: 'custom', text})}
+                onDraw={() => icebreakerMutation.mutate({action: 'draw'})}
+              />
+            ) : undefined
+          }
           retroTitle={board.title}
           startLabel={
             nextOpeningPhase(board) === 'ICEBREAKER' ? 'Start with the icebreaker' : 'Start the retro'
           }
           teamName={teams?.find(({id}) => id === board.teamId)?.name}
+        />
+      ) : board.phase === 'ICEBREAKER' && board.icebreaker ? (
+        // Before everything else: the phase has no columns, and a blank board must not hide it.
+        <IcebreakerStage
+          icebreaker={board.icebreaker}
+          isBusy={icebreakerMutation.isPending || answerMutation.isPending || removeAnswerMutation.isPending}
+          isFacilitator={board.isFacilitator}
+          onAnswer={(text) => answerMutation.mutate(text)}
+          onCustom={(text) => icebreakerMutation.mutate({action: 'custom', text})}
+          onDraw={() => icebreakerMutation.mutate({action: 'draw'})}
+          onHide={() => icebreakerMutation.mutate({action: 'hideAnswers'})}
+          onRemoveAnswer={() => removeAnswerMutation.mutate()}
+          onReveal={() => icebreakerMutation.mutate({action: 'revealAnswers'})}
+          participants={participants}
         />
       ) : board.columns.length === 0 ? (
         // A blank board: nobody can write until there is somewhere to write.

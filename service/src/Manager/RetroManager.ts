@@ -1,10 +1,14 @@
 import {v4 as uuid} from 'uuid';
 import type {RetroPhase} from '~/Db/schema';
 import {BadRequestHttpError, ConflictHttpError, NotFoundHttpError} from '~/Error/HttpError';
+import {ICEBREAKER_QUESTIONS} from '~/Icebreaker/questions';
+import type {IcebreakerManager} from '~/Manager/IcebreakerManager';
 import type {ActionModel, ReviewItemModel} from '~/Model/ActionModel';
 import type {
   BoardModel,
   CardModel,
+  IcebreakerModel,
+  IcebreakerQuestionModel,
   ColumnModel,
   NoteModel,
   RetroSummaryModel,
@@ -15,6 +19,7 @@ import type {
   ActionReviewRow,
   ActionRow,
   BoardData,
+  IcebreakerAnswerRow,
   NoteRow,
   RetroRow,
 } from '~/Repository/BoardRepository';
@@ -28,6 +33,7 @@ import type {AuthContext} from '~/Security/AuthContext';
 import {checkRetroAllowance} from '~/Security/Plans';
 import {RetroAccessChecker} from '~/Security/RetroAccessChecker';
 import type {RoleChecker} from '~/Security/RoleChecker';
+import {logger} from '~/logger';
 
 /**
  * The board's structure is settled while people write and never after: once notes are placed,
@@ -56,6 +62,8 @@ const VOTES_REVEALED_PHASES: RetroPhase[] = ['DISCUSS', 'ARCHIVED'];
 
 export const DICE_PHASE: RetroPhase = 'DISCUSS';
 
+const QUESTIONS_BY_ID = new Map(ICEBREAKER_QUESTIONS.map((question) => [question.id, question]));
+
 export class RetroManager {
   public constructor(
     private readonly retroRepository: RetroRepository,
@@ -66,6 +74,7 @@ export class RetroManager {
     private readonly roleChecker: RoleChecker,
     private readonly voteRepository: VoteRepository,
     private readonly templateManager: RetroTemplateManager,
+    private readonly icebreakerManager: IcebreakerManager,
   ) {}
 
   public async listByTeam(auth: AuthContext, teamId: string): Promise<RetroSummaryModel[]> {
@@ -121,13 +130,14 @@ export class RetroManager {
   /**
    * A retro starts from a template, or from an explicit list of columns, never both; with
    * neither, from the team default. The template is copied here and never read again
-   * (ADR 0004): editing it later does not touch this retro.
+   * (ADR 0004): editing it later does not touch this retro. An icebreaker is drawn now and
+   * asked on entering ICEBREAKER; without one asked for, the retro has none.
    */
   public async create(
     auth: AuthContext,
     teamId: string,
     title: string,
-    options: {columns?: string[]; maxVotes?: number; templateId?: string} = {},
+    options: {columns?: string[]; icebreaker?: boolean; maxVotes?: number; templateId?: string} = {},
   ): Promise<BoardModel> {
     // Membership first, then the role: an org admin passes the role check on every team, and
     // without this the retro would be written before the board read refused to return it.
@@ -149,6 +159,9 @@ export class RetroManager {
     const maxVotes = options.maxVotes ?? template?.maxVotes ?? undefined;
 
     const id = uuid();
+    const icebreakerQuestionId = (options.icebreaker ?? false)
+      ? await this.icebreakerManager.drawFor(auth, {icebreakerQuestionId: null, id, teamId})
+      : null;
 
     // One transaction: a failure leaves neither a retro without its columns nor orphan columns.
     await auth.db.unscoped.transaction().execute(async (trx) => {
@@ -156,6 +169,7 @@ export class RetroManager {
         {
           createdBy: auth.userId,
           defaultTimerSeconds: template?.timerSeconds ?? null,
+          icebreakerQuestionId,
           id,
           ...(maxVotes === undefined ? {} : {maxVotes}),
           orgId: auth.orgId,
@@ -190,7 +204,7 @@ export class RetroManager {
    * broadcast so the anonymity rules only ever live in one place.
    */
   public static projectBoard(data: BoardData, userId: string): BoardModel {
-    const {actionReviews, actions, clusters, columns, notes, retro, votes} = data;
+    const {actionReviews, actions, clusters, columns, icebreakerAnswers, notes, retro, votes} = data;
     const myVotes = votes.filter((vote) => vote.userId === userId);
 
     return {
@@ -208,6 +222,7 @@ export class RetroManager {
       defaultTimerSeconds: retro.defaultTimerSeconds,
       id: retro.id,
       facilitatorId: retro.facilitatorId,
+      icebreaker: RetroManager.buildIcebreaker(retro, icebreakerAnswers, userId),
       isFacilitator: retro.facilitatorId === userId,
       maxVotes: retro.maxVotes,
       myNotesRevealed: notes.some((note) => note.authorId === userId && Boolean(note.revealed)),
@@ -228,6 +243,63 @@ export class RetroManager {
       voteProgress: retro.phase === 'VOTE' ? RetroManager.countVotesByUser(votes) : {},
       votesRevealed: VOTES_REVEALED_PHASES.includes(retro.phase),
     };
+  }
+
+  /**
+   * Answers are signed, like notes: everyone sees who answered, nobody reads an answer but
+   * its author until the facilitator reveals them, the facilitator included. Before the
+   * question is asked it is the facilitator's preview alone, and a question never asked
+   * disappears once the retro moves on, for everyone.
+   */
+  public static buildIcebreaker(
+    retro: RetroRow,
+    answers: IcebreakerAnswerRow[],
+    userId: string,
+  ): IcebreakerModel | null {
+    const hasQuestion = retro.icebreakerQuestionId !== null || retro.icebreakerCustomText !== null;
+    const isAsked = retro.icebreakerAskedAt !== null;
+
+    if (!hasQuestion || (!isAsked && retro.phase !== 'LOBBY')) {
+      return null;
+    }
+
+    const revealed = Boolean(retro.icebreakerAnswersRevealed);
+
+    return {
+      answeredCount: answers.length,
+      answers: answers.map((answer) => {
+        const mine = answer.userId === userId;
+
+        return {
+          author: {
+            id: answer.userId,
+            name: answer.authorName,
+            ...(answer.authorPictureUrl ? {pictureUrl: answer.authorPictureUrl} : {}),
+          },
+          mine,
+          text: revealed || mine ? answer.text : '',
+        };
+      }),
+      answersRevealed: revealed,
+      question: isAsked || retro.facilitatorId === userId ? RetroManager.toQuestion(retro) : null,
+      state: isAsked ? 'ASKED' : 'WAITING',
+    };
+  }
+
+  private static toQuestion(retro: RetroRow): IcebreakerQuestionModel {
+    if (retro.icebreakerCustomText !== null) {
+      return {source: 'CUSTOM', text: retro.icebreakerCustomText};
+    }
+
+    const question = QUESTIONS_BY_ID.get(retro.icebreakerQuestionId ?? '');
+
+    if (!question) {
+      logger.error({questionId: retro.icebreakerQuestionId, retroId: retro.id}, 'Unknown icebreaker question');
+
+      return {source: 'CUSTOM', text: ''};
+    }
+
+    return {category: question.category, id: question.id, source: 'BANK', text: question.text};
   }
 
   /**
@@ -358,7 +430,22 @@ export class RetroManager {
       await this.voteRepository.removeAllByRetroId(retroId);
     }
 
+    // Entering the icebreaker asks its question, drawn on the spot if there is none yet. It is
+    // asked once: coming back later keeps the question, its date and its answers.
+    const icebreakerChanges: UpdateRetroInput = {};
+
+    if (changes.phase === 'ICEBREAKER' && retro.phase !== 'ICEBREAKER') {
+      if (retro.icebreakerQuestionId === null && retro.icebreakerCustomText === null) {
+        icebreakerChanges.icebreakerQuestionId = await this.icebreakerManager.drawFor(auth, retro);
+      }
+
+      if (retro.icebreakerAskedAt === null) {
+        icebreakerChanges.icebreakerAskedAt = new Date().toISOString();
+      }
+    }
+
     await this.retroRepository.update(retroId, {
+      ...icebreakerChanges,
       ...(changes.maxVotes === undefined ? {} : {maxVotes: changes.maxVotes}),
       ...(changes.phase ? {phase: changes.phase} : {}),
       ...(changes.title ? {title: changes.title} : {}),

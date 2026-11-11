@@ -8,7 +8,7 @@ export const COLUMN_EDIT_PHASES: RetroPhase[] = ['LOBBY', 'BRAINSTORM'];
 export type NextOpeningPhase = 'ICEBREAKER' | 'REVIEW' | 'BRAINSTORM';
 
 type OpeningBoard = {
-  phase: RetroPhase | 'ICEBREAKER' | 'REVIEW';
+  phase: RetroPhase | 'REVIEW';
   icebreaker?: unknown;
   review?: {enabled: boolean; items: unknown[]};
 };

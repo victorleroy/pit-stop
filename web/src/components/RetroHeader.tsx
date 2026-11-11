@@ -22,6 +22,7 @@ export const outlined = {
  */
 export const RetroHeader = ({
   canZoom,
+  icebreaker,
   onZoomChange,
   presence,
   teamId,
@@ -30,6 +31,8 @@ export const RetroHeader = ({
 }: {
   /** Nothing to scale on a board without columns. */
   canZoom: boolean;
+  /** The question of a retro that moved on from it. */
+  icebreaker?: ReactNode;
   onZoomChange: (zoom: number) => void;
   presence: ReactNode;
   teamId: string;
@@ -78,6 +81,7 @@ export const RetroHeader = ({
       }}
     >
       <Box sx={{flexShrink: 0}}>{presence}</Box>
+      {icebreaker}
     </Stack>
 
     {canZoom ? (

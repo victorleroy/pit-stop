@@ -20,6 +20,7 @@ vi.mock('@/api/templates', async (importOriginal) => ({
 const board = {
   actions: [],
   columns: [],
+  icebreaker: null,
   id: 'r1',
   isFacilitator: false,
   maxVotes: 3,

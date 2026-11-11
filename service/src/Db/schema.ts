@@ -4,7 +4,15 @@ import type {Generated} from 'kysely';
  * Each phase joins this list with the feature that ships it, so the API refuses a phase that
  * the database CHECK already accepts but nothing handles yet (ADR 0005).
  */
-export const RETRO_PHASES = ['LOBBY', 'BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS', 'ARCHIVED'] as const;
+export const RETRO_PHASES = [
+  'LOBBY',
+  'ICEBREAKER',
+  'BRAINSTORM',
+  'SHARE',
+  'VOTE',
+  'DISCUSS',
+  'ARCHIVED',
+] as const;
 export type RetroPhase = (typeof RETRO_PHASES)[number];
 
 /** Before the board: a retro passes through them once, in this order, skipping the unused. */
@@ -152,6 +160,18 @@ interface RetrosTable {
   templateId: string | null;
   templateName: string | null;
   defaultTimerSeconds: number | null;
+  icebreakerQuestionId: string | null;
+  icebreakerCustomText: string | null;
+  icebreakerAskedAt: string | null;
+  icebreakerAnswersRevealed: Generated<number>;
+}
+
+interface IcebreakerAnswersTable {
+  retroId: string;
+  userId: string;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface ColumnsTable {
@@ -256,4 +276,5 @@ export interface Database {
   actionReviews: ActionReviewsTable;
   retroTemplates: RetroTemplatesTable;
   retroTemplateColumns: RetroTemplateColumnsTable;
+  icebreakerAnswers: IcebreakerAnswersTable;
 }

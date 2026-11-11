@@ -36,6 +36,7 @@ const PHASE_LABELS: Record<RetroPhase, string> = {
   ARCHIVED: 'Archived',
   BRAINSTORM: 'Brainstorm',
   DISCUSS: 'Discuss',
+  ICEBREAKER: 'Icebreaker',
   LOBBY: 'Waiting room',
   SHARE: 'Share',
   VOTE: 'Vote',
@@ -45,12 +46,16 @@ const PHASE_HINTS: Record<RetroPhase, string> = {
   ARCHIVED: 'This retro is archived and read-only.',
   BRAINSTORM: 'Others see that you are writing, not what. Write freely.',
   DISCUSS: 'Going through the topics in vote order.',
+  ICEBREAKER: 'Answer in one line, or out loud.',
   LOBBY: 'The retro has not started yet. Say hello while everyone arrives.',
   SHARE: 'Share your notes to make them readable. You can hide them again. A note added now is shared at once.',
   VOTE: 'Everyone spends their votes on the topics to discuss.',
 };
 
 const WORKING_PHASES: RetroPhase[] = ['BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS'];
+
+// A quick question answers in a couple of minutes, not the five of a brainstorm.
+const ICEBREAKER_TIMER_SECONDS = 120;
 
 // The budget is settled before anybody spends it: once voting starts it stays put.
 const VOTE_SETTING_PHASES: RetroPhase[] = ['LOBBY', 'BRAINSTORM', 'SHARE'];
@@ -123,10 +128,15 @@ export const BoardToolbar = ({
     closeColumnDialog();
   };
 
-  const currentIndex = WORKING_PHASES.indexOf(board.phase);
+  const isIcebreaker = board.phase === 'ICEBREAKER';
+  // The step only exists for a retro that has a question to ask: an old retro keeps its track.
+  const steps: RetroPhase[] =
+    board.icebreaker || isIcebreaker ? ['ICEBREAKER', ...WORKING_PHASES] : WORKING_PHASES;
+  const currentIndex = steps.indexOf(board.phase);
   const isLobby = board.phase === 'LOBBY';
-  const nextPhase = isLobby ? undefined : WORKING_PHASES[currentIndex + 1];
   const openingPhase = nextOpeningPhase(board);
+  // REVIEW is not a phase the service accepts yet: the icebreaker leads to the next step shown.
+  const nextPhase = isLobby ? undefined : steps[currentIndex + 1];
   const isArchived = board.phase === 'ARCHIVED';
   const canReveal = ['SHARE', 'VOTE', 'DISCUSS'].includes(board.phase);
   const myNotes = board.columns.flatMap((column) =>
@@ -136,6 +146,8 @@ export const BoardToolbar = ({
   // The board's structure is settled while people write, and by the facilitator alone.
   const canAddColumn = board.isFacilitator && COLUMN_EDIT_PHASES.includes(board.phase);
   const hasColumns = board.columns.length > 0;
+  // The icebreaker is answered before any column exists: leaving it needs none.
+  const canMoveOn = hasColumns || isIcebreaker;
   const isSettingVotes = VOTE_SETTING_PHASES.includes(board.phase);
   const votesLeftLabel = `${board.myVotesLeft} vote${board.myVotesLeft === 1 ? '' : 's'} left`;
 
@@ -147,10 +159,11 @@ export const BoardToolbar = ({
   const timerBlock =
     !isArchived && (board.isFacilitator || board.timer.state !== 'IDLE') ? (
       <TimerControls
+        defaultSeconds={isIcebreaker ? ICEBREAKER_TIMER_SECONDS : board.defaultTimerSeconds}
         isBusy={isTimerBusy}
         isFacilitator={board.isFacilitator}
+        key={isIcebreaker ? 'icebreaker' : 'retro'}
         onTimer={onTimer}
-        defaultSeconds={board.defaultTimerSeconds}
         receivedAt={receivedAt}
         timer={board.timer}
       />
@@ -228,7 +241,7 @@ export const BoardToolbar = ({
 
   const moveOnButton = (
     <Button
-      disabled={isBusy || !hasColumns}
+      disabled={isBusy || !canMoveOn}
       onClick={() => nextPhase && onPhaseChange(nextPhase)}
       variant="contained"
     >
@@ -290,7 +303,7 @@ export const BoardToolbar = ({
       {isLobby ? startButton : null}
 
       {nextPhase ? (
-        hasColumns ? (
+        canMoveOn ? (
           moveOnButton
         ) : (
           // A disabled button swallows the hover, so the tooltip listens on a wrapper.
@@ -375,7 +388,7 @@ export const BoardToolbar = ({
             direction="row"
             sx={{alignItems: 'flex-start', flexGrow: 1, maxWidth: 640, minWidth: {xs: 0, sm: 420}}}
           >
-            {WORKING_PHASES.map((phase, index) => {
+            {steps.map((phase, index) => {
               const isDone = index < currentIndex;
               const isCurrent = phase === board.phase;
               const canJump = board.isFacilitator && !isArchived && !isCurrent;

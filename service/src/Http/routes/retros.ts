@@ -4,6 +4,7 @@ import type {ActionReviewOutcome, RetroPhase} from '~/Db/schema';
 import {RenameClusterDto, GroupNoteDto} from '~/Dto/Retro/ClusterDto';
 import {CreateColumnDto, ReorderColumnsDto, UpdateColumnDto} from '~/Dto/Retro/ColumnDto';
 import {CreateRetroDto} from '~/Dto/Retro/CreateRetroDto';
+import {IcebreakerAnswerDto, IcebreakerCommandDto} from '~/Dto/Retro/IcebreakerDto';
 import {CreateNoteDto, UpdateNoteDto} from '~/Dto/Retro/NoteDto';
 import {UpdateRetroDto} from '~/Dto/Retro/UpdateRetroDto';
 import {ReviewOutcomeDto} from '~/Dto/Retro/ReviewDto';
@@ -13,6 +14,7 @@ import {HandOverDto} from '~/Dto/Admin/AdminDto';
 import type {Variables} from '~/Http/middleware/auth';
 import {validateBody} from '~/Http/middleware/validate';
 import type {TimerAction} from '~/Model/TimerModel';
+import type {IcebreakerAction} from '~/Manager/IcebreakerManager';
 import type {AuthContext} from '~/Security/AuthContext';
 import {logger} from '~/logger';
 
@@ -42,6 +44,7 @@ export const retroRoutes = (c: Container) => {
       body.title,
       {
         ...(body.columns === undefined ? {} : {columns: body.columns}),
+        ...(body.icebreaker === undefined ? {} : {icebreaker: body.icebreaker}),
         ...(body.maxVotes === undefined ? {} : {maxVotes: body.maxVotes}),
         ...(body.templateId === undefined ? {} : {templateId: body.templateId}),
       },
@@ -291,6 +294,42 @@ export const retroRoutes = (c: Container) => {
     c.hub.resetDice(retroId);
 
     return context.body(null, 204);
+  });
+
+  // --------------------------------------------------------------- icebreaker
+
+  app.patch('/retros/:retroId/icebreaker', async (context) => {
+    const retroId = context.req.param('retroId');
+    const body = await validateBody(context, IcebreakerCommandDto);
+    const board = await c.hub.run(retroId, () =>
+      c.icebreakerManager.command(
+        context.get('auth'),
+        retroId,
+        body.action as IcebreakerAction,
+        body.text,
+      ),
+    );
+
+    return context.json(board);
+  });
+
+  app.put('/retros/:retroId/icebreaker/answer', async (context) => {
+    const retroId = context.req.param('retroId');
+    const body = await validateBody(context, IcebreakerAnswerDto);
+    const board = await c.hub.run(retroId, () =>
+      c.icebreakerManager.answer(context.get('auth'), retroId, body.text),
+    );
+
+    return context.json(board);
+  });
+
+  app.delete('/retros/:retroId/icebreaker/answer', async (context) => {
+    const retroId = context.req.param('retroId');
+    const board = await c.hub.run(retroId, () =>
+      c.icebreakerManager.removeAnswer(context.get('auth'), retroId),
+    );
+
+    return context.json(board);
   });
 
   // ------------------------------------------------------------------ actions

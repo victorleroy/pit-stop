@@ -15,6 +15,7 @@ const board = (overrides: Partial<Board> = {}) =>
     carriedOverActions: [],
     columns: [],
     facilitatorId: 'f',
+    icebreaker: null,
     isFacilitator: true,
     maxVotes: 3,
     myNotesRevealed: false,
@@ -91,5 +92,71 @@ describe('BoardToolbar in the waiting room', () => {
     expect(onTakeFacilitation).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', {name: 'Start the retro'})).toBeNull();
     expect(screen.queryByRole('button', {name: 'Add a column'})).toBeNull();
+  });
+});
+
+describe('BoardToolbar and the icebreaker', () => {
+  afterEach(cleanup);
+
+  const icebreaker = {answeredCount: 0, answers: [], answersRevealed: false, question: null, state: 'ASKED'} as Board['icebreaker'];
+
+  it('opens the stepper with the icebreaker when the retro has one', () => {
+    renderToolbar(board({icebreaker, phase: 'BRAINSTORM'}));
+
+    const first = screen.getByText('Icebreaker');
+    const second = screen.getByText('Brainstorm');
+
+    expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('opens the stepper with the icebreaker while it is the current phase', () => {
+    renderToolbar(board({icebreaker, phase: 'ICEBREAKER'}));
+
+    expect(screen.getByText('Icebreaker')).toBeTruthy();
+    expect(screen.getByText(/Answer in one line, or out loud\./)).toBeTruthy();
+  });
+
+  it('starts the stepper with brainstorm when there is no icebreaker', () => {
+    renderToolbar(board({phase: 'BRAINSTORM'}));
+
+    expect(screen.queryByText('Icebreaker')).toBeNull();
+    expect(screen.getByText('Brainstorm')).toBeTruthy();
+  });
+
+  it('moves on from the icebreaker to brainstorm even with no column', () => {
+    const onPhaseChange = vi.fn();
+    renderToolbar(board({icebreaker, phase: 'ICEBREAKER'}), onPhaseChange);
+
+    const button = screen.getByRole('button', {name: 'Move on to Brainstorm'}) as HTMLButtonElement;
+
+    expect(button.disabled).toBe(false);
+    fireEvent.click(button);
+
+    expect(onPhaseChange).toHaveBeenCalledWith('BRAINSTORM');
+  });
+
+  it('moves on from the icebreaker to brainstorm while actions wait for review', () => {
+    const onPhaseChange = vi.fn();
+    const review = {enabled: true, focusActionId: null, items: [{}]} as unknown as Board['review'];
+    renderToolbar(board({icebreaker, phase: 'ICEBREAKER', review}), onPhaseChange);
+
+    fireEvent.click(screen.getByRole('button', {name: 'Move on to Brainstorm'}));
+
+    expect(onPhaseChange).toHaveBeenCalledWith('BRAINSTORM');
+  });
+
+  it('still needs a column to move on from brainstorm', () => {
+    renderToolbar(board({icebreaker, phase: 'BRAINSTORM'}));
+
+    expect((screen.getByRole('button', {name: 'Move on to Share'}) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('lets the facilitator go back to the icebreaker from a later phase', () => {
+    const onPhaseChange = vi.fn();
+    renderToolbar(board({icebreaker, phase: 'SHARE'}), onPhaseChange);
+
+    fireEvent.click(screen.getByText('Icebreaker'));
+
+    expect(onPhaseChange).toHaveBeenCalledWith('ICEBREAKER');
   });
 });

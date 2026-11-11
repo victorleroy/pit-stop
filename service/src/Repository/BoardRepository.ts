@@ -6,6 +6,13 @@ export interface RetroRow {
   createdBy: string;
   defaultTimerSeconds: number | null;
   facilitatorId: string;
+  /** Always 0 or 1. */
+  icebreakerAnswersRevealed: number;
+  /** Set on entering ICEBREAKER: from then on the question is asked, and counts as used. */
+  icebreakerAskedAt: string | null;
+  /** A bank question or the facilitator's own text, never both (CHECK). */
+  icebreakerCustomText: string | null;
+  icebreakerQuestionId: string | null;
   id: string;
   maxVotes: number;
   orgId: string;
@@ -76,6 +83,15 @@ export interface ActionReviewRow {
   reviewerPictureUrl: string | null;
 }
 
+/** The author's name and picture are joined, never stored: a rename propagates. */
+export interface IcebreakerAnswerRow {
+  authorName: string;
+  authorPictureUrl: string | null;
+  createdAt: string;
+  text: string;
+  userId: string;
+}
+
 /**
  * Everything the board projection needs, in one place: four small indexed reads that SQLite
  * answers from the same page cache, rather than a query per card.
@@ -86,6 +102,8 @@ export interface BoardData {
   actions: ActionRow[];
   clusters: ClusterRow[];
   columns: ColumnRow[];
+  /** Oldest first. */
+  icebreakerAnswers: IcebreakerAnswerRow[];
   notes: NoteRow[];
   retro: RetroRow;
   votes: VoteRow[];
@@ -99,7 +117,7 @@ export class BoardRepository {
    * rely on the retro having been resolved through the scoped accessor (ADR-001 D6).
    */
   public async loadBoard(retro: RetroRow): Promise<BoardData> {
-    const [columns, notes, clusters, votes, actions, actionReviews] = await Promise.all([
+    const [columns, notes, clusters, votes, actions, actionReviews, icebreakerAnswers] = await Promise.all([
       this.db
         .selectFrom('columns')
         .select(['id', 'title', 'position', 'prompt'])
@@ -153,9 +171,24 @@ export class BoardRepository {
         ])
         .where('actionReviews.retroId', '=', retro.id)
         .execute(),
+
+      this.db
+        .selectFrom('icebreakerAnswers')
+        .innerJoin('users', 'users.id', 'icebreakerAnswers.userId')
+        .select([
+          'icebreakerAnswers.userId',
+          'users.name as authorName',
+          'users.pictureUrl as authorPictureUrl',
+          'icebreakerAnswers.text',
+          'icebreakerAnswers.createdAt',
+        ])
+        .where('icebreakerAnswers.retroId', '=', retro.id)
+        .orderBy('icebreakerAnswers.createdAt')
+        .orderBy('icebreakerAnswers.userId')
+        .execute(),
     ]);
 
-    return {actionReviews, actions, clusters, columns, notes, retro, votes};
+    return {actionReviews, actions, clusters, columns, icebreakerAnswers, notes, retro, votes};
   }
 
   public async findTeamActions(teamId: string): Promise<ActionRow[]> {

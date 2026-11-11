@@ -8,6 +8,7 @@ import {ActionManager} from '~/Manager/ActionManager';
 import {AdminManager} from '~/Manager/AdminManager';
 import {AuthManager} from '~/Manager/AuthManager';
 import {ClusterManager} from '~/Manager/ClusterManager';
+import {IcebreakerManager} from '~/Manager/IcebreakerManager';
 import {InvitationManager} from '~/Manager/InvitationManager';
 import {NoteManager} from '~/Manager/NoteManager';
 import {PasswordResetManager} from '~/Manager/PasswordResetManager';
@@ -25,6 +26,7 @@ import {ActionReviewRepository} from '~/Repository/ActionReviewRepository';
 import {BoardRepository} from '~/Repository/BoardRepository';
 import {ClusterRepository} from '~/Repository/ClusterRepository';
 import {ColumnRepository} from '~/Repository/ColumnRepository';
+import {IcebreakerAnswerRepository} from '~/Repository/IcebreakerAnswerRepository';
 import {InvitationRepository} from '~/Repository/InvitationRepository';
 import {MembershipRepository} from '~/Repository/MembershipRepository';
 import {NoteRepository} from '~/Repository/NoteRepository';
@@ -46,6 +48,7 @@ export interface Container {
   clusterManager: ClusterManager;
   db: Db;
   hub: SessionHub;
+  icebreakerManager: IcebreakerManager;
   invitationManager: InvitationManager;
   mailer: Mailer;
   noteManager: NoteManager;
@@ -90,6 +93,13 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
     roleChecker,
   );
 
+  const icebreakerManager = new IcebreakerManager(
+    retroRepository,
+    new IcebreakerAnswerRepository(db),
+    boardRepository,
+    accessChecker,
+  );
+
   const retroManager = new RetroManager(
     retroRepository,
     columnRepository,
@@ -99,6 +109,7 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
     roleChecker,
     voteRepository,
     retroTemplateManager,
+    icebreakerManager,
   );
 
   const invitationManager = new InvitationManager(
@@ -165,6 +176,7 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
     ),
     db,
     hub,
+    icebreakerManager,
     invitationManager,
     mailer,
     noteManager: new NoteManager(

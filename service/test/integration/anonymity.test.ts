@@ -337,4 +337,92 @@ describe('anonymity', () => {
       expect(board.columns.flatMap((column) => column.cards)).toEqual([]);
     }
   });
+
+  /** Icebreaker answers are signed: the text is what stays hidden, and only until revealed. */
+  describe('icebreaker answers', () => {
+    let icebreakerRetroId: string;
+
+    beforeEach(async () => {
+      const teamId = (await harness.container.retroManager.getBoard(author, retroId)).teamId;
+
+      icebreakerRetroId = (
+        await harness.container.retroManager.create(author, teamId, 'Sprint 43', {icebreaker: true})
+      ).id;
+    });
+
+    const sessionToken = async (auth: AuthContext): Promise<string> => {
+      const row = await harness.container.db
+        .selectFrom('users')
+        .selectAll()
+        .where('id', '=', auth.userId)
+        .executeTakeFirstOrThrow();
+
+      return (await harness.container.authManager.issueSession(row)).token;
+    };
+
+    /** The same reading through both paths: the HTTP read and the websocket broadcast. */
+    const icebreakerFor = async (auth: AuthContext) => {
+      const viaHttp = (await harness.container.retroManager.getBoard(auth, icebreakerRetroId)).icebreaker;
+      const sent: string[] = [];
+      const session = harness.container.hub.acquire(icebreakerRetroId);
+      const connection = {
+        name: auth.name,
+        socket: {close: jest.fn(), OPEN: 1, readyState: 1, send: (raw: string) => sent.push(raw)} as never,
+        token: await sessionToken(auth),
+        userId: auth.userId,
+      };
+
+      session.add(connection);
+      await session.broadcastBoard();
+      harness.container.hub.release(icebreakerRetroId, connection);
+
+      const viaSocket = JSON.parse(sent.find((raw) => raw.includes('board.updated'))!).board.icebreaker;
+
+      expect(viaSocket).toEqual(viaHttp);
+
+      return viaHttp;
+    };
+
+    const enter = (phase: 'ICEBREAKER' | 'BRAINSTORM' | 'SHARE' | 'VOTE' | 'DISCUSS' | 'ARCHIVED') =>
+      harness.container.retroManager.updateRetro(author, icebreakerRetroId, {phase});
+
+    it('shows the question in the waiting room to the facilitator alone', async () => {
+      expect((await icebreakerFor(author))?.question).not.toBeNull();
+      expect((await icebreakerFor(other))?.question).toBeNull();
+    });
+
+    it('hides the text of an answer from everyone but its author until revealed, in every phase', async () => {
+      await enter('ICEBREAKER');
+      await harness.container.icebreakerManager.answer(other, icebreakerRetroId, 'Tea');
+
+      const hidden = {author: {id: other.userId, name: 'Alice'}, mine: false, text: ''};
+
+      for (const phase of ['ICEBREAKER', 'BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS', 'ARCHIVED'] as const) {
+        await enter(phase);
+
+        // The facilitator does not read ahead either.
+        expect((await icebreakerFor(author))?.answers).toEqual([hidden]);
+        expect((await icebreakerFor(other))?.answers).toEqual([{...hidden, mine: true, text: 'Tea'}]);
+      }
+    });
+
+    it('shows every answer once revealed, in every phase after', async () => {
+      await enter('ICEBREAKER');
+      await harness.container.icebreakerManager.answer(other, icebreakerRetroId, 'Tea');
+      await harness.container.icebreakerManager.command(author, icebreakerRetroId, 'revealAnswers');
+
+      for (const phase of ['ICEBREAKER', 'BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS', 'ARCHIVED'] as const) {
+        await enter(phase);
+
+        expect((await icebreakerFor(author))?.answers[0]?.text).toBe('Tea');
+      }
+
+      await enter('DISCUSS');
+      await enter('ICEBREAKER');
+      await harness.container.icebreakerManager.command(author, icebreakerRetroId, 'hideAnswers');
+
+      expect((await icebreakerFor(author))?.answers[0]?.text).toBe('');
+    });
+  });
 });
+

@@ -53,6 +53,32 @@ export interface RetroSummaryModel {
   title: string;
 }
 
+export type IcebreakerCategoryModel = 'FUN';
+
+/** A bank question travels in both languages: the reader's browser picks one. */
+export type IcebreakerQuestionModel =
+  | {category: IcebreakerCategoryModel; id: string; source: 'BANK'; text: {en: string; fr: string}}
+  | {source: 'CUSTOM'; text: string};
+
+export interface IcebreakerAnswerModel {
+  /** Always present: answers are signed. */
+  author: NoteAuthorModel;
+  mine: boolean;
+  /** Empty until the answers are revealed, except for the author's own. */
+  text: string;
+}
+
+export interface IcebreakerModel {
+  answeredCount: number;
+  /** Oldest first. */
+  answers: IcebreakerAnswerModel[];
+  answersRevealed: boolean;
+  /** Null for everyone but the facilitator until the question is asked. */
+  question: IcebreakerQuestionModel | null;
+  /** WAITING exists in LOBBY only: drawn, not asked yet. */
+  state: 'ASKED' | 'WAITING';
+}
+
 export interface BoardModel extends RetroSummaryModel {
   /** Actions decided during this retro. */
   actions: ActionModel[];
@@ -63,6 +89,8 @@ export interface BoardModel extends RetroSummaryModel {
   defaultTimerSeconds: number | null;
   /** Not protected content: who facilitates already shows through the takeover rule. */
   facilitatorId: string;
+  /** Null when the retro has no question, or one that was never asked and the retro moved on. */
+  icebreaker: IcebreakerModel | null;
   maxVotes: number;
   /** Whether the caller has shared the text of their notes. */
   myNotesRevealed: boolean;

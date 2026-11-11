@@ -47,7 +47,14 @@ export interface TeamSummary {
   retroCount: number;
 }
 
-export type RetroPhase = 'LOBBY' | 'BRAINSTORM' | 'SHARE' | 'VOTE' | 'DISCUSS' | 'ARCHIVED';
+export type RetroPhase =
+  | 'LOBBY'
+  | 'ICEBREAKER'
+  | 'BRAINSTORM'
+  | 'SHARE'
+  | 'VOTE'
+  | 'DISCUSS'
+  | 'ARCHIVED';
 
 export interface NoteAuthor {
   id: string;
@@ -163,6 +170,39 @@ export interface TeamRetroSummary extends RetroSummary {
   teamName: string;
 }
 
+/** One category today: the bank is light questions only, to set a good mood. */
+export type IcebreakerCategory = 'FUN';
+
+/** A bank question comes in both languages; the reader's browser picks one. */
+export type IcebreakerQuestion =
+  | {category: IcebreakerCategory; id: string; source: 'BANK'; text: {en: string; fr: string}}
+  | {source: 'CUSTOM'; text: string};
+
+export interface IcebreakerAnswer {
+  /** Always present: answers are signed. */
+  author: NoteAuthor;
+  mine: boolean;
+  /** Empty until the answers are revealed, except for your own. */
+  text: string;
+}
+
+export interface Icebreaker {
+  answeredCount: number;
+  /** Oldest first. */
+  answers: IcebreakerAnswer[];
+  answersRevealed: boolean;
+  /** Null for everyone but the facilitator until the question is asked. */
+  question: IcebreakerQuestion | null;
+  /** WAITING exists in LOBBY only: drawn, not asked yet. */
+  state: 'ASKED' | 'WAITING';
+}
+
+export type IcebreakerCommand =
+  | {action: 'draw'}
+  | {action: 'custom'; text: string}
+  | {action: 'revealAnswers'}
+  | {action: 'hideAnswers'};
+
 export interface Board extends RetroSummary {
   actions: Action[];
   carriedOverActions: Action[];
@@ -170,6 +210,8 @@ export interface Board extends RetroSummary {
   /** Suggested timer duration copied from the template, null when it set none. */
   defaultTimerSeconds: number | null;
   facilitatorId: string;
+  /** Null when the retro has no question, or one never asked once the retro moved on. */
+  icebreaker: Icebreaker | null;
   maxVotes: number;
   myNotesRevealed: boolean;
   myVotesLeft: number;
