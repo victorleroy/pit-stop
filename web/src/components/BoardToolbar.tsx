@@ -124,9 +124,8 @@ export const BoardToolbar = ({
 
   const isIcebreaker = board.phase === 'ICEBREAKER';
   const isReview = board.phase === 'REVIEW';
-  // An opening step only exists for a retro that uses it: an old retro keeps its track.
+  // The icebreaker lives in the waiting room dialog, so the track starts after it.
   const steps: RetroPhase[] = [
-    ...(board.icebreaker || isIcebreaker ? (['ICEBREAKER'] as const) : []),
     ...(hasReviewStep(board) || isReview ? (['REVIEW'] as const) : []),
     ...WORKING_PHASES,
   ];

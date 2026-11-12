@@ -129,19 +129,24 @@ describe('BoardToolbar and the icebreaker', () => {
 
   const icebreaker = {answeredCount: 0, answers: [], question: null, state: 'ASKED'} as Board['icebreaker'];
 
-  it('opens the stepper with the icebreaker when the retro has one', () => {
+  const review = (enabled: boolean, count: number) =>
+    ({enabled, focusActionId: null, items: Array.from({length: count}, () => ({}))}) as unknown as Board['review'];
+
+  it('keeps the icebreaker out of the stepper', () => {
     renderToolbar(board({icebreaker, phase: 'BRAINSTORM'}));
 
-    const first = screen.getByText('Icebreaker');
+    expect(screen.queryByText('Icebreaker')).toBeNull();
+    expect(screen.getByText('Brainstorm')).toBeTruthy();
+  });
+
+  it('shows every step as upcoming while the icebreaker is the current phase', () => {
+    renderToolbar(board({icebreaker, phase: 'ICEBREAKER', review: review(true, 1)}));
+
+    expect(screen.queryByText('Icebreaker')).toBeNull();
+    const first = screen.getByText('Review');
     const second = screen.getByText('Brainstorm');
 
     expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it('opens the stepper with the icebreaker while it is the current phase', () => {
-    renderToolbar(board({icebreaker, phase: 'ICEBREAKER'}));
-
-    expect(screen.getByText('Icebreaker')).toBeTruthy();
   });
 
   it('starts the stepper with brainstorm when there is no icebreaker', () => {
@@ -162,9 +167,6 @@ describe('BoardToolbar and the icebreaker', () => {
 
     expect(onPhaseChange).toHaveBeenCalledWith('BRAINSTORM');
   });
-
-  const review = (enabled: boolean, count: number) =>
-    ({enabled, focusActionId: null, items: Array.from({length: count}, () => ({}))}) as unknown as Board['review'];
 
   it('moves on from the icebreaker to the review while actions wait for it', () => {
     const onPhaseChange = vi.fn();
@@ -197,13 +199,12 @@ describe('BoardToolbar and the icebreaker', () => {
     expect(screen.getByText('Review')).toBeTruthy();
   });
 
-  it('puts the review between the icebreaker and the brainstorm', () => {
+  it('puts the review before the brainstorm', () => {
     renderToolbar(board({icebreaker, phase: 'BRAINSTORM', review: review(true, 1)}));
 
-    const order = ['Icebreaker', 'Review', 'Brainstorm'].map((label) => screen.getByText(label));
+    const order = ['Review', 'Brainstorm'].map((label) => screen.getByText(label));
 
     expect(order[0]!.compareDocumentPosition(order[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(order[1]!.compareDocumentPosition(order[2]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('starts brainstorming from the review, even with no column', () => {
@@ -221,12 +222,12 @@ describe('BoardToolbar and the icebreaker', () => {
     expect((screen.getByRole('button', {name: 'Move on to Share'}) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('lets the facilitator go back to the icebreaker from a later phase', () => {
+  it('lets the facilitator go back to brainstorm from a later phase', () => {
     const onPhaseChange = vi.fn();
     renderToolbar(board({icebreaker, phase: 'SHARE'}), onPhaseChange);
 
-    fireEvent.click(screen.getByText('Icebreaker'));
+    fireEvent.click(screen.getByText('Brainstorm'));
 
-    expect(onPhaseChange).toHaveBeenCalledWith('ICEBREAKER');
+    expect(onPhaseChange).toHaveBeenCalledWith('BRAINSTORM');
   });
 });

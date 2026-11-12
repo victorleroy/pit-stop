@@ -391,7 +391,8 @@ member.
   at creation, then the
   facilitator's switch in `LOBBY`; exposed as `review.enabled`. The review step is skipped
   when it is off or `review.items` is empty (`nextOpeningPhase`), and shown in the stepper only
-  then or while in `REVIEW`. The service does not enforce that order.
+  then or while in `REVIEW`. The service does not enforce that order. The stepper never lists
+  `ICEBREAKER` (it plays in the waiting-room dialog): while in it, every step shows as upcoming.
 - **Focus** (`PUT /retros/{retroId}/review/focus {actionId | null}`): the facilitator's alone
   (`403`), in `REVIEW` only (`403`, `409` in `ARCHIVED`), on an action of `review.items`
   (`409`). It is board state: late joiners and a restart keep it. Recording an outcome does
