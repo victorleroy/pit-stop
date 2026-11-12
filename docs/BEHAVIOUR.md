@@ -896,8 +896,7 @@ epoch milliseconds; `points` in `game.hit` is the player's total, not a delta.
     `nextOpeningPhase(board)`: `Review` when the review step is on, `Brainstorm` otherwise), enabled with no column; the others read
     `Waiting for {name} to move on`, with `Take over facilitation` when the facilitator is not
     connected. Mobile: one column, no horizontal scroll.
-  - After the icebreaker, a recap chip in the header opens a popover with the question and
-    only the answers that were revealed.
+  - Once the retro moves on, the icebreaker no longer shows anywhere on the board.
 - **Wheel Gun**, in the step 1 dialog below the people, always on: it is played while the dialog is
   open (the facilitator setting up the board leaves it). Positions use
   `offset = serverNow − Date.now()` from the last game event. A tap plays at once; the wheel

@@ -63,7 +63,6 @@ import {ActionReview} from '@/components/ActionReview';
 import {BoardColumn} from '@/components/BoardColumn';
 import {CursorLayer} from '@/components/CursorLayer';
 import {EmptyState} from '@/components/EmptyState';
-import {IcebreakerRecap} from '@/components/icebreaker/IcebreakerRecap';
 import {IcebreakerStep} from '@/components/icebreaker/IcebreakerStep';
 import {LobbyView} from '@/components/lobby/LobbyView';
 import {WheelGun} from '@/components/lobby/WheelGun';
@@ -597,11 +596,6 @@ export const RetroPage = () => {
 
       <RetroHeader
         canZoom={board.columns.length > 0}
-        icebreaker={
-          board.icebreaker && !['LOBBY', 'ICEBREAKER'].includes(board.phase) ? (
-            <IcebreakerRecap icebreaker={board.icebreaker} />
-          ) : null
-        }
         onZoomChange={setZoom}
         presence={
           <PresenceBar
