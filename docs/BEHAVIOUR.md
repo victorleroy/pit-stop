@@ -438,8 +438,9 @@ Two stored states, so the network never eats the clock:
 | `stop` | — | clears both |
 
 Every participant hears a short chime (generated with the Web Audio API) when their local
-countdown reaches zero, once per run: a board opened on an overdue timer stays silent. A mute
-toggle beside the clock is stored per viewer in `localStorage`. A browser that blocks audio
+countdown reaches zero, once per run: a board opened on an overdue timer stays silent. The
+chime follows the per-viewer mute preference stored in `localStorage` (toggled from the waiting-room
+game; the timer has no mute button). A browser that blocks audio
 until the page was touched simply stays silent.
 
 The facilitator starts the timer from a picker: presets of 1, 3, 5 and 10 minutes, or a custom
@@ -447,7 +448,7 @@ number of minutes. The picker remembers the last duration chosen. It opens on th
 template's suggested duration (`board.defaultTimerSeconds`), 5 minutes otherwise.
 
 `start` takes `seconds` in `[5, 3600]`; `extend` takes a non-zero `seconds` in `[-3600, 3600]`.
-The facilitator's `-1` and `+1` buttons send `-60` and `+60`; they exist only while a timer is
+The controls sit on a row below the clock and its bar. The facilitator's `-1` and `+1` buttons send `-60` and `+60`; they exist only while a timer is
 running or paused. A cut larger than what is left ends the round instead: the remaining time
 clamps to `0` (a running clock reaches zero at once, chime included), never below. Extending an
 already-overdue timer never yields a negative duration; cutting one is `409` and its `-1` is

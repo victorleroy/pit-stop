@@ -50,15 +50,12 @@ describe('TimerControls sound', () => {
     expect(chime).not.toHaveBeenCalled();
   });
 
-  it('stays silent when muted, and remembers the choice', () => {
+  it('stays silent when the stored preference is muted', () => {
+    window.localStorage.setItem('pit-stop.timer-muted', '1');
     renderTimer();
-    fireEvent.click(screen.getByLabelText('Mute the timer sound'));
-    expect(window.localStorage.getItem('pit-stop.timer-muted')).toBe('1');
+    expect(screen.queryByLabelText(/timer sound/)).toBeNull();
     act(() => void vi.advanceTimersByTime(5000));
     expect(chime).not.toHaveBeenCalled();
-    cleanup();
-    renderTimer();
-    expect(screen.getByLabelText('Unmute the timer sound')).toBeTruthy();
   });
 });
 
