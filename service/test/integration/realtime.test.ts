@@ -7,6 +7,7 @@ import {retroRoutes} from '~/Http/routes/retros';
 import {teamRoutes} from '~/Http/routes/teams';
 import {templateRoutes} from '~/Http/routes/templates';
 import {createSocketAttacher, tokenFromProtocols} from '~/Realtime/attachSocket';
+import {COALESCE_MS} from '~/Realtime/SessionHub';
 import type {AuthContext} from '~/Security/AuthContext';
 
 const fakeSocket = () => {
@@ -79,6 +80,44 @@ describe('live retros', () => {
     await Promise.all([slow, fast]);
 
     expect(order).toEqual(['first', 'second']);
+  });
+
+  it('sends the first board of a burst at once and its last one 250 ms later, even after a failure', async () => {
+    const {sent, socket} = fakeSocket();
+    const session = harness.container.hub.acquire(retroId);
+    const boards = () => sent.filter((raw) => raw.includes('board.updated')).length;
+    const settle = () => new Promise((resolve) => setTimeout(resolve, COALESCE_MS + 50));
+
+    session.add({name: 'Alice', socket, token: await sessionToken(member), userId: member.userId});
+
+    await Promise.all(
+      Array.from({length: 5}, () => harness.container.hub.run(retroId, async () => undefined)),
+    );
+    expect(boards()).toBe(1);
+
+    await settle();
+    expect(boards()).toBe(2);
+
+    await settle();
+    await harness.container.hub.run(retroId, async () => undefined);
+    expect(boards()).toBe(3);
+
+    await expect(
+      harness.container.hub.run(retroId, async () => {
+        throw new Error('refused');
+      }),
+    ).rejects.toThrow('refused');
+    await settle();
+    expect(boards()).toBe(3);
+
+    await harness.container.hub.run(retroId, async () => undefined);
+    await expect(
+      harness.container.hub.run(retroId, async () => {
+        throw new Error('refused');
+      }),
+    ).rejects.toThrow('refused');
+    await settle();
+    expect(boards()).toBe(4);
   });
 
   it('stops sending the board to somebody removed from the team', async () => {

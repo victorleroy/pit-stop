@@ -832,8 +832,15 @@ epoch milliseconds; `points` in `game.hit` is the player's total, not a delta.
   and avatar from that answer: when one changed, `presence.updated` follows the board. A
   profile write broadcasts every live retro of the organisation again (section 6, Profile);
   cursors take the new name on their next move.
-- On subscribe: access check, then `broadcastBoard` **and** `broadcastPresence`, then the
-  current dice to the new connection when somebody rolled.
+- On subscribe: access check, then the board **to the new connection only** (nobody else's
+  board changed) and `broadcastPresence` to everyone, then the current dice to the new
+  connection when somebody rolled.
+- **Boards are throttled per retro.** A board goes out at most every **250 ms**
+  (`COALESCE_MS`): the first command of a burst sends it at once, the ones within the next
+  250 ms leave it to a trailing board, sent through the queue with the final state. A command
+  that moves the phase, and a re-broadcast from another retro or a profile (`refreshRetros`),
+  send theirs at once: the session only learns the phase from the board it sends. A failed
+  command still sends the board the commands before it changed.
 - Access refused on subscribe sends `{type: 'error'}` without closing the socket.
 - A dead connection is pruned on the first failed send.
 - **An action edit refreshes every live board of its team.** The edit runs in the queue of

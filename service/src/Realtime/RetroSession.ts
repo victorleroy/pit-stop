@@ -202,6 +202,10 @@ export class RetroSession {
     }
   }
 
+  public get knownPhase(): RetroPhase | undefined {
+    return this.phase;
+  }
+
   /**
    * One board read, then one projection per recipient: the anonymity rules of
    * RetroManager.projectBoard are the only ones that ever reach a client. Somebody joining
