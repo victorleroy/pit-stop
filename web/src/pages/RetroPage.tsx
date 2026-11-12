@@ -91,6 +91,8 @@ const FADE_WIDTH = 56;
 
 const ACTIONS_WIDTH = 440;
 
+const APP_BAR_HEIGHT = 65;
+
 // A mouse notch is about 100 and a trackpad pinch sends many small deltas: one step per notch.
 const WHEEL_STEP = 50;
 
@@ -828,7 +830,15 @@ export const RetroPage = () => {
         ModalProps={{keepMounted: true}}
         onClose={() => setIsActionsOpen(false)}
         open={isActionsOpen}
-        slotProps={{paper: {sx: {bgcolor: SLIPSTREAM.surface, width: {xs: '100%', sm: ACTIONS_WIDTH}}}}}
+        slotProps={{
+          paper: {
+            sx: {
+              bgcolor: SLIPSTREAM.surface,
+              ...(isWide && {height: `calc(100% - ${APP_BAR_HEIGHT}px)`, top: APP_BAR_HEIGHT}),
+              width: {xs: '100%', sm: ACTIONS_WIDTH},
+            },
+          },
+        }}
         variant={isWide ? 'persistent' : 'temporary'}
       >
         <Stack divider={<Divider />} spacing={3} sx={{p: 3}}>
