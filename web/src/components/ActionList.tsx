@@ -49,7 +49,11 @@ const ActionRow = ({
         ) : (
           <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
             <Typography
-              sx={{textDecoration: action.status === 'OPEN' ? 'none' : 'line-through'}}
+              sx={{
+                minWidth: 0,
+                overflowWrap: 'anywhere',
+                textDecoration: action.status === 'OPEN' ? 'none' : 'line-through',
+              }}
               variant="textM"
             >
               {action.text}

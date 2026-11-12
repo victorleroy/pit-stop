@@ -89,7 +89,13 @@ export const NoteCard = ({
           </Stack>
         ) : (
           <Typography
-            sx={{color: 'inherit', fontSize: '0.875rem', lineHeight: 1.4, whiteSpace: 'pre-wrap'}}
+            sx={{
+              color: 'inherit',
+              fontSize: '0.875rem',
+              lineHeight: 1.4,
+              overflowWrap: 'anywhere',
+              whiteSpace: 'pre-wrap',
+            }}
             variant="textM"
           >
             {note.text}

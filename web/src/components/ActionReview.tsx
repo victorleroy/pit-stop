@@ -239,7 +239,9 @@ const ReviewRow = ({
           sx={{ alignItems: "flex-start", flexWrap: "wrap" }}
         >
           <Stack spacing={0.5} sx={{ flexGrow: 1, minWidth: 220 }}>
-            <Typography sx={{ fontWeight: isFocused ? 600 : 400 }}>
+            <Typography
+              sx={{ fontWeight: isFocused ? 600 : 400, overflowWrap: "anywhere" }}
+            >
               {action.text}
             </Typography>
             <Stack
