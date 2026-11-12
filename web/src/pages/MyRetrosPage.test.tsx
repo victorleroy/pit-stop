@@ -100,7 +100,7 @@ describe('MyRetrosPage new retro', () => {
     expect(screen.queryByRole('option', {name: 'Org only'})).toBeNull();
     fireEvent.click(await screen.findByRole('option', {name: 'Ops'}));
     fireEvent.change(await screen.findByLabelText('Title'), {target: {value: 'Sprint 12'}});
-    await screen.findByRole('radio', {name: /Start \/ Stop \/ Continue/});
+    await screen.findByRole('combobox', {name: 'Template'});
     fireEvent.click(screen.getByRole('button', {name: 'Start'}));
 
     await waitFor(() =>

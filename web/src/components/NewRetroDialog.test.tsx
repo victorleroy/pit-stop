@@ -69,6 +69,19 @@ const start = async (title = 'Sprint 12') => {
   fireEvent.click(screen.getByRole('button', {name: 'Start'}));
 };
 
+const templateInput = async () =>
+  (await screen.findByRole('combobox', {
+    name: 'Template',
+  })) as HTMLInputElement;
+
+const choose = async (name: string) => {
+  const input = await templateInput();
+
+  fireEvent.focus(input);
+  fireEvent.change(input, {target: {value: name}});
+  fireEvent.click(await screen.findByRole('option', {name: new RegExp(name)}));
+};
+
 describe('NewRetroDialog', () => {
   afterEach(() => {
     cleanup();
@@ -79,18 +92,65 @@ describe('NewRetroDialog', () => {
     vi.mocked(fetchTeamTemplates).mockResolvedValue(catalogue());
     renderDialog();
 
-    const radio = await screen.findByRole('radio', {
+    const input = await templateInput();
+
+    expect(input.value).toBe('Start / Stop / Continue');
+
+    fireEvent.mouseDown(input);
+    const option = await screen.findByRole('option', {
       name: /Start \/ Stop \/ Continue/,
     });
 
-    expect((radio as HTMLInputElement).checked).toBe(true);
-    expect(screen.getByText('Default')).toBeTruthy();
-    expect(screen.getByRole('radiogroup', {name: 'Template'})).toBeTruthy();
+    expect(within(option).getByText('Default')).toBeTruthy();
+    expect(screen.getAllByText('Default')).toHaveLength(1);
+  });
+
+  it('groups the team templates before the classics', async () => {
+    vi.mocked(fetchTeamTemplates).mockResolvedValue(catalogue());
+    renderDialog();
+
+    fireEvent.mouseDown(await templateInput());
+
+    const groups = (await screen.findAllByRole('listbox')).flatMap((box) =>
+      Array.from(box.querySelectorAll('.MuiAutocomplete-groupLabel')).map(
+        (node) => node.textContent,
+      ),
+    );
+
+    expect(groups).toEqual(['Your team', 'Classics']);
+  });
+
+  it('filters the options by template name or column name', async () => {
+    vi.mocked(fetchTeamTemplates).mockResolvedValue(
+      catalogue({
+        team: [
+          template('u1', 'Retro night', {
+            columns: [{prompt: null, title: 'Wins'}],
+            scope: 'TEAM',
+          }),
+        ],
+      }),
+    );
+    renderDialog();
+
+    fireEvent.focus(await templateInput());
+    fireEvent.change(await templateInput(), {target: {value: 'blan'}});
+    expect(await screen.findByRole('option', {name: 'Blank'})).toBeTruthy();
+    expect(screen.queryByRole('option', {name: /Retro night/})).toBeNull();
+
+    fireEvent.change(await templateInput(), {target: {value: 'wins'}});
+    expect(await screen.findByRole('option', {name: /Retro night/})).toBeTruthy();
+    expect(screen.queryByRole('option', {name: 'Blank'})).toBeNull();
+
+    fireEvent.change(await templateInput(), {target: {value: 'zzz'}});
+    expect(await screen.findByText('No template matches')).toBeTruthy();
   });
 
   it('hides the team group when the team has no template', async () => {
     vi.mocked(fetchTeamTemplates).mockResolvedValue(catalogue({team: []}));
     renderDialog();
+
+    fireEvent.mouseDown(await templateInput());
 
     await screen.findByText('Classics');
 
@@ -104,7 +164,7 @@ describe('NewRetroDialog', () => {
     await screen.findByText('About Start / Stop / Continue');
     expect(screen.getByText('Start: What should we begin?')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('radio', {name: /Blank/}));
+    await choose('Blank');
 
     expect(
       screen.getByText('No column yet: you add them on the board before people write.'),
@@ -116,13 +176,13 @@ describe('NewRetroDialog', () => {
     vi.mocked(createRetro).mockResolvedValue({id: 'b1'} as Awaited<ReturnType<typeof createRetro>>);
     renderDialog();
 
-    fireEvent.click(await screen.findByRole('radio', {name: /Retro night/}));
+    await choose('Retro night');
     expect(screen.getByLabelText('Votes per person').textContent).toBe('7 votes');
 
-    fireEvent.click(screen.getByRole('radio', {name: /Blank/}));
+    await choose('Blank');
     expect(screen.getByLabelText('Votes per person').textContent).toBe('3 votes');
 
-    fireEvent.click(screen.getByRole('radio', {name: /Retro night/}));
+    await choose('Retro night');
     await start();
 
     await waitFor(() =>
@@ -140,7 +200,7 @@ describe('NewRetroDialog', () => {
     vi.mocked(createRetro).mockResolvedValue({id: 'b1'} as Awaited<ReturnType<typeof createRetro>>);
     renderDialog();
 
-    await screen.findByRole('radio', {name: /Start \/ Stop \/ Continue/});
+    await templateInput();
     const checkbox = screen.getByRole('checkbox', {
       name: 'Start with an icebreaker',
     }) as HTMLInputElement;
@@ -173,22 +233,22 @@ describe('NewRetroDialog', () => {
     const isChecked = (name: string) =>
       (screen.getByRole('checkbox', {name}) as HTMLInputElement).checked;
 
-    await screen.findByRole('radio', {name: /Start \/ Stop \/ Continue/});
+    await templateInput();
     expect(isChecked('Start with an icebreaker')).toBe(true);
     expect(isChecked('Review open actions')).toBe(true);
 
-    fireEvent.click(screen.getByRole('radio', {name: /Quiet/}));
+    await choose('Quiet');
     expect(isChecked('Start with an icebreaker')).toBe(false);
     expect(isChecked('Review open actions')).toBe(false);
 
     fireEvent.click(screen.getByRole('checkbox', {name: 'Review open actions'}));
     expect(isChecked('Review open actions')).toBe(true);
 
-    fireEvent.click(screen.getByRole('radio', {name: /Retro night/}));
+    await choose('Retro night');
     expect(isChecked('Start with an icebreaker')).toBe(true);
     expect(isChecked('Review open actions')).toBe(true);
 
-    fireEvent.click(screen.getByRole('radio', {name: /Quiet/}));
+    await choose('Quiet');
     expect(isChecked('Review open actions')).toBe(false);
 
     await start();
@@ -223,19 +283,13 @@ describe('NewRetroDialog', () => {
     vi.mocked(createRetro).mockRejectedValue(new ApiError(404, 'Template not found'));
     renderDialog();
 
-    fireEvent.click(await screen.findByRole('radio', {name: /Retro night/}));
+    await choose('Retro night');
     await start();
 
     expect(await screen.findByText('Template not found')).toBeTruthy();
     await waitFor(() => expect(fetchTeamTemplates).toHaveBeenCalledTimes(2));
-    await waitFor(() =>
-      expect(
-        (
-          screen.getByRole('radio', {
-            name: /Start \/ Stop \/ Continue/,
-          }) as HTMLInputElement
-        ).checked,
-      ).toBe(true),
+    await waitFor(async () =>
+      expect((await templateInput()).value).toBe('Start / Stop / Continue'),
     );
   });
 
@@ -261,7 +315,7 @@ describe('NewRetroDialog', () => {
     vi.mocked(fetchTeamTemplates).mockResolvedValue(catalogue());
     renderDialog(['t1', 't2']);
 
-    await screen.findByRole('radio', {name: /Retro night/});
+    await templateInput();
     expect(fetchTeamTemplates).toHaveBeenCalledWith('t1');
 
     fireEvent.mouseDown(screen.getByLabelText('Team'));
@@ -274,7 +328,7 @@ describe('NewRetroDialog', () => {
     vi.mocked(fetchTeamTemplates).mockResolvedValue(catalogue());
     renderDialog();
 
-    await screen.findByText('Classics');
+    await templateInput();
 
     expect(screen.queryByLabelText('Team')).toBeNull();
   });
@@ -286,6 +340,6 @@ describe('NewRetroDialog', () => {
 
     fireEvent.click(await screen.findByRole('button', {name: 'Retry'}));
 
-    expect(await screen.findByRole('radio', {name: /Retro night/})).toBeTruthy();
+    expect(await templateInput()).toBeTruthy();
   });
 });

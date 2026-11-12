@@ -1,17 +1,16 @@
+import Autocomplete, {createFilterOptions} from '@mui/material/Autocomplete';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import MenuItem from '@mui/material/MenuItem';
-import Radio from '@mui/material/Radio';
-import RadioGroup from '@mui/material/RadioGroup';
 import Skeleton from '@mui/material/Skeleton';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import {useTheme} from '@mui/material/styles';
 import {Button, Chip, Dialog, Select, Stack, TextField, Typography} from '@/ui';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {useState} from 'react';
+import {useMemo, useState} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
 import {ApiError} from '@/api/client';
 import {createRetro, DEFAULT_MAX_VOTES, VOTE_OPTIONS} from '@/api/retros';
@@ -21,19 +20,9 @@ import type {Template} from '@/api/types';
 import {useToast} from '@/contexts/ToastContext';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
 
-const TemplateOption = ({isDefault, template}: {isDefault: boolean; template: Template}) => (
-  <FormControlLabel
-    control={<Radio size="small" />}
-    label={
-      <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
-        <Typography variant="textM">{template.name}</Typography>
-        {isDefault ? <Chip color="primary" label="Default" size="small" /> : null}
-      </Stack>
-    }
-    sx={{mx: 0}}
-    value={template.id}
-  />
-);
+const filterTemplates = createFilterOptions<Template>({
+  stringify: (template) => [template.name, ...template.columns.map(({title}) => title)].join(' '),
+});
 
 export const NewRetroDialog = ({
   initialTeamId,
@@ -71,7 +60,10 @@ export const NewRetroDialog = ({
     refetch,
   } = useQuery({queryFn: () => fetchTeamTemplates(teamId), queryKey: teamTemplatesKey(teamId)});
 
-  const all = templates ? [...templates.team, ...templates.builtin] : [];
+  const all = useMemo(
+    () => (templates ? [...templates.team, ...templates.builtin] : []),
+    [templates],
+  );
   const selected =
     all.find(({id}) => id === pickedId) ?? all.find(({id}) => id === templates?.defaultTemplateId);
   const maxVotes = votesPicked ?? selected?.maxVotes ?? DEFAULT_MAX_VOTES;
@@ -125,22 +117,6 @@ export const NewRetroDialog = ({
     setPickedId(undefined);
     resetPicks();
   };
-
-  const group = (label: string, items: Template[]) =>
-    items.length === 0 ? null : (
-      <Stack spacing={0.25}>
-        <Typography color="textSecondary" variant="textXs">
-          {label}
-        </Typography>
-        {items.map((template) => (
-          <TemplateOption
-            isDefault={template.id === templates?.defaultTemplateId}
-            key={template.id}
-            template={template}
-          />
-        ))}
-      </Stack>
-    );
 
   const steps = [hasIcebreaker && 'Icebreaker', hasActionReview && 'Action review'].filter(Boolean);
 
@@ -208,25 +184,8 @@ export const NewRetroDialog = ({
             value={title}
           />
           <Stack spacing={1}>
-            <Stack direction="row" sx={{alignItems: 'baseline', justifyContent: 'space-between'}}>
-              <Typography variant="textS">Template</Typography>
-              <Typography
-                color="primary"
-                component={Link}
-                onClick={onClose}
-                sx={{textDecoration: 'none'}}
-                to={`/teams/${teamId}/templates`}
-                variant="textXs"
-              >
-                Manage templates
-              </Typography>
-            </Stack>
             {isLoading ? (
-              <Stack aria-label="Loading templates" spacing={1}>
-                <Skeleton height={28} variant="rounded" />
-                <Skeleton height={28} variant="rounded" />
-                <Skeleton height={28} variant="rounded" />
-              </Stack>
+              <Skeleton aria-label="Loading templates" height={40} variant="rounded" />
             ) : null}
             {isError ? (
               <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
@@ -238,19 +197,36 @@ export const NewRetroDialog = ({
                 </Button>
               </Stack>
             ) : null}
-            {templates ? (
-              <RadioGroup
+            {templates && selected ? (
+              <Autocomplete
                 aria-describedby="template-preview"
-                aria-label="Template"
-                onChange={(event) => pick(event.target.value)}
-                sx={{maxHeight: {sm: 260, xs: 'none'}, overflowY: 'auto'}}
-                value={selected?.id ?? ''}
-              >
-                <Stack spacing={1}>
-                  {group('Your team', templates.team)}
-                  {group('Classics', templates.builtin)}
-                </Stack>
-              </RadioGroup>
+                disableClearable
+                filterOptions={filterTemplates}
+                getOptionLabel={(template) => template.name}
+                groupBy={(template) => (template.scope === 'TEAM' ? 'Your team' : 'Classics')}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                noOptionsText="No template matches"
+                onChange={(_event, template) => pick(template.id)}
+                options={all}
+                renderInput={(params) => <TextField {...params} label="Template" size="small" />}
+                renderOption={({key, ...props}, template) => (
+                  <Stack
+                    component="li"
+                    direction="row"
+                    key={key}
+                    spacing={1}
+                    {...props}
+                    sx={{alignItems: 'center'}}
+                  >
+                    <Typography variant="textM">{template.name}</Typography>
+                    {template.id === templates.defaultTemplateId ? (
+                      <Chip color="primary" label="Default" size="small" />
+                    ) : null}
+                  </Stack>
+                )}
+                size="small"
+                value={selected}
+              />
             ) : null}
             {isMobile && preview ? (
               <Button
@@ -263,6 +239,16 @@ export const NewRetroDialog = ({
               </Button>
             ) : null}
             {isMobile && !isPreviewOpen ? null : preview}
+            <Typography
+              color="primary"
+              component={Link}
+              onClick={onClose}
+              sx={{alignSelf: 'flex-start', textDecoration: 'none'}}
+              to={`/teams/${teamId}/templates`}
+              variant="textXs"
+            >
+              Manage templates
+            </Typography>
           </Stack>
           <Stack spacing={0.75}>
             <Typography variant="textS">Votes per person</Typography>
