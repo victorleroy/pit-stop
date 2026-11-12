@@ -43,17 +43,6 @@ export const PHASE_LABELS: Record<RetroPhase, string> = {
   VOTE: 'Vote',
 };
 
-const PHASE_HINTS: Record<RetroPhase, string> = {
-  ARCHIVED: 'This retro is archived and read-only.',
-  BRAINSTORM: 'Others see that you are writing, not what. Write freely.',
-  DISCUSS: 'Going through the topics in vote order.',
-  ICEBREAKER: 'Answer on a post-it, or out loud.',
-  LOBBY: 'The retro has not started yet. Say hello while everyone arrives.',
-  REVIEW: 'Did we do what we decided?',
-  SHARE: 'Share your notes to make them readable. You can hide them again. A note added now is shared at once.',
-  VOTE: 'Everyone spends their votes on the topics to discuss.',
-};
-
 const WORKING_PHASES: RetroPhase[] = ['BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS'];
 
 // A quick question answers in a couple of minutes, not the five of a brainstorm.
@@ -570,11 +559,6 @@ export const BoardToolbar = ({
             open={isSavingTemplate}
           />
         ) : null}
-
-        <Typography color="textSecondary" variant="textXs">
-          {PHASE_HINTS[board.phase]}
-          {board.isFacilitator && !isArchived ? ' Click a step to go back to it.' : ''}
-        </Typography>
       </Stack>
     </Card>
   );

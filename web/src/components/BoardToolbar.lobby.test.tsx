@@ -64,7 +64,6 @@ describe('BoardToolbar in the waiting room', () => {
 
     expect(screen.queryByText('Waiting room')).toBeNull();
     expect(screen.getByText('Brainstorm')).toBeTruthy();
-    expect(screen.getByText(/The retro has not started yet\. Say hello while everyone arrives\./)).toBeTruthy();
   });
 
   it('starts the retro on brainstorm, even with no column yet', () => {
@@ -113,7 +112,6 @@ describe('BoardToolbar and the icebreaker', () => {
     renderToolbar(board({icebreaker, phase: 'ICEBREAKER'}));
 
     expect(screen.getByText('Icebreaker')).toBeTruthy();
-    expect(screen.getByText(/Answer on a post-it, or out loud\./)).toBeTruthy();
   });
 
   it('starts the stepper with brainstorm when there is no icebreaker', () => {
@@ -167,7 +165,6 @@ describe('BoardToolbar and the icebreaker', () => {
 
     renderToolbar(board({phase: 'REVIEW', review: review(true, 0)}));
     expect(screen.getByText('Review')).toBeTruthy();
-    expect(screen.getByText(/Did we do what we decided\?/)).toBeTruthy();
   });
 
   it('puts the review between the icebreaker and the brainstorm', () => {
