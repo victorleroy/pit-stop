@@ -99,7 +99,7 @@ describe('RetroPage in the waiting room', () => {
 
     expect(await screen.findByRole('dialog', {name: 'Welcome to the pit stop'})).toBeTruthy();
     expect(await screen.findByText('Waiting for Fay to start the retro')).toBeTruthy();
-    expect(screen.queryByRole('button', {name: /Start the retro|Set up the board/})).toBeNull();
+    expect(screen.queryByRole('button', {name: /Start|Close/})).toBeNull();
     expect(screen.queryByTestId('cursors')).toBeNull();
   });
 
@@ -114,22 +114,23 @@ describe('RetroPage in the waiting room', () => {
     vi.mocked(updateRetro).mockResolvedValue({...board(true), phase: 'BRAINSTORM'} as Board);
     renderPage(board(true));
 
-    fireEvent.click(await screen.findByRole('button', {name: 'Start the retro'}));
+    fireEvent.click(await screen.findByRole('button', {name: 'Start'}));
 
     await waitFor(() => expect(updateRetro).toHaveBeenCalledWith('r1', {phase: 'BRAINSTORM'}));
   });
 
-  it('lets the facilitator step out to set up the board, and come back', async () => {
+  it('lets the facilitator close the waiting room, and reopen it from the toolbar', async () => {
     renderPage(board(true));
 
-    fireEvent.click(await screen.findByRole('button', {name: 'Set up the board'}));
+    fireEvent.click(await screen.findByRole('button', {name: 'Close'}));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.getByRole('button', {name: /rename/i})).toBeTruthy();
     expect(screen.queryByTestId('cursors')).toBeNull();
     expect(sendCursor).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', {name: 'Back to the waiting room'}));
+    expect(screen.queryByText('Back to the waiting room')).toBeNull();
+    fireEvent.click(screen.getByRole('button', {name: 'Waiting room'}));
 
     expect(await screen.findByRole('dialog', {name: 'Welcome to the pit stop'})).toBeTruthy();
   });
@@ -148,7 +149,7 @@ describe('RetroPage in the waiting room', () => {
     await screen.findByText('Welcome to the pit stop');
     expect(gameActions()).toEqual(['game.join']);
 
-    fireEvent.click(screen.getByRole('button', {name: 'Set up the board'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Close'}));
 
     expect(gameActions()).toEqual(['game.join', 'game.leave']);
   });
@@ -174,34 +175,28 @@ describe('RetroPage with an icebreaker', () => {
       ...overrides,
     }) as unknown as Board;
 
-  it('offers the facilitator the icebreaker or the retro straight away from the waiting room', async () => {
+  it('starts on the icebreaker from the single Start when the retro has one', async () => {
     vi.mocked(updateRetro).mockResolvedValue(icebreakerBoard());
     const lobby = {...board(true), icebreaker: {answeredCount: 0, answers: [], question: null, state: 'WAITING'}} as unknown as Board;
     renderPage(lobby);
 
-    fireEvent.click(await screen.findByRole('button', {name: 'Start with the icebreaker'}));
+    fireEvent.click(await screen.findByRole('button', {name: 'Start'}));
     await waitFor(() => expect(updateRetro).toHaveBeenCalledWith('r1', {phase: 'ICEBREAKER'}));
-
-    fireEvent.click(screen.getByRole('button', {name: 'Start without icebreaker'}));
-    await waitFor(() => expect(updateRetro).toHaveBeenCalledWith('r1', {phase: 'BRAINSTORM'}));
+    expect(screen.queryByRole('button', {name: /without icebreaker|with the icebreaker/})).toBeNull();
   });
 
-  it('chains into the review when it is on: skipping the icebreaker, or moving on from it', async () => {
+  it('chains into the review when it is on: started without an icebreaker, or moving on from it', async () => {
     const review = {
       enabled: true,
       focusActionId: null,
       items: [{action: {closedAt: null, id: 'a1', status: 'OPEN', text: 'Fix the CI'}, outcome: null}],
     } as unknown as Board['review'];
     vi.mocked(updateRetro).mockResolvedValue({...icebreakerBoard({review}), phase: 'REVIEW'} as Board);
-    const lobby = {
-      ...board(true),
-      icebreaker: {answeredCount: 0, answers: [], question: null, state: 'WAITING'},
-      review,
-    } as unknown as Board;
+    const lobby = {...board(true), review} as unknown as Board;
     renderPage(lobby);
 
     expect(await screen.findByLabelText('Review 1 open action first')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', {name: 'Start without icebreaker'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Start'}));
     await waitFor(() => expect(updateRetro).toHaveBeenCalledWith('r1', {phase: 'REVIEW'}));
 
     cleanup();

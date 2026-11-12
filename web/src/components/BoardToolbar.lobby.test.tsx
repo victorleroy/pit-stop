@@ -27,7 +27,12 @@ const board = (overrides: Partial<Board> = {}) =>
     ...overrides,
   }) as Board;
 
-const renderToolbar = (value: Board, onPhaseChange = vi.fn(), onTakeFacilitation = vi.fn()) =>
+const renderToolbar = (
+  value: Board,
+  onPhaseChange = vi.fn(),
+  onTakeFacilitation = vi.fn(),
+  onOpenWaitingRoom?: () => void,
+) =>
   render(
     <QueryClientProvider client={new QueryClient({defaultOptions: {queries: {retry: false}}})}>
       <ToastProvider>
@@ -44,6 +49,7 @@ const renderToolbar = (value: Board, onPhaseChange = vi.fn(), onTakeFacilitation
       onHide={vi.fn()}
       onMaxVotesChange={vi.fn()}
       onOpenActions={vi.fn()}
+      onOpenWaitingRoom={onOpenWaitingRoom}
       onPhaseChange={onPhaseChange}
       onReveal={vi.fn()}
       onTakeFacilitation={onTakeFacilitation}
@@ -71,9 +77,33 @@ describe('BoardToolbar in the waiting room', () => {
     renderToolbar(board(), onPhaseChange);
 
     expect(screen.queryByRole('button', {name: /Move on to/})).toBeNull();
-    fireEvent.click(screen.getByRole('button', {name: 'Start the retro'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Start'}));
 
     expect(onPhaseChange).toHaveBeenCalledWith('BRAINSTORM');
+  });
+
+  it('starts on the icebreaker with the same single Start when the retro has one', () => {
+    const onPhaseChange = vi.fn();
+    const icebreaker = {answeredCount: 0, answers: [], question: null, state: 'WAITING'} as Board['icebreaker'];
+    renderToolbar(board({icebreaker}), onPhaseChange);
+
+    fireEvent.click(screen.getByRole('button', {name: 'Start'}));
+
+    expect(onPhaseChange).toHaveBeenCalledWith('ICEBREAKER');
+    expect(screen.queryByRole('button', {name: /Start with/})).toBeNull();
+  });
+
+  it('reopens the waiting room only once the facilitator has closed it', () => {
+    const onOpenWaitingRoom = vi.fn();
+    const {unmount} = renderToolbar(board());
+
+    expect(screen.queryByRole('button', {name: 'Waiting room'})).toBeNull();
+
+    unmount();
+    renderToolbar(board(), vi.fn(), vi.fn(), onOpenWaitingRoom);
+    fireEvent.click(screen.getByRole('button', {name: 'Waiting room'}));
+
+    expect(onOpenWaitingRoom).toHaveBeenCalledTimes(1);
   });
 
   it('lets the facilitator add a column', () => {
@@ -89,7 +119,7 @@ describe('BoardToolbar in the waiting room', () => {
     fireEvent.click(screen.getByRole('button', {name: 'Take over facilitation'}));
 
     expect(onTakeFacilitation).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('button', {name: 'Start the retro'})).toBeNull();
+    expect(screen.queryByRole('button', {name: 'Start'})).toBeNull();
     expect(screen.queryByRole('button', {name: 'Add a column'})).toBeNull();
   });
 });
@@ -149,7 +179,7 @@ describe('BoardToolbar and the icebreaker', () => {
     const onPhaseChange = vi.fn();
     renderToolbar(board({review: review(true, 2)}), onPhaseChange);
 
-    fireEvent.click(screen.getByRole('button', {name: 'Start the retro'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Start'}));
 
     expect(onPhaseChange).toHaveBeenCalledWith('REVIEW');
   });

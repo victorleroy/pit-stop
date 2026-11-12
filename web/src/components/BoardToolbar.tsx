@@ -68,6 +68,7 @@ export const BoardToolbar = ({
   onHide,
   onMaxVotesChange,
   onOpenActions,
+  onOpenWaitingRoom,
   onPhaseChange,
   onReveal,
   onTakeFacilitation,
@@ -90,6 +91,8 @@ export const BoardToolbar = ({
   onHide: () => void;
   onMaxVotesChange: (maxVotes: number) => void;
   onOpenActions: () => void;
+  /** While the facilitator has closed the waiting room: opens it again. */
+  onOpenWaitingRoom?: () => void;
   openActionCount: number;
   onPhaseChange: (phase: RetroPhase) => void;
   onReveal: () => void;
@@ -249,7 +252,7 @@ export const BoardToolbar = ({
       onClick={() => onPhaseChange(openingPhase)}
       variant="contained"
     >
-      {openingPhase === 'ICEBREAKER' ? 'Start with the icebreaker' : 'Start the retro'}
+      Start
     </Button>
   );
 
@@ -292,6 +295,12 @@ export const BoardToolbar = ({
             ))}
           </Select>
         </Stack>
+      ) : null}
+
+      {isLobby && onOpenWaitingRoom ? (
+        <Button onClick={onOpenWaitingRoom} size="small" variant="outlined">
+          Waiting room
+        </Button>
       ) : null}
 
       {isLobby ? startButton : null}

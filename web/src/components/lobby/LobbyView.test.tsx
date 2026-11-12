@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import {cleanup, fireEvent, render, screen} from '@testing-library/react';
+import {cleanup, fireEvent, render, screen, within} from '@testing-library/react';
 import type {ComponentProps} from 'react';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import type {Participant, TeamMember} from '@/api/types';
@@ -97,22 +97,34 @@ describe('LobbyView', () => {
     expect(screen.getByText('+14')).toBeTruthy();
   });
 
-  it('offers the start and the board setup to the facilitator only, whatever the presence', () => {
+  it('offers a single Start to the facilitator only, whatever the presence', () => {
     const onStart = vi.fn();
-    const onSetUpBoard = vi.fn();
-    const {unmount} = renderLobby({isFacilitator: true, onSetUpBoard, onStart, participants: []});
+    const {unmount} = renderLobby({isFacilitator: true, onStart, participants: []});
 
-    fireEvent.click(screen.getByRole('button', {name: 'Start the retro'}));
-    fireEvent.click(screen.getByRole('button', {name: 'Set up the board'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Start'}));
 
     expect(onStart).toHaveBeenCalledTimes(1);
-    expect(onSetUpBoard).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', {name: /icebreaker|Set up/i})).toBeNull();
     expect(screen.queryByText(/Waiting for/)).toBeNull();
 
     unmount();
-    renderLobby({onSetUpBoard});
+    renderLobby();
 
-    expect(screen.queryByRole('button', {name: /Start|Set up/})).toBeNull();
+    expect(screen.queryByRole('button', {name: /Start/})).toBeNull();
+  });
+
+  it('lets the facilitator alone close the waiting room', () => {
+    const onClose = vi.fn();
+    const {unmount} = renderLobby({isFacilitator: true, onClose});
+
+    fireEvent.click(within(screen.getByRole('dialog', {name: 'Welcome to the pit stop'})).getByRole('button', {name: 'Close'}));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    unmount();
+    renderLobby({onClose});
+
+    expect(screen.queryByRole('button', {name: 'Close'})).toBeNull();
   });
 
   it('tells a participant who will start the retro', () => {
@@ -154,27 +166,13 @@ describe('LobbyView', () => {
     expect(screen.queryByText(/everyone did the best job they could/)).toBeNull();
   });
 
-  it('offers the icebreaker or skipping it when the retro has one', () => {
-    const onStart = vi.fn();
-    const onSkipIcebreaker = vi.fn();
-    renderLobby({isFacilitator: true, onSkipIcebreaker, onStart, startLabel: 'Start with the icebreaker'});
-
-    fireEvent.click(screen.getByRole('button', {name: 'Start with the icebreaker'}));
-    fireEvent.click(screen.getByRole('button', {name: 'Start without icebreaker'}));
-
-    expect(onStart).toHaveBeenCalledTimes(1);
-    expect(onSkipIcebreaker).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('or')).toBeTruthy();
-  });
-
   it('shows the icebreaker step in the same dialog, without the waiting room or the game', () => {
     const onStart = vi.fn();
     renderLobby({
       game: <p>the game</p>,
       icebreaker: <h2 id="icebreaker-title">Best lunch?</h2>,
       isFacilitator: true,
-      onSetUpBoard: vi.fn(),
-      onSkipIcebreaker: vi.fn(),
+      onClose: vi.fn(),
       onStart,
       startLabel: 'Move on to Brainstorm',
     });
@@ -182,8 +180,7 @@ describe('LobbyView', () => {
     expect(screen.getByRole('dialog', {name: 'Best lunch?'})).toBeTruthy();
     expect(screen.queryByText('the game')).toBeNull();
     expect(screen.queryByText('Welcome to the pit stop')).toBeNull();
-    expect(screen.queryByRole('button', {name: /Set up the board|without icebreaker/})).toBeNull();
-    expect(screen.queryByRole('button', {name: 'Close'})).toBeNull();
+        expect(screen.queryByRole('button', {name: 'Close'})).toBeNull();
 
     fireEvent.click(screen.getByRole('button', {name: 'Move on to Brainstorm'}));
 

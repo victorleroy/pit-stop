@@ -1,3 +1,4 @@
+import CloseIcon from '@mui/icons-material/Close';
 import Dialog from '@mui/material/Dialog';
 import DialogContent from '@mui/material/DialogContent';
 import Divider from '@mui/material/Divider';
@@ -6,7 +7,7 @@ import type {Participant, TeamMember} from '@/api/types';
 import {ICEBREAKER_TITLE_ID} from '@/components/icebreaker/IcebreakerQuestion';
 import {LOBBY_TITLE} from '@/components/lobby/lobbyCopy';
 import {LobbyPresence} from '@/components/lobby/LobbyPresence';
-import {Box, Button, Stack, Typography} from '@/ui';
+import {Box, Button, IconButton, Stack, Tooltip, Typography} from '@/ui';
 
 export const LobbyView = ({
   facilitatorId,
@@ -17,15 +18,14 @@ export const LobbyView = ({
   isStarting = false,
   isTakingOver = false,
   members,
-  onSetUpBoard,
-  onSkipIcebreaker,
+  onClose,
   onStart,
   onTakeOver,
   open = true,
   participants,
   preview,
   retroTitle,
-  startLabel = 'Start the retro',
+  startLabel = 'Start',
   teamName,
 }: {
   facilitatorId: string;
@@ -38,9 +38,8 @@ export const LobbyView = ({
   isStarting?: boolean;
   isTakingOver?: boolean;
   members: TeamMember[] | undefined;
-  onSetUpBoard?: () => void;
-  /** Offered next to the start when an icebreaker is on the menu: skips it. */
-  onSkipIcebreaker?: () => void;
+  /** The facilitator's way out of the waiting room: it stays open for everybody else. */
+  onClose?: () => void;
   onStart: () => void;
   onTakeOver?: () => void;
   open?: boolean;
@@ -59,30 +58,10 @@ export const LobbyView = ({
   const titleId = icebreaker ? ICEBREAKER_TITLE_ID : 'waiting-room-title';
 
   const controls = isFacilitator ? (
-    // Labels stay on one line: the row wraps between buttons, never inside one.
-    <Stack
-      direction={{sm: 'row', xs: 'column'}}
-      sx={{alignItems: {sm: 'center', xs: 'stretch'}, columnGap: 1.5, flexWrap: 'wrap', rowGap: 1, '& .MuiButton-root': {whiteSpace: 'nowrap'}}}
-      useFlexGap
-    >
+    <Stack sx={{alignItems: {sm: 'flex-start', xs: 'stretch'}}}>
       <Button disabled={isStarting} onClick={onStart} size="large" variant="contained">
         {startLabel}
       </Button>
-      {onSkipIcebreaker && !icebreaker ? (
-        <>
-          <Typography color="textSecondary" sx={{textAlign: 'center'}} variant="textS">
-            or
-          </Typography>
-          <Button disabled={isStarting} onClick={onSkipIcebreaker} variant="outlined">
-            Start without icebreaker
-          </Button>
-        </>
-      ) : null}
-      {onSetUpBoard && !icebreaker ? (
-        <Button onClick={onSetUpBoard} variant="text">
-          Set up the board
-        </Button>
-      ) : null}
     </Stack>
   ) : (
     <Box sx={{alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: 1}}>
@@ -105,6 +84,13 @@ export const LobbyView = ({
       open={open}
       slotProps={{paper: {sx: {m: 2, maxHeight: 'calc(100% - 32px)', width: 'calc(100% - 32px)'}}}}
     >
+      {isFacilitator && onClose && !icebreaker ? (
+        <Tooltip title="Close">
+          <IconButton aria-label="Close" onClick={onClose} size="small" sx={{position: 'absolute', right: 8, top: 8}}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      ) : null}
       <DialogContent sx={{p: {sm: 4, xs: 2.5}}}>
         {icebreaker ? (
           <Stack spacing={3}>
@@ -113,7 +99,7 @@ export const LobbyView = ({
           </Stack>
         ) : (
           <Stack spacing={3}>
-            <Stack spacing={0.5}>
+            <Stack spacing={0.5} sx={{pr: isFacilitator && onClose ? 3 : 0}}>
               <Typography component="h2" id="waiting-room-title" variant="headingL">
                 {LOBBY_TITLE}
               </Typography>

@@ -863,7 +863,7 @@ epoch milliseconds; `points` in `game.hit` is the player's total, not a delta.
 - The board is pushed by the service on every change; the page only falls back to fetching
   while the socket is down.
 - **Waiting room** (`LOBBY` then `ICEBREAKER`): one dialog over the board that nobody dismisses
-  (no close button, backdrop or `Escape`), gone for everybody once the retro leaves it. Its
+  with the backdrop or `Escape`, gone for everybody once the retro leaves it. Its
   `aria-labelledby` follows the current step's heading.
   - **Step 1** (`LOBBY`): a welcome (`Welcome to the pit stop`, retro title and team), then who
     is here among the team's members (`x/y joined`, present first with their avatar and first
@@ -871,16 +871,16 @@ epoch milliseconds; `points` in `game.hit` is the player's total, not a delta.
     yet"; `Everyone is here` once complete), then the game. Presence is shown only while the
     socket is connected, `Reconnecting…` otherwise, so `0/y` never shows. The others read
     `Waiting for {name} to start the retro`; when the facilitator is not connected they also get
-    `Take over facilitation`, since the toolbar is under the dialog. When the retro has an
-    icebreaker the facilitator gets `Start with the icebreaker` (phase `ICEBREAKER`), a small
-    `or`, then `Start without icebreaker` (the phase after it, `nextOpeningPhase` without the
-    icebreaker: `REVIEW` when the review step is on, `BRAINSTORM` otherwise); otherwise a single `Start the retro` (target
-    `nextOpeningPhase(board)`). Neither is conditioned on presence. `Set up the board` closes
-    the dialog for the facilitator only, the board and its column controls show, with `Back to
-    the waiting room` to reopen it; the toolbar still offers the start. `LOBBY` is not in the
+    `Take over facilitation`, since the toolbar is under the dialog. The facilitator gets a
+    single `Start`, not conditioned on presence, towards `nextOpeningPhase(board)`: `ICEBREAKER`
+    when the retro has one (set at creation or by its template), else `REVIEW` when the review
+    step is on, else `BRAINSTORM`; the toolbar's start reads `Start` too. A close icon (`Close`)
+    in the dialog's top-right corner, for the facilitator alone, closes the dialog for them
+    only: the retro stays in `LOBBY` for everybody else, the board and its column controls
+    show, and a `Waiting room` button in the toolbar, next to `Start`, reopens it. `LOBBY` is not in the
     phase stepper, and no cursor is sent. Above the people, the facilitator alone gets a
     `Review n open actions first` switch when there is anything to review.
-  - **Step 2** (`ICEBREAKER`): the same dialog, no game, no `Set up the board`. The question
+  - **Step 2** (`ICEBREAKER`): the same dialog, no game, no close icon. The question
     is an `h2`, large, at the top; below it one zone of post-its and a counter
     `{n} of {expected} answered` (`aria-live="polite"`, expected = present participants plus
     answer authors). A click in the empty part of the zone creates my post-it in inline edit

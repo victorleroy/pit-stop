@@ -7,7 +7,6 @@ import {useTheme} from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import {
   Box,
-  Button,
   IconButton,
   Loader,
   Stack,
@@ -239,7 +238,7 @@ export const RetroPage = () => {
     refetchInterval: isConnected ? false : FALLBACK_POLL_INTERVAL_MS,
   });
 
-  // Held here, not in the lobby: the podium of a game ended by "Start the retro" must outlive
+  // Held here, not in the lobby: the podium of a game ended by "Start" must outlive
   // the lobby view it came from.
   const game = useLobbyGame({
     isActive: board?.phase === 'LOBBY' && !(board.isFacilitator && lobbyTab === 'setup'),
@@ -651,6 +650,7 @@ export const RetroPage = () => {
         onHide={() => hideMutation.mutate()}
         onMaxVotesChange={(maxVotes) => maxVotesMutation.mutate(maxVotes)}
         onOpenActions={() => setIsActionsOpen((isOpen) => !isOpen)}
+        onOpenWaitingRoom={isSettingUp ? () => setLobbyTab('waiting') : undefined}
         onPhaseChange={changePhase}
         onReveal={() => revealMutation.mutate()}
         onTakeFacilitation={() => takeFacilitationMutation.mutate()}
@@ -685,12 +685,7 @@ export const RetroPage = () => {
           isStarting={phaseMutation.isPending}
           isTakingOver={takeFacilitationMutation.isPending}
           members={members}
-          onSetUpBoard={() => setLobbyTab('setup')}
-          onSkipIcebreaker={
-            isLobby && board.icebreaker
-              ? () => phaseMutation.mutate(nextOpeningPhase({...board, icebreaker: null}))
-              : undefined
-          }
+          onClose={() => setLobbyTab('setup')}
           onStart={() => phaseMutation.mutate(nextOpeningPhase(board))}
           onTakeOver={() => takeFacilitationMutation.mutate()}
           open={!isSettingUp}
@@ -713,26 +708,9 @@ export const RetroPage = () => {
             ) : undefined
           }
           retroTitle={board.title}
-          startLabel={
-            isIcebreaker
-              ? `Move on to ${PHASE_LABELS[nextOpeningPhase(board)]}`
-              : nextOpeningPhase(board) === 'ICEBREAKER'
-                ? 'Start with the icebreaker'
-                : 'Start the retro'
-          }
+          startLabel={isIcebreaker ? `Move on to ${PHASE_LABELS[nextOpeningPhase(board)]}` : 'Start'}
           teamName={teams?.find(({id}) => id === board.teamId)?.name}
         />
-      ) : null}
-
-      {isSettingUp ? (
-        <Stack direction="row" sx={{alignItems: 'center', flexWrap: 'wrap', gap: 1.5}}>
-          <Typography color="textSecondary" variant="textS">
-            The team is in the waiting room.
-          </Typography>
-          <Button onClick={() => setLobbyTab('waiting')} size="small" variant="outlined">
-            Back to the waiting room
-          </Button>
-        </Stack>
       ) : null}
 
       {board.phase === 'REVIEW' ? (
