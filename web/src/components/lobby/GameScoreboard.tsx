@@ -62,7 +62,7 @@ export const GameScoreboard = ({
       <Box component="table" sx={{borderCollapse: 'collapse', fontSize: 14, width: '100%'}}>
         <Box
           component="caption"
-          sx={{clip: 'rect(0 0 0 0)', height: 1, overflow: 'hidden', position: 'absolute', width: 1}}
+          sx={{clip: 'rect(0 0 0 0)', height: '1px', overflow: 'hidden', position: 'absolute', width: '1px'}}
         >
           Wheel Gun scores
         </Box>

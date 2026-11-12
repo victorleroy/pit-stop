@@ -439,10 +439,10 @@ export const ActionReview = ({
         aria-live="polite"
         sx={{
           clip: "rect(0 0 0 0)",
-          height: 1,
+          height: "1px",
           overflow: "hidden",
           position: "absolute",
-          width: 1,
+          width: "1px",
         }}
       >
         {focused ? `Now reviewing: ${focused.action.text}` : ""}
