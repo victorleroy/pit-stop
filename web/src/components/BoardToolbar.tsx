@@ -394,7 +394,11 @@ export const BoardToolbar = ({
               const canJump = board.isFacilitator && !isArchived && !isCurrent;
 
               return (
-                <Stack direction="row" key={phase} sx={{alignItems: 'flex-start', flexGrow: index ? 1 : 0}}>
+                <Stack
+                  direction="row"
+                  key={phase}
+                  sx={{alignItems: 'flex-start', flexGrow: index ? 1 : 0, minWidth: 0}}
+                >
                   {index ? (
                     <Box
                       sx={{
@@ -420,8 +424,8 @@ export const BoardToolbar = ({
                       cursor: canJump ? 'pointer' : 'default',
                       font: 'inherit',
                       p: 0,
-                      // On a phone the die needs a little of the track's width beside Discuss.
-                      width: {xs: dice ? 54 : 64, sm: 92},
+                      // As wide as its word on a phone, and narrower than 92px whenever the board is.
+                      width: {xs: 'auto', sm: 92},
                     }}
                   >
                     {/*
