@@ -139,13 +139,36 @@ declare module '@mui/material/Typography' {
   }
 }
 
+const TOUCH_TARGET = {
+  '@media (pointer: coarse)': {
+    '&::after': {
+      content: '""',
+      height: '100%',
+      left: '50%',
+      minHeight: 44,
+      minWidth: 44,
+      position: 'absolute',
+      top: '50%',
+      transform: 'translate(-50%, -50%)',
+      width: '100%',
+    },
+  },
+} as const;
+
 export const theme = createTheme({
   components: {
     MuiButton: {
       defaultProps: {disableElevation: true},
       styleOverrides: {
-        // Pills, and a touch target that clears 44px whatever the size prop says.
-        root: {borderRadius: 999, fontWeight: 600, minHeight: 40, paddingInline: 20, textTransform: 'none'},
+        // Pills, and a hit area that clears 44px on a touch screen whatever the size prop says.
+        root: {
+          borderRadius: 999,
+          fontWeight: 600,
+          minHeight: 40,
+          paddingInline: 20,
+          textTransform: 'none',
+          ...TOUCH_TARGET,
+        },
         contained: {
           boxShadow: '0 1px 2px rgba(10, 37, 64, 0.08), 0 8px 18px -8px rgba(99, 91, 255, 0.55)',
           '&:hover': {
@@ -157,6 +180,9 @@ export const theme = createTheme({
           ownerState.color === 'error' ? {} : {borderColor: SLIPSTREAM.line, color: SLIPSTREAM.ink},
         sizeSmall: {minHeight: 34, paddingInline: 14},
       },
+    },
+    MuiIconButton: {
+      styleOverrides: {root: TOUCH_TARGET},
     },
     MuiCard: {
       styleOverrides: {
