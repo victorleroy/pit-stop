@@ -1,5 +1,6 @@
 import {keyframes} from '@mui/material/styles';
 import type {Participant, TeamMember} from '@/api/types';
+import {MAX_TOOLTIP_LINES} from '@/components/PresenceBar';
 import {UserAvatar} from '@/components/UserAvatar';
 import {Box, Stack, Tooltip, Typography} from '@/ui';
 
@@ -137,7 +138,12 @@ export const LobbyPresence = ({
         <Tooltip
           title={
             <Box component="span" sx={{whiteSpace: 'pre-line'}}>
-              {hidden.map(({name, userId}) => (here.has(userId) ? name : `${name} · not here yet`)).join('\n')}
+              {[
+                ...hidden
+                  .slice(0, MAX_TOOLTIP_LINES)
+                  .map(({name, userId}) => (here.has(userId) ? name : `${name} · not here yet`)),
+                ...(hidden.length > MAX_TOOLTIP_LINES ? [`+${hidden.length - MAX_TOOLTIP_LINES} more`] : []),
+              ].join('\n')}
             </Box>
           }
         >

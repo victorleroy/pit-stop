@@ -60,7 +60,7 @@ const useReorderSlide = (order: string) => {
 const AVATAR = 28;
 const GAP = 4;
 const RANKED_SLOT = 38;
-const MAX_TOOLTIP_LINES = 12;
+export const MAX_TOOLTIP_LINES = 12;
 
 const useAvailableWidth = () => {
   const ref = useRef<HTMLDivElement>(null);

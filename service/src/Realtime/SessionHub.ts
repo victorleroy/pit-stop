@@ -88,10 +88,10 @@ export class SessionHub implements PresenceReader {
 
   /**
    * Serialises a command against this board, then fans the new board out from the queue.
-   * A command with another one queued behind it leaves the broadcast to that one: thirty
-   * people sharing their notes at once cost a few boards each, not thirty. Past that, a board
-   * goes out at most every COALESCE_MS, the last one of a burst always, and a new phase at
-   * once. A failed command still sends what the ones before it changed.
+   * A board goes out at most every COALESCE_MS: the first one of a burst at once, the last one
+   * always, through the queue, and a new phase at once. Thirty people sharing their notes at
+   * once cost a few boards each, not thirty. A failed command still sends what the ones before
+   * it changed.
    */
   public run<T>(retroId: string, work: () => Promise<T>): Promise<T> {
     return this.enqueue(retroId, work, false);

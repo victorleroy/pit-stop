@@ -3,6 +3,7 @@ import {cleanup, fireEvent, render, screen, within} from '@testing-library/react
 import type {ComponentProps} from 'react';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import type {Participant, TeamMember} from '@/api/types';
+import {LobbyPresence} from '@/components/lobby/LobbyPresence';
 import {LobbyView} from '@/components/lobby/LobbyView';
 
 const member = (userId: string): TeamMember => ({
@@ -195,6 +196,18 @@ describe('LobbyView', () => {
     fireEvent.click(screen.getByRole('button', {name: 'Take over facilitation'}));
 
     expect(onTakeOver).toHaveBeenCalledTimes(1);
+  });
+
+  it('names at most twelve of the people past the avatars, then counts the rest', async () => {
+    const crowd = Array.from({length: 40}, (_, index) => member(`m${index}`));
+    render(<LobbyPresence isConnected members={crowd} participants={[]} />);
+
+    fireEvent.mouseOver(screen.getByLabelText('24 more'));
+    const tooltip = await screen.findByRole('tooltip');
+
+    expect(tooltip.textContent).toContain('M27 · not here yet');
+    expect(tooltip.textContent).not.toContain('M28');
+    expect(tooltip.textContent).toContain('+12 more');
   });
 
   it('mounts the game where it is given', () => {
