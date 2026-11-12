@@ -4,6 +4,7 @@ import {AppLayout} from '@/components/AppLayout';
 import {useAuth} from '@/contexts/AuthContext';
 import {AdminPage} from '@/pages/AdminPage';
 import {PaddockPage} from '@/pages/PaddockPage';
+import {ProfilePage} from '@/pages/ProfilePage';
 import {InvitePage} from '@/pages/InvitePage';
 import {LoginPage} from '@/pages/LoginPage';
 import {MyRetrosPage} from '@/pages/MyRetrosPage';
@@ -11,6 +12,7 @@ import {ResetPasswordPage} from '@/pages/ResetPasswordPage';
 import {SetupPage} from '@/pages/SetupPage';
 import {RetroPage} from '@/pages/RetroPage';
 import {TeamPage} from '@/pages/TeamPage';
+import {TeamTemplatesPage} from '@/pages/TeamTemplatesPage';
 import {TeamsPage} from '@/pages/TeamsPage';
 import {VerifyEmailPage} from '@/pages/VerifyEmailPage';
 
@@ -48,7 +50,9 @@ export const router = createBrowserRouter([
           {element: <MyRetrosPage />, path: 'retros'},
           {element: <AdminPage />, path: 'admin'},
           {element: <PaddockPage />, path: 'paddock'},
+          {element: <ProfilePage />, path: 'profile'},
           {element: <TeamPage />, path: 'teams/:teamId'},
+          {element: <TeamTemplatesPage />, path: 'teams/:teamId/templates'},
           {element: <RetroPage />, path: 'teams/:teamId/retros/:retroId'},
           {element: <Navigate replace to="/retros" />, path: '*'},
         ],

@@ -1,0 +1,233 @@
+// @vitest-environment jsdom
+import {cleanup, fireEvent, render, screen} from '@testing-library/react';
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
+import {MemoryRouter} from 'react-router-dom';
+import {afterEach, describe, expect, it, vi} from 'vitest';
+import type {Board} from '@/api/types';
+import {BoardToolbar} from '@/components/BoardToolbar';
+import {ToastProvider} from '@/contexts/ToastContext';
+
+vi.mock('@/api/teams', () => ({fetchTeams: vi.fn().mockResolvedValue([])}));
+
+const board = (overrides: Partial<Board> = {}) =>
+  ({
+    actions: [],
+    carriedOverActions: [],
+    columns: [],
+    facilitatorId: 'f',
+    icebreaker: null,
+    isFacilitator: true,
+    maxVotes: 3,
+    myNotesRevealed: false,
+    myVotesLeft: 3,
+    phase: 'LOBBY',
+    teamId: 't1',
+    template: null,
+    timer: {state: 'IDLE'},
+    ...overrides,
+  }) as Board;
+
+const renderToolbar = (
+  value: Board,
+  onPhaseChange = vi.fn(),
+  onTakeFacilitation = vi.fn(),
+  onOpenWaitingRoom?: () => void,
+) =>
+  render(
+    <QueryClientProvider client={new QueryClient({defaultOptions: {queries: {retry: false}}})}>
+      <ToastProvider>
+        <MemoryRouter>
+    <BoardToolbar
+      authorFilter={[]}
+      board={value}
+      isAddingColumn={false}
+      isBusy={false}
+      isTimerBusy={false}
+      onAddColumn={vi.fn()}
+      onAddingColumnChange={vi.fn()}
+      onAuthorFilterChange={vi.fn()}
+      onHide={vi.fn()}
+      onMaxVotesChange={vi.fn()}
+      onOpenActions={vi.fn()}
+      onOpenWaitingRoom={onOpenWaitingRoom}
+      onPhaseChange={onPhaseChange}
+      onReveal={vi.fn()}
+      onTakeFacilitation={onTakeFacilitation}
+      onTimer={vi.fn()}
+      openActionCount={0}
+      receivedAt={Date.now()}
+    />
+        </MemoryRouter>
+      </ToastProvider>
+    </QueryClientProvider>,
+  );
+
+describe('BoardToolbar in the waiting room', () => {
+  afterEach(cleanup);
+
+  it('keeps the waiting room out of the stepper', () => {
+    renderToolbar(board());
+
+    expect(screen.queryByText('Waiting room')).toBeNull();
+    expect(screen.getByText('Brainstorm')).toBeTruthy();
+  });
+
+  it('starts the retro on brainstorm, even with no column yet', () => {
+    const onPhaseChange = vi.fn();
+    renderToolbar(board(), onPhaseChange);
+
+    expect(screen.queryByRole('button', {name: /Move on to/})).toBeNull();
+    fireEvent.click(screen.getByRole('button', {name: 'Start'}));
+
+    expect(onPhaseChange).toHaveBeenCalledWith('BRAINSTORM');
+  });
+
+  it('starts on the icebreaker with the same single Start when the retro has one', () => {
+    const onPhaseChange = vi.fn();
+    const icebreaker = {answeredCount: 0, answers: [], question: null, state: 'WAITING'} as Board['icebreaker'];
+    renderToolbar(board({icebreaker}), onPhaseChange);
+
+    fireEvent.click(screen.getByRole('button', {name: 'Start'}));
+
+    expect(onPhaseChange).toHaveBeenCalledWith('ICEBREAKER');
+    expect(screen.queryByRole('button', {name: /Start with/})).toBeNull();
+  });
+
+  it('reopens the waiting room only once the facilitator has closed it', () => {
+    const onOpenWaitingRoom = vi.fn();
+    const {unmount} = renderToolbar(board());
+
+    expect(screen.queryByRole('button', {name: 'Waiting room'})).toBeNull();
+
+    unmount();
+    renderToolbar(board(), vi.fn(), vi.fn(), onOpenWaitingRoom);
+    fireEvent.click(screen.getByRole('button', {name: 'Waiting room'}));
+
+    expect(onOpenWaitingRoom).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets the facilitator add a column', () => {
+    renderToolbar(board());
+
+    expect(screen.getByRole('button', {name: 'Add a column'})).toBeTruthy();
+  });
+
+  it('lets a participant take over, and not start', () => {
+    const onTakeFacilitation = vi.fn();
+    renderToolbar(board({isFacilitator: false}), vi.fn(), onTakeFacilitation);
+
+    fireEvent.click(screen.getByRole('button', {name: 'Take over facilitation'}));
+
+    expect(onTakeFacilitation).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', {name: 'Start'})).toBeNull();
+    expect(screen.queryByRole('button', {name: 'Add a column'})).toBeNull();
+  });
+});
+
+describe('BoardToolbar and the icebreaker', () => {
+  afterEach(cleanup);
+
+  const icebreaker = {answeredCount: 0, answers: [], question: null, state: 'ASKED'} as Board['icebreaker'];
+
+  const review = (enabled: boolean, count: number) =>
+    ({enabled, focusActionId: null, items: Array.from({length: count}, () => ({}))}) as unknown as Board['review'];
+
+  it('keeps the icebreaker out of the stepper', () => {
+    renderToolbar(board({icebreaker, phase: 'BRAINSTORM'}));
+
+    expect(screen.queryByText('Icebreaker')).toBeNull();
+    expect(screen.getByText('Brainstorm')).toBeTruthy();
+  });
+
+  it('shows every step as upcoming while the icebreaker is the current phase', () => {
+    renderToolbar(board({icebreaker, phase: 'ICEBREAKER', review: review(true, 1)}));
+
+    expect(screen.queryByText('Icebreaker')).toBeNull();
+    const first = screen.getByText('Review');
+    const second = screen.getByText('Brainstorm');
+
+    expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('starts the stepper with brainstorm when there is no icebreaker', () => {
+    renderToolbar(board({phase: 'BRAINSTORM'}));
+
+    expect(screen.queryByText('Icebreaker')).toBeNull();
+    expect(screen.getByText('Brainstorm')).toBeTruthy();
+  });
+
+  it('moves on from the icebreaker to brainstorm even with no column', () => {
+    const onPhaseChange = vi.fn();
+    renderToolbar(board({icebreaker, phase: 'ICEBREAKER'}), onPhaseChange);
+
+    const button = screen.getByRole('button', {name: 'Move on to Brainstorm'}) as HTMLButtonElement;
+
+    expect(button.disabled).toBe(false);
+    fireEvent.click(button);
+
+    expect(onPhaseChange).toHaveBeenCalledWith('BRAINSTORM');
+  });
+
+  it('moves on from the icebreaker to the review while actions wait for it', () => {
+    const onPhaseChange = vi.fn();
+    renderToolbar(board({icebreaker, phase: 'ICEBREAKER', review: review(true, 1)}), onPhaseChange);
+
+    fireEvent.click(screen.getByRole('button', {name: 'Move on to Review'}));
+
+    expect(onPhaseChange).toHaveBeenCalledWith('REVIEW');
+  });
+
+  it('starts the retro on the review when there is no icebreaker', () => {
+    const onPhaseChange = vi.fn();
+    renderToolbar(board({review: review(true, 2)}), onPhaseChange);
+
+    fireEvent.click(screen.getByRole('button', {name: 'Start'}));
+
+    expect(onPhaseChange).toHaveBeenCalledWith('REVIEW');
+  });
+
+  it('keeps the review out of the stepper when it is off or empty, but not while in it', () => {
+    renderToolbar(board({phase: 'BRAINSTORM', review: review(false, 2)}));
+    expect(screen.queryByText('Review')).toBeNull();
+    cleanup();
+
+    renderToolbar(board({phase: 'BRAINSTORM', review: review(true, 0)}));
+    expect(screen.queryByText('Review')).toBeNull();
+    cleanup();
+
+    renderToolbar(board({phase: 'REVIEW', review: review(true, 0)}));
+    expect(screen.getByText('Review')).toBeTruthy();
+  });
+
+  it('puts the review before the brainstorm', () => {
+    renderToolbar(board({icebreaker, phase: 'BRAINSTORM', review: review(true, 1)}));
+
+    const order = ['Review', 'Brainstorm'].map((label) => screen.getByText(label));
+
+    expect(order[0]!.compareDocumentPosition(order[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('starts brainstorming from the review, even with no column', () => {
+    const onPhaseChange = vi.fn();
+    renderToolbar(board({phase: 'REVIEW', review: review(true, 1)}), onPhaseChange);
+
+    fireEvent.click(screen.getByRole('button', {name: 'Start brainstorming'}));
+
+    expect(onPhaseChange).toHaveBeenCalledWith('BRAINSTORM');
+  });
+
+  it('still needs a column to move on from brainstorm', () => {
+    renderToolbar(board({icebreaker, phase: 'BRAINSTORM'}));
+
+    expect((screen.getByRole('button', {name: 'Move on to Share'}) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('lets the facilitator go back to brainstorm from a later phase', () => {
+    const onPhaseChange = vi.fn();
+    renderToolbar(board({icebreaker, phase: 'SHARE'}), onPhaseChange);
+
+    fireEvent.click(screen.getByText('Brainstorm'));
+
+    expect(onPhaseChange).toHaveBeenCalledWith('BRAINSTORM');
+  });
+});

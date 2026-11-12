@@ -5,6 +5,8 @@ import DialogTitle from '@mui/material/DialogTitle';
 
 export interface ConfirmRequest {
   confirmLabel?: string;
+  /** Destructive by default; `primary` for a confirmation that loses nothing. */
+  confirmTone?: 'error' | 'primary';
   message: string;
   onConfirm: () => void;
   title: string;
@@ -29,7 +31,7 @@ export const ConfirmDialog = ({
         Cancel
       </Button>
       <Button
-        color="error"
+        color={request?.confirmTone ?? 'error'}
         onClick={() => {
           request?.onConfirm();
           onClose();

@@ -24,7 +24,7 @@ describe('multi-tenant isolation', () => {
 
     acmeTeamId = await harness.createTeam(acme);
 
-    const board = await harness.container.retroManager.create(acme, acmeTeamId, 'Acme internals');
+    const board = await harness.createStartedRetro(acme, acmeTeamId, 'Acme internals');
 
     acmeRetroId = board.id;
 
@@ -69,6 +69,12 @@ describe('multi-tenant isolation', () => {
     await expect(
       harness.container.adminManager.setOrgAdmin(globex, acme.userId, true),
     ).rejects.toThrow('not found in this organisation');
+  });
+
+  it('refuses to remove the avatar of a member of another organisation', async () => {
+    await expect(
+      harness.container.profileManager.removeMemberAvatar(globex, acme.userId),
+    ).rejects.toMatchObject({status: 404});
   });
 
   it('refuses to change the team administrators of another organisation', async () => {
@@ -119,5 +125,35 @@ describe('multi-tenant isolation', () => {
     expect(summary.teamCount).toBe(1);
     // The paddock payload must never carry board content (ADR-001 D8).
     expect(JSON.stringify(orgs)).not.toContain('acme secret');
+  });
+
+  it('never returns a template of another organisation', async () => {
+    const acmeTemplate = await harness.container.retroTemplateManager.create(acme, acmeTeamId, {
+      actionReview: null,
+      columns: [{prompt: 'acme secret', title: 'Ideas'}],
+      description: null,
+      icebreaker: null,
+      maxVotes: null,
+      name: 'Acme format',
+      timerSeconds: null,
+    });
+    const globexTeamId = await harness.createTeam(globex);
+
+    await harness.container.retroTemplateManager.duplicate(globex, globexTeamId, 'builtin:kalm');
+
+    const rows = await globex.db.retroTemplates().selectAll().execute();
+
+    expect(rows.map(({name}) => name)).toEqual(['KALM (copy)']);
+    expect(
+      await globex.db.retroTemplates().selectAll().where('id', '=', acmeTemplate.id).execute(),
+    ).toEqual([]);
+    await expect(
+      harness.container.retroManager.create(globex, globexTeamId, 'Stolen', {
+        templateId: acmeTemplate.id,
+      }),
+    ).rejects.toMatchObject({status: 404});
+    await expect(
+      harness.container.retroTemplateManager.list(globex, acmeTeamId),
+    ).rejects.toMatchObject({status: 403});
   });
 });

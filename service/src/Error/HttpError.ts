@@ -39,6 +39,18 @@ export class ConflictHttpError extends HttpError {
   }
 }
 
+export class PayloadTooLargeHttpError extends HttpError {
+  public constructor(message: string, cause?: Error) {
+    super(413, message, cause);
+  }
+}
+
+export class UnsupportedMediaTypeHttpError extends HttpError {
+  public constructor(message: string, cause?: Error) {
+    super(415, message, cause);
+  }
+}
+
 export class TooManyRequestsHttpError extends HttpError {
   public constructor(message: string, cause?: Error) {
     super(429, message, cause);

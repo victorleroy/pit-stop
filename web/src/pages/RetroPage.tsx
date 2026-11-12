@@ -1,5 +1,13 @@
+import CloseIcon from '@mui/icons-material/Close';
+import Divider from '@mui/material/Divider';
+import Drawer from '@mui/material/Drawer';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Switch from '@mui/material/Switch';
+import {useTheme} from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import {
   Box,
+  IconButton,
   Loader,
   Stack,
   Typography,
@@ -7,44 +15,86 @@ import {
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import type {PointerEvent as ReactPointerEvent, ReactNode} from 'react';
 import {useEffect, useRef, useState} from 'react';
-import {Link, useNavigate, useParams} from 'react-router-dom';
+import {useNavigate, useParams} from 'react-router-dom';
 import {
   addColumn,
   castVote,
+  clearReviewOutcome,
   createAction,
   createNote,
+  fetchActionStats,
   fetchBoard,
   groupNote,
+  answerIcebreaker,
   hideMyNotes,
   removeColumn,
+  removeIcebreakerAnswer,
   removeNote,
   renameCluster,
+  resetDice,
+  rollDie,
   takeFacilitation,
-  renameColumn,
+  reorderColumns,
   revealMyNotes,
+  hideIcebreakerAnswer,
+  revealIcebreakerAnswer,
+  setNoteRevealed,
+  setReviewFocus,
+  recordReviewOutcome,
   ungroupNote,
   updateAction,
+  updateColumn,
   updateNote,
   updateRetro,
 } from '@/api/retros';
-import {fetchTeamMembers} from '@/api/teams';
-import type {ActionStatus, Board, RetroPhase, TimerAction} from '@/api/types';
+import {fetchTeamMembers, fetchTeams} from '@/api/teams';
+import type {
+  ActionStatus,
+  Board,
+  GameEvent,
+  RetroPhase,
+  ReviewOutcome,
+  TimerAction,
+} from '@/api/types';
 import type {ConfirmRequest} from '@/components/ConfirmDialog';
 import {ConfirmDialog} from '@/components/ConfirmDialog';
 import {ActionList} from '@/components/ActionList';
+import {ActionReview} from '@/components/ActionReview';
 import {BoardColumn} from '@/components/BoardColumn';
 import {CursorLayer} from '@/components/CursorLayer';
 import {EmptyState} from '@/components/EmptyState';
+import {IcebreakerStep} from '@/components/icebreaker/IcebreakerStep';
+import {LobbyView} from '@/components/lobby/LobbyView';
+import {WheelGun} from '@/components/lobby/WheelGun';
+import {useAuth} from '@/contexts/AuthContext';
 import {useToast} from '@/contexts/ToastContext';
-import {BoardToolbar} from '@/components/BoardToolbar';
+import {BoardToolbar, PHASE_LABELS} from '@/components/BoardToolbar';
 import {PresenceBar} from '@/components/PresenceBar';
+import {RetroHeader} from '@/components/RetroHeader';
+import {SpeakingOrder} from '@/components/SpeakingOrder';
 import {useBoardSocket} from '@/hooks/useBoardSocket';
+import {useDiceSpin} from '@/hooks/useDiceSpin';
+import {podiumMessage, useLobbyGame} from '@/hooks/useLobbyGame';
 import {SLIPSTREAM} from '@/ui/theme';
+import {readZoom, saveZoom, stepZoom} from '@/utils/boardZoom';
+import {boardAuthors} from '@/utils/authorFilter';
+import {moveColumn} from '@/utils/columnOrder';
+import {countOpenActions} from '@/utils/openActions';
+import {COLUMN_EDIT_PHASES, REVIEW_OUTCOME_PHASES, nextOpeningPhase} from '@/utils/phases';
 
 // Only used while the websocket is down.
 const FALLBACK_POLL_INTERVAL_MS = 5_000;
 
+const STATS_DEBOUNCE_MS = 500;
+
 const FADE_WIDTH = 56;
+
+const ACTIONS_WIDTH = 440;
+
+const APP_BAR_HEIGHT = 65;
+
+// A mouse notch is about 100 and a trackpad pinch sends many small deltas: one step per notch.
+const WHEEL_STEP = 50;
 
 const fade = (side: 'left' | 'right', isShown: boolean) => ({
   backgroundImage: `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, ${SLIPSTREAM.ground}, ${SLIPSTREAM.ground}00)`,
@@ -118,19 +168,59 @@ export const RetroPage = () => {
   const queryClient = useQueryClient();
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | undefined>(undefined);
   const [isAddingColumn, setIsAddingColumn] = useState(false);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
+  // Beside the board on a wide screen, so cards stay at hand; over it on a phone.
+  const isWide = useMediaQuery(useTheme().breakpoints.up('md'));
   const [actionDraft, setActionDraft] = useState<{nonce: number; text: string} | undefined>(
     undefined,
   );
+  // Per viewer: each screen picks its own, cursors stay fractions of the board whatever it is.
+  const [zoom, setZoom] = useState(readZoom);
+  const [authorFilter, setAuthorFilter] = useState<string[]>([]);
+  const [lobbyTab, setLobbyTab] = useState<'setup' | 'waiting'>('waiting');
+  const [boardElement, setBoardElement] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => saveZoom(zoom), [zoom]);
+
+  // Ctrl+wheel (and a trackpad pinch) zooms the board instead of the whole page.
+  useEffect(() => {
+    if (!boardElement) return undefined;
+
+    let pending = 0;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+
+      event.preventDefault();
+      pending += event.deltaY;
+      if (Math.abs(pending) < WHEEL_STEP) return;
+
+      const direction = pending < 0 ? 1 : -1;
+      pending = 0;
+      setZoom((current) => stepZoom(current, direction));
+    };
+
+    boardElement.addEventListener('wheel', onWheel, {passive: false});
+    return () => boardElement.removeEventListener('wheel', onWheel);
+  }, [boardElement]);
 
   const queryKey = ['retros', retroId, 'board'];
 
   const toast = useToast();
+  const {user} = useAuth();
 
   const onBoard = (next: Board) => queryClient.setQueryData(queryKey, next);
 
-  const {cursors, hideCursor, isConnected, participants, sendCursor} = useBoardSocket({
-    onBoard,
-    retroId,
+  const gameEventRef = useRef<(event: GameEvent) => void>(() => undefined);
+
+  const {cursors, hideCursor, isConnected, isDiceSnapshot, isSubscribed, participants, rolls, send, sendCursor} =
+    useBoardSocket({
+      onBoard,
+      onGameEvent: (event) => gameEventRef.current(event),
+      retroId,
+    });
+  const dice = useDiceSpin(rolls, {
+    isSnapshot: isDiceSnapshot,
+    reducedMotion: useMediaQuery('(prefers-reduced-motion: reduce)'),
   });
 
   // While the socket is up it already carries the board this command produced, and possibly
@@ -149,16 +239,54 @@ export const RetroPage = () => {
     refetchInterval: isConnected ? false : FALLBACK_POLL_INTERVAL_MS,
   });
 
+  // Held here, not in the lobby: the podium of a game ended by "Start" must outlive
+  // the lobby view it came from.
+  const game = useLobbyGame({
+    isActive: board?.phase === 'LOBBY' && !(board.isFacilitator && lobbyTab === 'setup'),
+    isConnected: isSubscribed,
+    onEnded: ({scores, teamStops}) => toast.info(podiumMessage(scores, teamStops)),
+    send,
+    userId: user?.id,
+  });
+  gameEventRef.current = game.handleEvent;
+
   const {data: members} = useQuery({
     enabled: Boolean(board?.teamId),
     queryFn: () => fetchTeamMembers(board?.teamId as string),
     queryKey: ['teams', board?.teamId, 'members'],
   });
 
+  const {data: teams} = useQuery({
+    enabled: board?.phase === 'LOBBY',
+    queryFn: fetchTeams,
+    queryKey: ['teams'],
+  });
+
   const phaseMutation = useMutation({
     mutationFn: (phase: RetroPhase) => updateRetro(retroId as string, {phase}),
     ...boardMutationOptions,
   });
+  const actionReviewMutation = useMutation({
+    mutationFn: (actionReview: boolean) => updateRetro(retroId as string, {actionReview}),
+    ...boardMutationOptions,
+  });
+
+  // Stats change with every outcome: read again once the clicks of a review settle down.
+  const isReviewing = board?.phase === 'REVIEW';
+  const statsKey = ['teams', board?.teamId, 'actions', 'stats', retroId];
+  const {data: actionStats, refetch: refetchStats} = useQuery({
+    enabled: isReviewing && Boolean(board?.teamId),
+    queryFn: () => fetchActionStats(board?.teamId as string, retroId),
+    queryKey: statsKey,
+  });
+
+  useEffect(() => {
+    if (!isReviewing) return;
+
+    const timeout = setTimeout(() => void refetchStats(), STATS_DEBOUNCE_MS);
+
+    return () => clearTimeout(timeout);
+  }, [dataUpdatedAt, isReviewing, refetchStats]);
   const maxVotesMutation = useMutation({
     mutationFn: (maxVotes: number) => updateRetro(retroId as string, {maxVotes}),
     ...boardMutationOptions,
@@ -168,9 +296,39 @@ export const RetroPage = () => {
     onError: (cause: Error) => toast.error(cause.message),
     onSuccess: () => queryClient.invalidateQueries({queryKey}),
   });
+  const rollDieMutation = useMutation({
+    mutationFn: () => rollDie(retroId as string),
+    onError: (cause: Error) => {
+      if (user) dice.stop(user.id);
+      toast.error(cause.message);
+    },
+    onMutate: () => {
+      if (user) dice.spin(user.id);
+    },
+  });
+  const resetDiceMutation = useMutation({
+    mutationFn: () => resetDice(retroId as string),
+    onError: (cause: Error) => toast.error(cause.message),
+  });
   const timerMutation = useMutation({
     mutationFn: ({action, seconds}: {action: TimerAction; seconds?: number}) =>
       updateRetro(retroId as string, {timer: {action, seconds}}),
+    ...boardMutationOptions,
+  });
+  const answerMutation = useMutation({
+    mutationFn: (text: string) => answerIcebreaker(retroId as string, text),
+    ...boardMutationOptions,
+  });
+  const removeAnswerMutation = useMutation({
+    mutationFn: () => removeIcebreakerAnswer(retroId as string),
+    ...boardMutationOptions,
+  });
+  const revealAnswerMutation = useMutation({
+    mutationFn: () => revealIcebreakerAnswer(retroId as string),
+    ...boardMutationOptions,
+  });
+  const hideAnswerMutation = useMutation({
+    mutationFn: () => hideIcebreakerAnswer(retroId as string),
     ...boardMutationOptions,
   });
   const revealMutation = useMutation({
@@ -181,13 +339,22 @@ export const RetroPage = () => {
     mutationFn: () => hideMyNotes(retroId as string),
     ...boardMutationOptions,
   });
+  const noteRevealMutation = useMutation({
+    mutationFn: ({noteId, revealed}: {noteId: string; revealed: boolean}) =>
+      setNoteRevealed(retroId as string, noteId, revealed),
+    ...boardMutationOptions,
+  });
   const addColumnMutation = useMutation({
     mutationFn: (title: string) => addColumn(retroId as string, title),
     ...boardMutationOptions,
   });
-  const renameColumnMutation = useMutation({
-    mutationFn: ({columnId, title}: {columnId: string; title: string}) =>
-      renameColumn(retroId as string, columnId, title),
+  const updateColumnMutation = useMutation({
+    mutationFn: ({columnId, ...changes}: {columnId: string; prompt?: string | null; title?: string}) =>
+      updateColumn(retroId as string, columnId, changes),
+    ...boardMutationOptions,
+  });
+  const reorderColumnsMutation = useMutation({
+    mutationFn: (columnIds: string[]) => reorderColumns(retroId as string, columnIds),
     ...boardMutationOptions,
   });
   const removeColumnMutation = useMutation({
@@ -241,15 +408,58 @@ export const RetroPage = () => {
       actionId,
       status,
       teamId,
+      text,
     }: {
       actionId: string;
-      status: ActionStatus;
+      status?: ActionStatus;
       teamId: string;
-    }) => updateAction(teamId, actionId, {status}),
+      text?: string;
+    }) => updateAction(teamId, actionId, {status, text}),
     onError: (cause: Error) => toast.error(cause.message),
     onSuccess: (_action, variables) => {
       void queryClient.invalidateQueries({queryKey});
       void queryClient.invalidateQueries({queryKey: ['teams', variables.teamId, 'actions']});
+    },
+  });
+  // Closing a carried-over action from here records it as reviewed by this retro; reopening
+  // it undoes that outcome.
+  const reviewMutation = useMutation({
+    mutationFn: async ({actionId, status}: {actionId: string; status: ActionStatus}) => {
+      await (status === 'OPEN'
+        ? clearReviewOutcome(retroId as string, actionId)
+        : recordReviewOutcome(retroId as string, actionId, status));
+    },
+    onError: (cause: Error) => toast.error(cause.message),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({queryKey});
+      void queryClient.invalidateQueries({queryKey: ['teams', board?.teamId, 'actions']});
+    },
+  });
+  const outcomeMutation = useMutation({
+    mutationFn: async ({
+      actionId,
+      comment,
+      outcome,
+    }: {
+      actionId: string;
+      comment?: string | null;
+      outcome: ReviewOutcome | null;
+    }) => {
+      await (outcome === null
+        ? clearReviewOutcome(retroId as string, actionId)
+        : recordReviewOutcome(retroId as string, actionId, outcome, comment));
+    },
+    onError: (cause: Error) => toast.error(cause.message),
+    onSuccess: () => {
+      if (!isConnected) void queryClient.invalidateQueries({queryKey});
+      void queryClient.invalidateQueries({queryKey: ['teams', board?.teamId, 'actions']});
+    },
+  });
+  const focusMutation = useMutation({
+    mutationFn: (actionId: string | null) => setReviewFocus(retroId as string, actionId),
+    onError: (cause: Error) => toast.error(cause.message),
+    onSuccess: () => {
+      if (!isConnected) void queryClient.invalidateQueries({queryKey});
     },
   });
   const voteMutation = useMutation({
@@ -262,11 +472,17 @@ export const RetroPage = () => {
     phaseMutation,
     maxVotesMutation,
     timerMutation,
+    answerMutation,
+    removeAnswerMutation,
+    revealAnswerMutation,
+    hideAnswerMutation,
     takeFacilitationMutation,
     revealMutation,
     hideMutation,
+    noteRevealMutation,
     addColumnMutation,
-    renameColumnMutation,
+    updateColumnMutation,
+    reorderColumnsMutation,
     removeColumnMutation,
     createNoteMutation,
     updateNoteMutation,
@@ -278,6 +494,9 @@ export const RetroPage = () => {
     voteMutation,
     createActionMutation,
     updateActionMutation,
+    reviewMutation,
+    outcomeMutation,
+    actionReviewMutation,
   ];
   const isBusy = mutations.some(({isPending}) => isPending);
 
@@ -307,7 +526,7 @@ export const RetroPage = () => {
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
 
-    if (!box.width || !box.height) return;
+    if (board.phase === 'LOBBY' || !box.width || !box.height) return;
 
     const x = (event.clientX - box.left) / box.width;
     const y = (event.clientY - box.top) / box.height;
@@ -317,6 +536,11 @@ export const RetroPage = () => {
     sendCursor(x, y);
   };
 
+  const isLobby = board.phase === 'LOBBY';
+  const isIcebreaker = board.phase === 'ICEBREAKER' && board.icebreaker !== null;
+  const isSettingUp = isLobby && board.isFacilitator && lobbyTab === 'setup';
+  const isRolling = board.phase === 'DISCUSS' && isConnected;
+  const canEditColumns = COLUMN_EDIT_PHASES.includes(board.phase);
   const canWrite = board.phase === 'BRAINSTORM';
   const canModerate = ['BRAINSTORM', 'SHARE'].includes(board.phase);
 
@@ -335,73 +559,175 @@ export const RetroPage = () => {
   const canGroup = board.phase === 'SHARE';
   const canVote = board.phase === 'VOTE';
   const canDecide = board.phase === 'DISCUSS';
+  const authors = boardAuthors(board);
+  const activeAuthorFilter =
+    authors.length > 1 ? authorFilter.filter((id) => authors.some((author) => author.id === id)) : [];
   const onStatusChange = (actionId: string, status: ActionStatus) =>
     updateActionMutation.mutate({actionId, status, teamId: board.teamId});
+  const onTextChange = (actionId: string, text: string) =>
+    updateActionMutation.mutate({actionId, teamId: board.teamId, text});
+  const facilitatorName = members?.find(({userId}) => userId === board.facilitatorId)?.name;
+
+  // Leaving the review is always possible; what nobody decided on stays open, said once.
+  const changePhase = (phase: RetroPhase) => {
+    const undecided = board.review.items.filter(({outcome}) => !outcome).length;
+
+    if (board.phase !== 'REVIEW' || phase === 'REVIEW' || undecided === 0) {
+      phaseMutation.mutate(phase);
+      return;
+    }
+
+    setConfirmRequest({
+      confirmLabel: 'Continue',
+      confirmTone: 'primary',
+      message: `${undecided} action${undecided === 1 ? ' has' : 's have'} not been reviewed. ${
+        undecided === 1 ? 'It stays' : 'They stay'
+      } open.`,
+      onConfirm: () => phaseMutation.mutate(phase),
+      title: 'Leave the review?',
+    });
+  };
 
   return (
-    <Stack spacing={3}>
+    // The open panel takes the board's right edge, so the columns narrow instead of hiding under it.
+    <Stack
+      spacing={3}
+      sx={{pr: isWide && isActionsOpen ? `${ACTIONS_WIDTH}px` : 0, transition: 'padding 225ms ease'}}
+    >
       <ConfirmDialog onClose={() => setConfirmRequest(undefined)} request={confirmRequest} />
 
-      <Stack spacing={1}>
-        {/* A long title wraps beside the presence, which keeps its corner instead of dropping
-            between the title and the way back. */}
-        <Stack direction="row" spacing={2} sx={{alignItems: 'flex-start'}}>
-          <Typography
-            sx={{flexGrow: 1, fontSize: {xs: '1.75rem', sm: undefined}, minWidth: 0, overflowWrap: 'anywhere'}}
-            variant="displayS"
-          >
-            {board.title}
-          </Typography>
-          <Stack sx={{flexShrink: 0, pt: {xs: 0.5, sm: 1.5}}}>
-            <PresenceBar isConnected={isConnected} participants={participants} />
-          </Stack>
-        </Stack>
-        <Link
-          style={{color: 'inherit', textDecoration: 'none', width: 'fit-content'}}
-          to={`/teams/${board.teamId}`}
-        >
-          <Typography color="textSecondary" variant="textS">
-            ← Back to the team
-          </Typography>
-        </Link>
-      </Stack>
+      <RetroHeader
+        canZoom={board.columns.length > 0}
+        onZoomChange={setZoom}
+        presence={
+          <PresenceBar
+            board={board}
+            dice={
+              isRolling
+                ? {rolls: dice.settled, spinningIds: dice.spinningIds.filter((userId) => userId !== user?.id)}
+                : undefined
+            }
+            isConnected={isConnected}
+            participants={participants}
+          />
+        }
+        teamId={board.teamId}
+        title={board.title}
+        zoom={zoom}
+      />
 
       <BoardToolbar
+        authorFilter={authorFilter}
         board={board}
+        dice={
+          isRolling ? (
+            <SpeakingOrder
+              held={dice.held}
+              isBusy={rollDieMutation.isPending || resetDiceMutation.isPending}
+              isFacilitator={board.isFacilitator}
+              myUserId={user?.id}
+              onReset={() => resetDiceMutation.mutate()}
+              onRoll={() => rollDieMutation.mutate()}
+              participants={participants}
+              rolls={dice.settled}
+              spinningIds={dice.spinningIds}
+            />
+          ) : null
+        }
         isAddingColumn={isAddingColumn}
         isBusy={isBusy}
         isTimerBusy={timerMutation.isPending}
         onAddColumn={(title) => addColumnMutation.mutate(title)}
-        onAddingColumnChange={setIsAddingColumn}
+        onAddingColumnChange={(isAdding) => {
+          setIsAddingColumn(isAdding);
+          if (isAdding) setLobbyTab('setup');
+        }}
+        onAuthorFilterChange={setAuthorFilter}
         onHide={() => hideMutation.mutate()}
         onMaxVotesChange={(maxVotes) => maxVotesMutation.mutate(maxVotes)}
-        onPhaseChange={(phase) => phaseMutation.mutate(phase)}
+        onOpenActions={() => setIsActionsOpen((isOpen) => !isOpen)}
+        onOpenWaitingRoom={isSettingUp ? () => setLobbyTab('waiting') : undefined}
+        onPhaseChange={changePhase}
         onReveal={() => revealMutation.mutate()}
         onTakeFacilitation={() => takeFacilitationMutation.mutate()}
         onTimer={(action, seconds) => timerMutation.mutate({action, seconds})}
+        openActionCount={countOpenActions(board)}
         receivedAt={dataUpdatedAt}
       />
 
-      {board.carriedOverActions.length > 0 ? (
-        <ActionList
-          actions={board.carriedOverActions}
-          canComplete={false}
-          canCreate={false}
-          emptyLabel=""
-          isBusy={isBusy}
-          members={members ?? []}
-          onStatusChange={onStatusChange}
-          title="Actions from previous retros"
+      {isLobby || isIcebreaker ? (
+        <LobbyView
+          facilitatorId={board.facilitatorId}
+          game={
+            isLobby ? (
+              <WheelGun game={game} isConnected={isConnected} participants={participants} userId={user?.id} />
+            ) : undefined
+          }
+          icebreaker={
+            isIcebreaker && board.icebreaker ? (
+              <IcebreakerStep
+                icebreaker={board.icebreaker}
+                isBusy={isBusy}
+                onAnswer={(text) => answerMutation.mutate(text)}
+                onHide={() => hideAnswerMutation.mutate()}
+                onRemoveAnswer={() => removeAnswerMutation.mutate()}
+                onReveal={() => revealAnswerMutation.mutate()}
+                participants={participants}
+              />
+            ) : undefined
+          }
+          isConnected={isConnected}
+          isFacilitator={board.isFacilitator}
+          isStarting={phaseMutation.isPending}
+          isTakingOver={takeFacilitationMutation.isPending}
+          members={members}
+          onClose={() => setLobbyTab('setup')}
+          onStart={() => phaseMutation.mutate(nextOpeningPhase(board))}
+          onTakeOver={() => takeFacilitationMutation.mutate()}
+          open={!isSettingUp}
+          participants={participants}
+          preview={
+            board.isFacilitator && isLobby && board.review.items.length > 0 ? (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={board.review.enabled}
+                    disabled={actionReviewMutation.isPending}
+                    onChange={(event) => actionReviewMutation.mutate(event.target.checked)}
+                    size="small"
+                  />
+                }
+                label={`Review ${board.review.items.length} open action${
+                  board.review.items.length === 1 ? '' : 's'
+                } first`}
+              />
+            ) : undefined
+          }
+          retroTitle={board.title}
+          startLabel={isIcebreaker ? `Move on to ${PHASE_LABELS[nextOpeningPhase(board)]}` : 'Start'}
+          teamName={teams?.find(({id}) => id === board.teamId)?.name}
         />
       ) : null}
 
-      {board.columns.length === 0 ? (
+      {board.phase === 'REVIEW' ? (
+        <ActionReview
+          facilitatorName={facilitatorName}
+          isBusy={outcomeMutation.isPending || focusMutation.isPending}
+          isFacilitator={board.isFacilitator}
+          onComment={(actionId, outcome, comment) => outcomeMutation.mutate({actionId, comment, outcome})}
+          onFocus={(actionId) => focusMutation.mutate(actionId)}
+          onOutcome={(actionId, outcome) => outcomeMutation.mutate({actionId, outcome})}
+          onUndo={(actionId) => outcomeMutation.mutate({actionId, outcome: null})}
+          review={board.review}
+          stats={actionStats}
+        />
+      ) : board.columns.length === 0 ? (
         // A blank board: nobody can write until there is somewhere to write.
         <Box sx={{border: '1px dashed', borderColor: 'divider', borderRadius: 2}}>
           {board.isFacilitator ? (
             <EmptyState
               action={
-                board.phase === 'BRAINSTORM'
+                canEditColumns
                   ? {label: 'Add a column', onClick: () => setIsAddingColumn(true)}
                   : undefined
               }
@@ -419,23 +745,29 @@ export const RetroPage = () => {
         /*
          * The columns share the width and the board scrolls sideways when there are more
          * than the screen holds. The inner box spans the whole scrolled content, so cursor
-         * positions stay fractions of the full board rather than of the visible slice.
+         * positions stay fractions of the full board rather than of the visible slice. It
+         * hugs the columns, zoom included, so a fraction lands on the same note at any zoom;
+         * the cursors themselves stay outside the zoom, at their usual size.
          */
         <SideScroll>
           <Box
             onPointerLeave={hideCursor}
             onPointerMove={onPointerMove}
-            sx={{minWidth: '100%', position: 'relative', width: 'max-content'}}
+            ref={setBoardElement}
+            sx={{position: 'relative', width: 'max-content'}}
           >
-            <CursorLayer cursors={cursors} />
+            {!canWrite && !canVote && !isLobby && <CursorLayer cursors={cursors} />}
 
-            <Stack direction="row" sx={{alignItems: 'flex-start', flexWrap: 'nowrap', gap: 2}}>
+            <Stack direction="row" sx={{alignItems: 'flex-start', flexWrap: 'nowrap', gap: 2, zoom}}>
               {board.columns.map((column, index) => (
                 <BoardColumn
+                  authorFilter={activeAuthorFilter}
+                  canAddNote={['BRAINSTORM', 'SHARE'].includes(board.phase)}
                   canDecide={canDecide}
-                  canEditColumn={board.isFacilitator && board.phase === 'BRAINSTORM'}
+                  canEditColumn={board.isFacilitator && canEditColumns}
                   canGroup={canGroup}
                   canRemove={board.columns.length > 1}
+                  canReveal={['SHARE', 'VOTE', 'DISCUSS'].includes(board.phase)}
                   canModerate={canModerate}
                   canVote={canVote}
                   canWrite={canWrite}
@@ -443,9 +775,18 @@ export const RetroPage = () => {
                   index={index}
                   isBusy={isBusy}
                   isFacilitator={board.isFacilitator}
+                  isLast={index === board.columns.length - 1}
                   key={column.id}
                   onAddNote={(text) => createNoteMutation.mutate({columnId: column.id, text})}
                   onGroupNote={(noteId, targetId) => groupMutation.mutate({noteId, targetId})}
+                  onMoveColumn={
+                    board.columns.length > 1
+                      ? (delta) =>
+                          reorderColumnsMutation.mutate(
+                            moveColumn(board.columns.map(({id}) => id), index, delta),
+                          )
+                      : undefined
+                  }
                   onMoveNote={(noteId) => moveNoteMutation.mutate({columnId: column.id, noteId})}
                   onRemoveColumn={() =>
                     setConfirmRequest({
@@ -464,10 +805,15 @@ export const RetroPage = () => {
                   onRenameCluster={(clusterId, title) =>
                     renameClusterMutation.mutate({clusterId, title})
                   }
-                  onRenameColumn={(title) => renameColumnMutation.mutate({columnId: column.id, title})}
-                  onTurnIntoAction={(text) => setActionDraft({nonce: Date.now(), text})}
+                  onRevealNote={(noteId, revealed) => noteRevealMutation.mutate({noteId, revealed})}
+                  onRenameColumn={(title) => updateColumnMutation.mutate({columnId: column.id, title})}
+                  onTurnIntoAction={(text) => {
+                    setActionDraft({nonce: Date.now(), text});
+                    setIsActionsOpen(true);
+                  }}
                   onUngroupNote={(noteId) => ungroupMutation.mutate(noteId)}
                   onUpdateNote={(noteId, text) => updateNoteMutation.mutate({noteId, text})}
+                  onUpdatePrompt={(prompt) => updateColumnMutation.mutate({columnId: column.id, prompt})}
                   onVote={(targetId, delta) => voteMutation.mutate({delta, targetId})}
                   ranks={ranks}
                   showTotals={board.votesRevealed}
@@ -479,21 +825,60 @@ export const RetroPage = () => {
         </SideScroll>
       )}
 
-      {canDecide || board.actions.length > 0 ? (
-        <ActionList
-          actions={board.actions}
-          canComplete={false}
-          canCreate={canDecide}
-          draft={actionDraft}
-          emptyLabel="No action decided yet."
-          isBusy={isBusy}
-          members={members ?? []}
-          onCreate={(text, assigneeId) => createActionMutation.mutate({assigneeId, text})}
-          onDraftApplied={() => setActionDraft(undefined)}
-          onStatusChange={onStatusChange}
-          title="Actions from this retro"
-        />
-      ) : null}
+      <Drawer
+        anchor="right"
+        ModalProps={{keepMounted: true}}
+        onClose={() => setIsActionsOpen(false)}
+        open={isActionsOpen}
+        slotProps={{
+          paper: {
+            sx: {
+              bgcolor: SLIPSTREAM.surface,
+              ...(isWide && {height: `calc(100% - ${APP_BAR_HEIGHT}px)`, top: APP_BAR_HEIGHT}),
+              width: {xs: '100%', sm: ACTIONS_WIDTH},
+            },
+          },
+        }}
+        variant={isWide ? 'persistent' : 'temporary'}
+      >
+        <Stack divider={<Divider />} spacing={3} sx={{p: 3}}>
+          <Stack direction="row" sx={{alignItems: 'center', justifyContent: 'space-between'}}>
+            <Typography variant="headingL">Actions</Typography>
+            <IconButton aria-label="Close the actions" onClick={() => setIsActionsOpen(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+
+          <ActionList
+            actions={board.actions}
+            canComplete={false}
+            canCreate={canDecide}
+            draft={actionDraft}
+            emptyLabel="No action decided yet."
+            isBusy={isBusy}
+            members={members ?? []}
+            onCreate={(text, assigneeId) => createActionMutation.mutate({assigneeId, text})}
+            onDraftApplied={() => setActionDraft(undefined)}
+            onStatusChange={onStatusChange}
+            onTextChange={onTextChange}
+            title="Actions from this retro"
+          />
+
+          {board.review.items.length > 0 ? (
+            <ActionList
+              actions={board.review.items.map(({action}) => action)}
+              canComplete={REVIEW_OUTCOME_PHASES.includes(board.phase)}
+              canCreate={false}
+              emptyLabel=""
+              isBusy={isBusy}
+              members={members ?? []}
+              onStatusChange={(actionId, status) => reviewMutation.mutate({actionId, status})}
+              onTextChange={onTextChange}
+              title="Actions from previous retros"
+            />
+          ) : null}
+        </Stack>
+      </Drawer>
 
     </Stack>
   );

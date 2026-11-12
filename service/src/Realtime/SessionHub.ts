@@ -1,7 +1,9 @@
 import type {Db} from '~/Db/connection';
 import type {PresenceReader} from '~/Manager/AdminManager';
 import type {BoardRepository, RetroRow} from '~/Repository/BoardRepository';
+import {ConflictHttpError, ForbiddenHttpError} from '~/Error/HttpError';
 import {logger} from '~/logger';
+import type {DieRoll} from '~/Model/WebSocketModel';
 import type {Authorizer, Connection} from '~/Realtime/RetroSession';
 import {RetroSession} from '~/Realtime/RetroSession';
 
@@ -18,7 +20,16 @@ const RETRO_COLUMNS = [
   'timerRemainingMs',
   'timerTotalMs',
   'createdAt',
+  'templateId',
+  'templateName',
+  'defaultTimerSeconds',
+  'icebreakerQuestionId',
+  'icebreakerAskedAt',
+  'actionReview',
+  'reviewFocusActionId',
 ] as const;
+
+export const COALESCE_MS = 250;
 
 /**
  * The registry of live retro actors (ADR-001 D1).
@@ -34,10 +45,14 @@ export class SessionHub implements PresenceReader {
    * lives apart from the connections: an HTTP command must not create a session that nobody
    * releases, and the last participant leaving must not split a queue still holding work.
    */
-  private readonly queues = new Map<string, {pending: number; tail: Promise<unknown>}>();
+  private readonly queues = new Map<string, {isDirty: boolean; pending: number; tail: Promise<unknown>}>();
+
+  private readonly broadcastAt = new Map<string, number>();
+
+  private readonly scheduled = new Map<string, ReturnType<typeof setTimeout>>();
 
   /** Set once the managers exist: the hub is built before them. Fails closed until then. */
-  private authorize: Authorizer = async () => false;
+  private authorize: Authorizer = async () => undefined;
 
   public constructor(
     private readonly db: Db,
@@ -71,25 +86,63 @@ export class SessionHub implements PresenceReader {
     return session;
   }
 
-  /** Serialises a command against this board, then fans the new board out from the queue. */
+  /**
+   * Serialises a command against this board, then fans the new board out from the queue.
+   * A board goes out at most every COALESCE_MS: the first one of a burst at once, the last one
+   * always, through the queue, and a new phase at once. Thirty people sharing their notes at
+   * once cost a few boards each, not thirty. A failed command still sends what the ones before
+   * it changed.
+   */
   public run<T>(retroId: string, work: () => Promise<T>): Promise<T> {
-    const entry = this.queues.get(retroId) ?? {pending: 0, tail: Promise.resolve()};
+    return this.enqueue(retroId, work, false);
+  }
+
+  private async hasPhaseMoved(retroId: string): Promise<boolean> {
+    const session = this.sessions.get(retroId);
+
+    if (!session) {
+      return false;
+    }
+
+    try {
+      return (await this.loadRetro(retroId))?.phase !== session.knownPhase;
+    } catch {
+      return true;
+    }
+  }
+
+  private enqueue<T>(retroId: string, work: () => Promise<T>, isUrgent: boolean): Promise<T> {
+    const entry = this.queues.get(retroId) ?? {isDirty: false, pending: 0, tail: Promise.resolve()};
 
     entry.pending += 1;
     this.queues.set(retroId, entry);
 
     const next = entry.tail.then(async () => {
-      const result = await work();
+      try {
+        const result = await work();
 
-      await this.notifyBoardChanged(retroId);
+        entry.isDirty = true;
 
-      return result;
+        return result;
+      } finally {
+        const wait = (this.broadcastAt.get(retroId) ?? 0) + COALESCE_MS - Date.now();
+        const isDue =
+          entry.isDirty && (wait <= 0 || isUrgent || (await this.hasPhaseMoved(retroId)));
+
+        if (isDue) {
+          entry.isDirty = false;
+          this.markBroadcast(retroId);
+          await this.notifyBoardChanged(retroId);
+        } else if (entry.isDirty && entry.pending === 1) {
+          this.scheduleBroadcast(retroId, wait);
+        }
+      }
     });
 
     const settle = (): void => {
       entry.pending -= 1;
 
-      if (entry.pending === 0 && this.queues.get(retroId) === entry) {
+      if (entry.pending === 0 && !entry.isDirty && this.queues.get(retroId) === entry) {
         this.queues.delete(retroId);
       }
     };
@@ -97,6 +150,31 @@ export class SessionHub implements PresenceReader {
     entry.tail = next.then(settle, settle);
 
     return next;
+  }
+
+  private markBroadcast(retroId: string): void {
+    const at = Date.now();
+
+    this.broadcastAt.set(retroId, at);
+    setTimeout(() => {
+      if (this.broadcastAt.get(retroId) === at) {
+        this.broadcastAt.delete(retroId);
+      }
+    }, COALESCE_MS).unref?.();
+  }
+
+  private scheduleBroadcast(retroId: string, wait: number): void {
+    if (this.scheduled.has(retroId)) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      this.scheduled.delete(retroId);
+      this.run(retroId, async () => undefined).catch(() => undefined);
+    }, wait);
+
+    timer.unref?.();
+    this.scheduled.set(retroId, timer);
   }
 
   public release(retroId: string, connection: Connection): void {
@@ -109,6 +187,7 @@ export class SessionHub implements PresenceReader {
     session.remove(connection);
 
     if (session.size === 0) {
+      session.dispose();
       this.sessions.delete(retroId);
       return;
     }
@@ -131,6 +210,30 @@ export class SessionHub implements PresenceReader {
     }
   }
 
+  /** A die belongs to somebody in the room: rolling needs the live session. */
+  public rollDie(retroId: string, userId: string): DieRoll[] {
+    const session = this.sessions.get(retroId);
+    const outcome = session?.rollDie(userId) ?? 'absent';
+
+    if (outcome === 'absent') {
+      throw new ConflictHttpError('Join the retro to roll your die');
+    }
+
+    if (outcome === 'already-rolled') {
+      throw new ConflictHttpError('You already rolled your die');
+    }
+
+    if (outcome === 'closed') {
+      throw new ForbiddenHttpError('Dice are only rolled during the discussion');
+    }
+
+    return session!.rolls();
+  }
+
+  public resetDice(retroId: string): void {
+    this.sessions.get(retroId)?.resetDice();
+  }
+
   /** Backs the facilitation takeover rule without any storage (BEHAVIOUR.md section 5). */
   public isWatching(retroId: string, userId: string): boolean {
     return this.sessions.get(retroId)?.isWatching(userId) ?? false;
@@ -138,6 +241,21 @@ export class SessionHub implements PresenceReader {
 
   public get liveRetroCount(): number {
     return this.sessions.size;
+  }
+
+  /** The retros somebody is looking at right now; the hub does not know their team. */
+  public liveRetroIds(): string[] {
+    return [...this.sessions.keys()];
+  }
+
+  /**
+   * Re-broadcasts boards a write elsewhere has changed. Each goes through its own retro's
+   * queue: a bare notifyBoardChanged could overtake a command in flight and send an older read last.
+   */
+  public async refreshRetros(retroIds: Iterable<string>): Promise<void> {
+    await Promise.all(
+      [...retroIds].map((retroId) => this.enqueue(retroId, async () => undefined, true)),
+    );
   }
 
   private async loadRetro(retroId: string): Promise<RetroRow | undefined> {

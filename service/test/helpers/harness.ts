@@ -6,6 +6,7 @@ import {createContainer} from '~/container';
 import type {Container} from '~/container';
 import {migrate} from '~/Db/migrate';
 import type {OrgRole} from '~/Db/schema';
+import type {BoardModel} from '~/Model/RetroModel';
 import type {AuthResponseModel} from '~/Model/UserModel';
 import type {AuthContext} from '~/Security/AuthContext';
 import {ScopedDb} from '~/Security/ScopedDb';
@@ -100,6 +101,21 @@ export class Harness {
     } finally {
       send.mockRestore();
     }
+  }
+
+  /**
+   * A retro already past its waiting room. Created retros open in LOBBY, where nothing can be
+   * written: scenarios about notes, votes or cursors start from the brainstorm instead.
+   */
+  public async createStartedRetro(
+    auth: AuthContext,
+    teamId: string,
+    title: string,
+    options?: Parameters<Container['retroManager']['create']>[3],
+  ): Promise<BoardModel> {
+    const board = await this.container.retroManager.create(auth, teamId, title, options);
+
+    return this.container.retroManager.updateRetro(auth, board.id, {phase: 'BRAINSTORM'});
   }
 
   /** A team plus its members, the starting point of almost every scenario. */

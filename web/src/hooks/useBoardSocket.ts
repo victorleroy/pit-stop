@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {tokenStorage} from '@/api/client';
-import type {Board, Cursor, Participant, ServerEvent} from '@/api/types';
+import type {Board, Cursor, DieRoll, GameEvent, Participant, ServerEvent} from '@/api/types';
 
 // Must match the service: it answers this subprotocol and reads the token offered next to it.
 const SOCKET_PROTOCOL = 'pit-stop';
@@ -28,6 +28,7 @@ const socketUrl = () => {
 
 interface Options {
   onBoard: (board: Board) => void;
+  onGameEvent?: (event: GameEvent) => void;
   retroId?: string;
 }
 
@@ -37,23 +38,28 @@ type TimestampedCursor = Cursor & {at: number};
  * Subscribes to the retro over websocket. The board is pushed by the service on every
  * change, so the page only falls back to polling while the socket is down.
  */
-export const useBoardSocket = ({onBoard, retroId}: Options) => {
+export const useBoardSocket = ({onBoard, onGameEvent, retroId}: Options) => {
   const [isConnected, setIsConnected] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [cursors, setCursors] = useState<TimestampedCursor[]>([]);
+  const [rolls, setRolls] = useState<DieRoll[]>([]);
+  const [isDiceSnapshot, setIsDiceSnapshot] = useState(false);
   const onBoardRef = useRef(onBoard);
   onBoardRef.current = onBoard;
+  const onGameEventRef = useRef(onGameEvent);
+  onGameEventRef.current = onGameEvent;
 
   const socketRef = useRef<WebSocket | undefined>(undefined);
   const pendingCursorRef = useRef<{x: number; y: number} | undefined>(undefined);
   const lastCursorSentAtRef = useRef(0);
   const cursorTimerRef = useRef<number | undefined>(undefined);
 
-  const send = (payload: object) => {
+  const send = useCallback((payload: object) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify(payload));
     }
-  };
+  }, []);
 
   const flushCursor = useCallback(() => {
     const position = pendingCursorRef.current;
@@ -64,7 +70,7 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
 
     lastCursorSentAtRef.current = Date.now();
     send({action: 'cursor', ...position});
-  }, []);
+  }, [send]);
 
   const sendCursor = useCallback(
     (x: number, y: number) => {
@@ -83,7 +89,7 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
     window.clearTimeout(cursorTimerRef.current);
     cursorTimerRef.current = undefined;
     send({action: 'cursor'});
-  }, []);
+  }, [send]);
 
   useEffect(() => {
     const token = tokenStorage.get();
@@ -110,9 +116,14 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
       socket.addEventListener('message', (event) => {
         const payload = JSON.parse(event.data as string) as ServerEvent;
 
-        if (payload.type === 'board.updated') onBoardRef.current(payload.board);
+        if (payload.type === 'board.updated') {
+          onBoardRef.current(payload.board);
+          setIsSubscribed(true);
+        }
 
         if (payload.type === 'error') refused = true;
+
+        if (payload.type.startsWith('game.')) onGameEventRef.current?.(payload as GameEvent);
 
         if (payload.type === 'presence.updated') {
           setParticipants(payload.participants);
@@ -120,6 +131,11 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
           // Somebody who left the retro cannot leave a pointer behind.
           const present = new Set(payload.participants.map(({userId}) => userId));
           setCursors((current) => current.filter(({userId}) => present.has(userId)));
+        }
+
+        if (payload.type === 'dice.updated') {
+          setRolls(payload.rolls);
+          setIsDiceSnapshot(Boolean(payload.snapshot));
         }
 
         if (payload.type === 'cursor.moved') {
@@ -141,8 +157,10 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
         if (cancelled) return;
 
         setIsConnected(false);
+        setIsSubscribed(false);
         setParticipants([]);
         setCursors([]);
+        setRolls([]);
 
         if (refused) return;
 
@@ -166,6 +184,7 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
 
     return () => {
       cancelled = true;
+      setIsSubscribed(false);
       window.clearInterval(sweep);
       window.clearTimeout(reconnectTimer);
       window.clearTimeout(cursorTimerRef.current);
@@ -175,5 +194,5 @@ export const useBoardSocket = ({onBoard, retroId}: Options) => {
     };
   }, [retroId]);
 
-  return {cursors, hideCursor, isConnected, participants, sendCursor};
+  return {cursors, hideCursor, isConnected, isDiceSnapshot, isSubscribed, participants, rolls, send, sendCursor};
 };

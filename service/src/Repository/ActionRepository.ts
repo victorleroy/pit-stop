@@ -18,6 +18,7 @@ export class ActionRepository {
         'actions.id',
         'actions.assigneeId',
         'users.name as assigneeName',
+        'actions.closedAt',
         'actions.createdAt',
         'actions.retroId',
         'retros.title as retroTitle',
@@ -52,14 +53,55 @@ export class ActionRepository {
       .execute();
   }
 
+  /** `executor` lets a manager run the write inside its own transaction. */
   public async update(
     actionId: string,
-    changes: {assigneeId?: string | null; status?: ActionStatus; text?: string},
+    changes: {
+      assigneeId?: string | null;
+      closedAt?: string | null;
+      status?: ActionStatus;
+      text?: string;
+    },
+    executor: Db = this.db,
   ): Promise<void> {
     if (!Object.keys(changes).length) {
       return;
     }
 
-    await this.db.updateTable('actions').set(changes).where('id', '=', actionId).execute();
+    await executor.updateTable('actions').set(changes).where('id', '=', actionId).execute();
+  }
+
+  public async countOpen(scoped: ScopedDb, teamId: string): Promise<number> {
+    const row = await scoped
+      .actions()
+      .select((eb) => eb.fn.countAll<number>().as('total'))
+      .where('actions.teamId', '=', teamId)
+      .where('actions.status', '=', 'OPEN')
+      .executeTakeFirst();
+
+    return Number(row?.total ?? 0);
+  }
+
+  /** Closures since `since` (all recorded ones without it); closures before closed_at existed are not counted. */
+  public async countClosedSince(
+    scoped: ScopedDb,
+    teamId: string,
+    status: 'DONE' | 'DROPPED',
+    since?: string,
+  ): Promise<number> {
+    let query = scoped
+      .actions()
+      .select((eb) => eb.fn.countAll<number>().as('total'))
+      .where('actions.teamId', '=', teamId)
+      .where('actions.status', '=', status)
+      .where('actions.closedAt', 'is not', null);
+
+    if (since) {
+      query = query.where('actions.closedAt', '>=', since);
+    }
+
+    const row = await query.executeTakeFirst();
+
+    return Number(row?.total ?? 0);
   }
 }

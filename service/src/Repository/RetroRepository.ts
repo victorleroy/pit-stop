@@ -16,26 +16,51 @@ const RETRO_COLUMNS = [
   'timerRemainingMs',
   'timerTotalMs',
   'createdAt',
+  'templateId',
+  'templateName',
+  'defaultTimerSeconds',
+  'icebreakerQuestionId',
+  'icebreakerAskedAt',
+  'actionReview',
+  'reviewFocusActionId',
 ] as const;
 
 export interface CreateRetroInput {
+  /** 0 or 1; left out, the column default (1) applies. */
+  actionReview?: number;
   createdBy: string;
+  defaultTimerSeconds?: number | null;
+  /** Drawn, not asked yet: the question is asked on entering ICEBREAKER. */
+  icebreakerQuestionId?: string | null;
   id: string;
   /** Left out, the column default (5) applies. */
   maxVotes?: number;
   orgId: string;
   teamId: string;
+  templateId?: string | null;
+  templateName?: string | null;
   title: string;
 }
 
 export interface UpdateRetroInput {
+  actionReview?: number;
   facilitatorId?: string;
+  icebreakerAskedAt?: string | null;
+  icebreakerQuestionId?: string | null;
   maxVotes?: number;
   phase?: RetroPhase;
+  reviewFocusActionId?: string | null;
   timerEndsAt?: string | null;
   timerRemainingMs?: number | null;
   timerTotalMs?: number | null;
   title?: string;
+}
+
+export interface IcebreakerUsage {
+  askedAt: string | null;
+  phase: RetroPhase;
+  questionId: string;
+  retroId: string;
 }
 
 export class RetroRepository {
@@ -68,18 +93,65 @@ export class RetroRepository {
       .execute();
   }
 
-  public async create(input: CreateRetroInput): Promise<void> {
-    await this.db
+  /** Narrows a list of retro ids, typically the live ones, to those of one team. */
+  public async findIdsByTeamId(scoped: ScopedDb, teamId: string, retroIds: string[]): Promise<string[]> {
+    if (!retroIds.length) {
+      return [];
+    }
+
+    const rows = await scoped
+      .retros()
+      .select('retros.id')
+      .where('retros.id', 'in', retroIds)
+      .where('retros.teamId', '=', teamId)
+      .execute();
+
+    return rows.map(({id}) => id);
+  }
+
+  /**
+   * The bank questions of the team's retros: the history of what was asked, and what the other
+   * waiting rooms hold back. Derived from the retros themselves, never stored apart.
+   */
+  public async findIcebreakerUsage(scoped: ScopedDb, teamId: string): Promise<IcebreakerUsage[]> {
+    const rows = await scoped
+      .retros()
+      .select([
+        'retros.id',
+        'retros.phase',
+        'retros.icebreakerQuestionId as questionId',
+        'retros.icebreakerAskedAt as askedAt',
+      ])
+      .where('retros.teamId', '=', teamId)
+      .where('retros.icebreakerQuestionId', 'is not', null)
+      .execute();
+
+    return rows.map(({askedAt, id, phase, questionId}) => ({
+      askedAt,
+      phase,
+      questionId: questionId as string,
+      retroId: id,
+    }));
+  }
+
+  /** Takes the caller's transaction: a retro and its columns are written together. */
+  public async create(input: CreateRetroInput, executor: Db = this.db): Promise<void> {
+    await executor
       .insertInto('retros')
       .values({
+        ...(input.actionReview === undefined ? {} : {actionReview: input.actionReview}),
         createdAt: new Date().toISOString(),
         createdBy: input.createdBy,
+        defaultTimerSeconds: input.defaultTimerSeconds ?? null,
         facilitatorId: input.createdBy,
+        icebreakerQuestionId: input.icebreakerQuestionId ?? null,
         id: input.id,
         ...(input.maxVotes === undefined ? {} : {maxVotes: input.maxVotes}),
         orgId: input.orgId,
-        phase: 'BRAINSTORM',
+        phase: 'LOBBY',
         teamId: input.teamId,
+        templateId: input.templateId ?? null,
+        templateName: input.templateName ?? null,
         title: input.title,
       })
       .execute();

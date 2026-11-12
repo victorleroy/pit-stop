@@ -16,6 +16,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import MuiDialog from '@mui/material/Dialog';
 import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
+import Popover from '@mui/material/Popover';
 import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
@@ -38,6 +39,7 @@ export {
   Container,
   IconButton,
   Paper,
+  Popover,
   Select,
   Stack,
   TextField,
@@ -50,22 +52,26 @@ export const Loader = ({size = 32}: {size?: number}) => <CircularProgress size={
 
 const AVATAR_SIZES = {large: 48, medium: 40, small: 28} as const;
 
+export type AvatarSize = keyof typeof AVATAR_SIZES;
+
 /** Sized by name rather than by box, because that is how the layouts talk about people. */
 export const Avatar = ({
+  alt,
   children,
   size = 'medium',
   src,
   sx,
 }: {
+  alt?: string;
   children?: ReactNode;
-  size?: keyof typeof AVATAR_SIZES;
+  size?: AvatarSize;
   src?: string;
   sx?: SxProps<Theme>;
 }) => {
   const box = AVATAR_SIZES[size];
 
   return (
-    <MuiAvatar src={src} sx={{fontSize: Math.round(box * 0.4), height: box, width: box, ...sx}}>
+    <MuiAvatar alt={alt} src={src} sx={{fontSize: Math.round(box * 0.4), height: box, width: box, ...sx}}>
       {children}
     </MuiAvatar>
   );
@@ -76,16 +82,18 @@ const DIALOG_WIDTHS = {large: 'md', medium: 'sm', small: 'xs'} as const;
 /** Same idea for dialogs: a named size rather than a breakpoint. */
 export const Dialog = ({
   children,
+  fullScreen,
   onClose,
   open,
   size = 'medium',
 }: {
   children: ReactNode;
+  fullScreen?: boolean;
   onClose: () => void;
   open: boolean;
   size?: keyof typeof DIALOG_WIDTHS;
 }) => (
-  <MuiDialog fullWidth maxWidth={DIALOG_WIDTHS[size]} onClose={onClose} open={open}>
+  <MuiDialog fullScreen={fullScreen} fullWidth maxWidth={DIALOG_WIDTHS[size]} onClose={onClose} open={open}>
     {children}
   </MuiDialog>
 );

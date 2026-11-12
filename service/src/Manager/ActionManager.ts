@@ -95,9 +95,16 @@ export class ActionManager {
       await this.checkAssignee(teamId, changes.assigneeId);
     }
 
+    // A status that changes records when the action was closed, or clears it on a reopen; the
+    // same status sent again leaves the closing date alone (BEHAVIOUR.md section 6).
+    const isStatusChange = changes.status !== undefined && changes.status !== action.status;
+
     await this.actionRepository.update(actionId, {
       ...(changes.assigneeId === undefined ? {} : {assigneeId: changes.assigneeId}),
       ...(changes.status ? {status: changes.status} : {}),
+      ...(isStatusChange
+        ? {closedAt: changes.status === 'OPEN' ? null : new Date().toISOString()}
+        : {}),
       ...(changes.text ? {text: changes.text} : {}),
     });
 

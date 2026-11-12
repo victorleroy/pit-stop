@@ -1,15 +1,18 @@
 import {
   Button,
-  Card,
   Chip,
+  IconButton,
   Select,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@/ui';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import MenuItem from '@mui/material/MenuItem';
 import {useEffect, useRef, useState} from 'react';
 import type {Action, ActionStatus, TeamMember} from '@/api/types';
+import {InlineEditor} from '@/components/InlineEditor';
 
 const STATUS_LABELS: Record<ActionStatus, string> = {
   DONE: 'Done',
@@ -22,50 +25,92 @@ const ActionRow = ({
   canComplete,
   isBusy,
   onStatusChange,
+  onTextChange,
 }: {
   action: Action;
   canComplete: boolean;
   isBusy: boolean;
   onStatusChange: (status: ActionStatus) => void;
-}) => (
-  <Stack direction="row" spacing={2} sx={{alignItems: 'center', flexWrap: 'wrap'}}>
-    <Stack spacing={0.5} sx={{flexGrow: 1, minWidth: 220}}>
-      <Typography
-        sx={{textDecoration: action.status === 'OPEN' ? 'none' : 'line-through'}}
-        variant="textM"
-      >
-        {action.text}
-      </Typography>
-      <Typography color="textSecondary" variant="textXs">
-        {action.retroTitle}
-        {action.assignee ? ` · ${action.assignee.name}` : ' · unassigned'}
-      </Typography>
-    </Stack>
+  onTextChange?: (text: string) => void;
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
 
-    {!canComplete ? null : action.status === 'OPEN' ? (
-      <Stack direction="row" spacing={1}>
-        <Button disabled={isBusy} onClick={() => onStatusChange('DONE')} size="small">
-          Done
-        </Button>
-        <Button
-          disabled={isBusy}
-          onClick={() => onStatusChange('DROPPED')}
-          size="small"
-          variant="text"
-        >
-          Drop
-        </Button>
+  return (
+    <Stack direction="row" spacing={2} sx={{alignItems: 'center', flexWrap: 'wrap'}}>
+      <Stack spacing={0.5} sx={{flexGrow: 1, minWidth: 220}}>
+        {isEditing && onTextChange ? (
+          <InlineEditor
+            label="Action text"
+            maxLength={300}
+            onClose={() => setIsEditing(false)}
+            onSave={onTextChange}
+            value={action.text}
+          />
+        ) : (
+          <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
+            <Typography
+              sx={{
+                minWidth: 0,
+                overflowWrap: 'anywhere',
+                textDecoration: action.status === 'OPEN' ? 'none' : 'line-through',
+              }}
+              variant="textM"
+            >
+              {action.text}
+            </Typography>
+            {onTextChange ? (
+              <Tooltip title="Edit this action">
+                <IconButton
+                  aria-label="Edit this action"
+                  onClick={() => setIsEditing(true)}
+                  size="small"
+                >
+                  <EditOutlinedIcon fontSize="inherit" />
+                </IconButton>
+              </Tooltip>
+            ) : null}
+          </Stack>
+        )}
+        <Typography color="textSecondary" variant="textXs">
+          {action.retroTitle}
+          {action.assignee ? ` · ${action.assignee.name}` : ' · unassigned'}
+        </Typography>
       </Stack>
-    ) : (
-      <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
-        <Chip label={STATUS_LABELS[action.status]} size="small" variant="outlined" />
-        <Button disabled={isBusy} onClick={() => onStatusChange('OPEN')} size="small" variant="text">
-          Reopen
-        </Button>
-      </Stack>
-    )}
-  </Stack>
-);
+
+      {!canComplete ? null : action.status === 'OPEN' ? (
+        <Stack direction="row" spacing={1}>
+          <Tooltip title="Abandon this action, keep it in history">
+            <span>
+              <Button
+                color="error"
+                disabled={isBusy}
+                onClick={() => onStatusChange('DROPPED')}
+                size="small"
+                variant="text"
+              >
+                Drop
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title="Mark as done">
+            <span>
+              <Button disabled={isBusy} onClick={() => onStatusChange('DONE')} size="small">
+                Done
+              </Button>
+            </span>
+          </Tooltip>
+        </Stack>
+      ) : (
+        <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
+          <Chip label={STATUS_LABELS[action.status]} size="small" variant="outlined" />
+          <Button disabled={isBusy} onClick={() => onStatusChange('OPEN')} size="small" variant="text">
+            Reopen
+          </Button>
+        </Stack>
+      )}
+    </Stack>
+  );
+};
 
 export const ActionList = ({
   actions,
@@ -78,6 +123,7 @@ export const ActionList = ({
   onCreate,
   onDraftApplied,
   onStatusChange,
+  onTextChange,
   title,
 }: {
   actions: Action[];
@@ -95,6 +141,7 @@ export const ActionList = ({
   /** The draft is in the field: the page lets go of it, so a remount never applies it again. */
   onDraftApplied?: () => void;
   onStatusChange: (actionId: string, status: ActionStatus) => void;
+  onTextChange?: (actionId: string, text: string) => void;
   title: string;
 }) => {
   const [text, setText] = useState('');
@@ -129,6 +176,7 @@ export const ActionList = ({
             isBusy={isBusy}
             key={action.id}
             onStatusChange={(status) => onStatusChange(action.id, status)}
+            onTextChange={onTextChange && ((value) => onTextChange(action.id, value))}
           />
         ))}
       </Stack>
@@ -145,35 +193,35 @@ export const ActionList = ({
   };
 
   return (
-    <Card sx={{p: 3}}>
-      <Stack spacing={2}>
-        <Typography variant="headingS">{title}</Typography>
+    <Stack spacing={2}>
+      <Typography variant="headingS">{title}</Typography>
 
-        {actions.length === 0 ? (
-          <Typography color="textSecondary" variant="textS">
-            {emptyLabel}
-          </Typography>
-        ) : null}
+      {actions.length === 0 ? (
+        <Typography color="textSecondary" variant="textS">
+          {emptyLabel}
+        </Typography>
+      ) : null}
 
-        {section('Left to do', open)}
-        {section('Done', closed)}
+      {section('Left to do', open)}
+      {section('Done', closed)}
 
-        {canCreate && onCreate ? (
-          <Stack direction="row" spacing={2} sx={{alignItems: 'flex-end', flexWrap: 'wrap'}}>
-            <TextField
-              inputRef={inputRef}
-              label="New action"
-              onChange={(event) => setText(event.target.value)}
-              placeholder="Split the CI into two jobs"
-              size="small"
-              sx={{flexGrow: 1, minWidth: 240}}
-              value={text}
-            />
+      {canCreate && onCreate ? (
+        <Stack spacing={1.5}>
+          <TextField
+            fullWidth
+            inputRef={inputRef}
+            label="New action"
+            onChange={(event) => setText(event.target.value)}
+            placeholder="Split the CI into two jobs"
+            size="small"
+            value={text}
+          />
+          <Stack direction="row" spacing={1.5}>
             <Select
               displayEmpty
               onChange={(event) => setAssigneeId(event.target.value as string)}
               size="small"
-              sx={{minWidth: 160}}
+              sx={{flexGrow: 1, minWidth: 0}}
               value={assigneeId}
             >
               <MenuItem value="">Nobody</MenuItem>
@@ -183,12 +231,17 @@ export const ActionList = ({
                 </MenuItem>
               ))}
             </Select>
-            <Button disabled={!text.trim() || isBusy} onClick={submit} variant="contained">
+            <Button
+              disabled={!text.trim() || isBusy}
+              onClick={submit}
+              sx={{flexShrink: 0, height: 40}}
+              variant="contained"
+            >
               Add
             </Button>
           </Stack>
-        ) : null}
-      </Stack>
-    </Card>
+        </Stack>
+      ) : null}
+    </Stack>
   );
 };

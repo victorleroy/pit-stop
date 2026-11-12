@@ -1,4 +1,6 @@
+import {useState} from 'react';
 import {
+  Button,
   Chip,
   Loader,
   Stack,
@@ -7,8 +9,10 @@ import {
 import {useQuery} from '@tanstack/react-query';
 import {Link, useNavigate} from 'react-router-dom';
 import {fetchMyRetros} from '@/api/retros';
+import {fetchTeams} from '@/api/teams';
 import type {RetroPhase} from '@/api/types';
 import {EmptyState} from '@/components/EmptyState';
+import {NewRetroDialog} from '@/components/NewRetroDialog';
 import {TeamDot} from '@/components/TeamDot';
 import {SURFACE} from '@/theme/texture';
 
@@ -16,6 +20,9 @@ const PHASE_LABELS: Record<RetroPhase, string> = {
   ARCHIVED: 'Archived',
   BRAINSTORM: 'Brainstorm',
   DISCUSS: 'Discuss',
+  ICEBREAKER: 'Icebreaker',
+  LOBBY: 'Waiting room',
+  REVIEW: 'Review',
   SHARE: 'Share',
   VOTE: 'Vote',
 };
@@ -29,6 +36,11 @@ export const MyRetrosPage = () => {
     // A retro somebody else starts has to show up without a reload.
     refetchInterval: 10_000,
   });
+
+  const {data: teams} = useQuery({queryFn: fetchTeams, queryKey: ['teams']});
+  // An org admin sees every team but only starts a retro in one they belong to.
+  const adminTeams = (teams ?? []).filter(({isAdmin, isMember}) => isAdmin && isMember);
+  const [isStarting, setIsStarting] = useState(false);
 
   const live = (retros ?? []).filter(({phase}) => phase !== 'ARCHIVED');
   const archived = (retros ?? []).filter(({phase}) => phase === 'ARCHIVED');
@@ -98,6 +110,21 @@ export const MyRetrosPage = () => {
 
   return (
     <Stack spacing={4}>
+      {adminTeams.length > 0 ? (
+        <Stack sx={{alignItems: 'flex-end'}}>
+          <Button onClick={() => setIsStarting(true)} variant="contained">
+            New retro
+          </Button>
+        </Stack>
+      ) : null}
+
+      {isStarting ? (
+        <NewRetroDialog
+          onClose={() => setIsStarting(false)}
+          teamIds={adminTeams.map(({id}) => id)}
+        />
+      ) : null}
+
       {isLoading ? (
         <Stack sx={{alignItems: 'center', py: 6}}>
           <Loader />

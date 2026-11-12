@@ -1,5 +1,8 @@
+import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import NotesRoundedIcon from '@mui/icons-material/NotesRounded';
 import {
   Box,
   Button,
@@ -10,60 +13,77 @@ import {
   Tooltip,
   Typography,
 } from '@/ui';
-import {useAutoFocus} from '@/hooks/useAutoFocus';
+import {InlineEditor} from '@/components/InlineEditor';
 import {noteColours} from '@/theme/texture';
 import {useState} from 'react';
 import type {Column} from '@/api/types';
 import {CardStack} from '@/components/CardStack';
+import {isGroupOnlyDrag} from '@/utils/noteDrag';
+
+const PROMPT_MAX_LENGTH = 140;
 
 export const BoardColumn = ({
+  authorFilter,
+  canAddNote,
   canDecide,
   canGroup,
   canEditColumn,
   canModerate,
   canRemove,
+  canReveal,
   canVote,
   canWrite,
   column,
   index,
   isBusy,
   isFacilitator,
+  isLast,
   onAddNote,
   onGroupNote,
+  onMoveColumn,
   onMoveNote,
   onRemoveColumn,
   onRemoveNote,
   onRenameCluster,
   onRenameColumn,
+  onRevealNote,
   onTurnIntoAction,
   onUngroupNote,
   onUpdateNote,
+  onUpdatePrompt,
   onVote,
   ranks,
   showTotals,
   votesLeft,
 }: {
+  authorFilter: string[];
+  canAddNote: boolean;
   canDecide: boolean;
   canGroup: boolean;
   canEditColumn: boolean;
   canModerate: boolean;
   canRemove: boolean;
+  canReveal: boolean;
   canVote: boolean;
   canWrite: boolean;
   column: Column;
   index: number;
   isBusy: boolean;
   isFacilitator: boolean;
+  isLast: boolean;
   onAddNote: (text: string) => void;
   onGroupNote: (noteId: string, targetId: string) => void;
+  onMoveColumn?: (delta: -1 | 1) => void;
   onMoveNote: (noteId: string) => void;
   onRemoveColumn: () => void;
   onRemoveNote: (noteId: string) => void;
   onRenameCluster: (clusterId: string, title: string) => void;
   onRenameColumn: (title: string) => void;
+  onRevealNote: (noteId: string, revealed: boolean) => void;
   onTurnIntoAction: (text: string) => void;
   onUngroupNote: (noteId: string) => void;
   onUpdateNote: (noteId: string, text: string) => void;
+  onUpdatePrompt: (prompt: string | null) => void;
   onVote: (targetId: string, delta: 1 | -1) => void;
   ranks: Map<string, number>;
   showTotals: boolean;
@@ -72,8 +92,7 @@ export const BoardColumn = ({
   const [draft, setDraft] = useState('');
   const [isOver, setIsOver] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(column.title);
-  const titleRef = useAutoFocus(isRenaming);
+  const [isEditingPrompt, setIsEditingPrompt] = useState(false);
 
   const submit = () => {
     const text = draft.trim();
@@ -84,27 +103,18 @@ export const BoardColumn = ({
     onAddNote(text);
   };
 
-  const saveTitle = () => {
-    const title = titleDraft.trim();
-    setIsRenaming(false);
-
-    if (title && title !== column.title) {
-      onRenameColumn(title);
-    }
-  };
-
   return (
     <Paper
       // Dropping on the column itself moves the note here; dropping on a card groups them.
       onDragLeave={() => setIsOver(false)}
       onDragOver={(event) => {
-        if (!canWrite) return;
+        if (!canWrite || isGroupOnlyDrag(event.dataTransfer)) return;
         event.preventDefault();
         setIsOver(true);
       }}
       onDrop={(event) => {
         setIsOver(false);
-        if (!canWrite || event.defaultPrevented) return;
+        if (!canWrite || event.defaultPrevented || isGroupOnlyDrag(event.dataTransfer)) return;
         const noteId = event.dataTransfer.getData('text/note-id');
         if (noteId) onMoveNote(noteId);
       }}
@@ -131,13 +141,10 @@ export const BoardColumn = ({
       <Stack spacing={2.5}>
         <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
           {isRenaming ? (
-            <TextField
-              fullWidth
-              inputRef={titleRef}
-              onBlur={saveTitle}
-              onChange={(event) => setTitleDraft(event.target.value)}
-              size="small"
-              value={titleDraft}
+            <InlineEditor
+              onClose={() => setIsRenaming(false)}
+              onSave={onRenameColumn}
+              value={column.title}
             />
           ) : (
             <Stack direction="row" spacing={1} sx={{alignItems: 'center', flexGrow: 1, minWidth: 0}}>
@@ -160,8 +167,36 @@ export const BoardColumn = ({
             </Stack>
           )}
 
-          {canEditColumn && !isRenaming ? (
+          {canEditColumn && !isRenaming && !isEditingPrompt ? (
             <Stack direction="row" spacing={0.5}>
+              {onMoveColumn ? (
+                <>
+                  <Tooltip title="Move the column left">
+                    <span>
+                      <IconButton
+                        aria-label="Move column left"
+                        disabled={isBusy || index === 0}
+                        onClick={() => onMoveColumn(-1)}
+                        size="small"
+                      >
+                        <ChevronLeftRoundedIcon fontSize="inherit" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="Move the column right">
+                    <span>
+                      <IconButton
+                        aria-label="Move column right"
+                        disabled={isBusy || isLast}
+                        onClick={() => onMoveColumn(1)}
+                        size="small"
+                      >
+                        <ChevronRightRoundedIcon fontSize="inherit" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </>
+              ) : null}
               <Tooltip title="Rename the column">
                 {/* A disabled button fires no events: the span keeps the tooltip working. */}
                 <span>
@@ -175,8 +210,20 @@ export const BoardColumn = ({
                   </IconButton>
                 </span>
               </Tooltip>
+              <Tooltip title="Edit the prompt">
+                <span>
+                  <IconButton
+                    aria-label="Edit prompt"
+                    disabled={isBusy}
+                    onClick={() => setIsEditingPrompt(true)}
+                    size="small"
+                  >
+                    <NotesRoundedIcon fontSize="inherit" />
+                  </IconButton>
+                </span>
+              </Tooltip>
               {canRemove ? (
-                <Tooltip title="Delete the column">
+                <Tooltip title="Permanently delete this column">
                   <span>
                     <IconButton
                       aria-label="Delete column"
@@ -193,11 +240,41 @@ export const BoardColumn = ({
           ) : null}
         </Stack>
 
+        {isEditingPrompt ? (
+          <InlineEditor
+            allowEmpty
+            label="Column prompt"
+            maxLength={PROMPT_MAX_LENGTH}
+            onClose={() => setIsEditingPrompt(false)}
+            onSave={(text) => onUpdatePrompt(text || null)}
+            placeholder="What goes in this column?"
+            value={column.prompt ?? ''}
+          />
+        ) : column.prompt ? (
+          <Tooltip title={column.prompt}>
+            <Typography
+              color="textSecondary"
+              sx={{
+                display: '-webkit-box',
+                overflow: 'hidden',
+                overflowWrap: 'anywhere',
+                WebkitBoxOrient: 'vertical',
+                WebkitLineClamp: 2,
+              }}
+              variant="textXs"
+            >
+              {column.prompt}
+            </Typography>
+          </Tooltip>
+        ) : null}
+
         {column.cards.map((card) => (
           <CardStack
+            authorFilter={authorFilter}
             canDecide={canDecide}
             canGroup={canGroup}
             canModerate={canModerate}
+            canReveal={canReveal}
             columnIndex={index}
             canVote={canVote}
             canWrite={canWrite}
@@ -208,6 +285,7 @@ export const BoardColumn = ({
             onDropNote={(noteId) => onGroupNote(noteId, card.id)}
             onRemoveNote={onRemoveNote}
             onRenameCluster={(title) => onRenameCluster(card.id, title)}
+            onRevealNote={onRevealNote}
             onTurnIntoAction={onTurnIntoAction}
             onUngroupNote={onUngroupNote}
             onUpdateNote={onUpdateNote}
@@ -218,7 +296,7 @@ export const BoardColumn = ({
           />
         ))}
 
-        {canWrite ? (
+        {canAddNote ? (
           <Stack spacing={1}>
             <TextField
               fullWidth

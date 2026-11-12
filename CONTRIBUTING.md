@@ -8,6 +8,15 @@ pull requests are read, on a best-effort basis, with no promised delay.
 Pit Stop is licensed under the GNU AGPL v3. By opening a pull request you agree that your
 contribution is licensed under the same terms (*inbound = outbound*). There is no CLA to sign.
 
+One exception: the icebreaker question bank, `service/src/Icebreaker/questions.ts`, is in the
+public domain under CC0-1.0, so a self-hosted copy can change it without tracking anyone. A
+contribution to that file is made under CC0-1.0.
+
+A question of the bank is original (never copied from another list), light and playful,
+answerable in one short sentence, and stays clear of family, health, religion, politics and money. It is written in
+English, at most 140 characters. Retire a question with `active: false`; never delete
+it or reuse its id.
+
 ## Before writing code
 
 - Open an issue first for anything bigger than a bug fix, so we agree on the behaviour before

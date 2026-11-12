@@ -1,6 +1,6 @@
 import {v4 as uuid} from 'uuid';
 import type {RetroPhase} from '~/Db/schema';
-import {ConflictHttpError, NotFoundHttpError} from '~/Error/HttpError';
+import {ConflictHttpError, ForbiddenHttpError, NotFoundHttpError} from '~/Error/HttpError';
 import type {RetroManager} from '~/Manager/RetroManager';
 import type {BoardModel} from '~/Model/RetroModel';
 import type {BoardRepository} from '~/Repository/BoardRepository';
@@ -32,7 +32,7 @@ export class ClusterManager {
     noteId: string,
     targetId: string,
   ): Promise<BoardModel> {
-    const {retro} = await this.accessChecker.checkRetroAccess(auth, retroId);
+    const {isFacilitator, retro} = await this.accessChecker.checkRetroAccess(auth, retroId);
     RetroAccessChecker.checkPhaseAllows(retro.phase, GROUPING_PHASES);
 
     if (noteId === targetId) {
@@ -45,6 +45,8 @@ export class ClusterManager {
     if (!note) {
       throw new NotFoundHttpError(`Note "${noteId}" not found`);
     }
+
+    ClusterManager.checkCanHandle(auth, note, isFacilitator);
 
     const targetCluster = data.clusters.find(({id}) => id === targetId);
     const targetNote = data.notes.find(({id}) => id === targetId);
@@ -71,6 +73,8 @@ export class ClusterManager {
     const clusterId = targetNote.clusterId ?? uuid();
 
     if (!targetNote.clusterId) {
+      ClusterManager.checkCanHandle(auth, targetNote, isFacilitator);
+
       await this.clusterRepository.create({columnId: note.columnId, id: clusterId, retroId});
       await this.noteRepository.update(retroId, targetNote.id, {clusterId});
     }
@@ -83,7 +87,7 @@ export class ClusterManager {
   }
 
   public async ungroup(auth: AuthContext, retroId: string, noteId: string): Promise<BoardModel> {
-    const {retro} = await this.accessChecker.checkRetroAccess(auth, retroId);
+    const {isFacilitator, retro} = await this.accessChecker.checkRetroAccess(auth, retroId);
     RetroAccessChecker.checkPhaseAllows(retro.phase, GROUPING_PHASES);
 
     const data = await this.boardRepository.loadBoard(retro);
@@ -92,6 +96,8 @@ export class ClusterManager {
     if (!note?.clusterId) {
       throw new ConflictHttpError(`Note "${noteId}" does not belong to a cluster`);
     }
+
+    ClusterManager.checkCanHandle(auth, note, isFacilitator);
 
     const {clusterId} = note;
 
@@ -131,5 +137,19 @@ export class ClusterManager {
     await this.clusterRepository.rename(retroId, clusterId, title);
 
     return this.retroManager.getBoard(auth, retroId);
+  }
+
+  /**
+   * Anyone may regroup a note the room can read; a note still face down stays with its
+   * author and the facilitator.
+   */
+  private static checkCanHandle(
+    auth: AuthContext,
+    note: {authorId: string; revealed: number | boolean},
+    isFacilitator: boolean,
+  ): void {
+    if (!note.revealed && note.authorId !== auth.userId && !isFacilitator) {
+      throw new ForbiddenHttpError('This note has not been shared yet');
+    }
   }
 }

@@ -2,7 +2,6 @@ import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   Chip,
@@ -12,6 +11,7 @@ import {
   Stack,
   Tag,
   TextField,
+  Tooltip,
   Typography,
 } from '@/ui';
 import InputAdornment from '@mui/material/InputAdornment';
@@ -20,19 +20,29 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import {alpha} from '@mui/material/styles';
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import type {ReactNode} from 'react';
 import {useState} from 'react';
 import {Link, Navigate} from 'react-router-dom';
 import {fetchPublicConfig} from '@/api/auth';
-import {fetchInvitations, fetchOrgStats, inviteToOrg, revokeInvitation} from '@/api/org';
+import {
+  fetchInvitations,
+  fetchOrgStats,
+  inviteToOrg,
+  removeMemberAvatar,
+  revokeInvitation,
+} from '@/api/org';
 import {fetchOrgMembers, fetchTeams, setOrgAdmin} from '@/api/teams';
 import type {Invitation, OrgMember, OrgRole, StatsPeriod} from '@/api/types';
 import {useAuth} from '@/contexts/AuthContext';
 import {useToast} from '@/contexts/ToastContext';
+import type {ConfirmRequest} from '@/components/ConfirmDialog';
+import {ConfirmDialog} from '@/components/ConfirmDialog';
 import {TeamDot} from '@/components/TeamDot';
 import {noteColours, SURFACE, teamColour} from '@/theme/texture';
-import {initials} from '@/utils/initials';
+import {UserAvatar} from '@/components/UserAvatar';
+import {SLIPSTREAM} from '@/ui/theme';
 
 const MemberRow = ({
   member,
@@ -55,13 +65,13 @@ const MemberRow = ({
     }}
     useFlexGap
   >
-    <Avatar size="small" src={member.pictureUrl}>
-      {initials(member.name)}
-    </Avatar>
+    <UserAvatar decorative id={member.id} name={member.name} pictureUrl={member.pictureUrl} size="small" />
 
     <Stack spacing={0.25} sx={{minWidth: 180}}>
       <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
-        <Typography variant="textM">{member.name}</Typography>
+        <Tooltip title={member.email}>
+          <Typography variant="textM">{member.name}</Typography>
+        </Tooltip>
         {member.isOrgAdmin ? (
           <Tag color="primary" size="small">
             Org admin
@@ -218,7 +228,7 @@ const Stats = () => {
                 sx={{
                   bgcolor: note.paper,
                   border: '1px solid',
-                  borderColor: 'rgba(10, 37, 64, 0.12)',
+                  borderColor: alpha(SLIPSTREAM.ink, 0.12),
                   height: 10,
                   transform: 'rotate(-6deg)',
                   width: 10,
@@ -253,10 +263,10 @@ const Stats = () => {
 };
 
 const STATUS_COLOURS: Record<Invitation['status'], string> = {
-  accepted: '#0E9F6E',
-  expired: '#8792A2',
-  pending: '#D97706',
-  revoked: '#8792A2',
+  accepted: SLIPSTREAM.success,
+  expired: SLIPSTREAM.inkMuted,
+  pending: SLIPSTREAM.warning,
+  revoked: SLIPSTREAM.inkMuted,
 };
 
 const Invitations = () => {
@@ -396,6 +406,7 @@ export const AdminPage = () => {
     {anchor: HTMLElement; member: OrgMember} | undefined
   >(undefined);
   const [isMemberMenuOpen, setIsMemberMenuOpen] = useState(false);
+  const [confirm, setConfirm] = useState<ConfirmRequest | undefined>(undefined);
 
   const setAdminMutation = useMutation({
     mutationFn: ({isAdmin, userId}: {isAdmin: boolean; userId: string}) =>
@@ -405,6 +416,12 @@ export const AdminPage = () => {
       void queryClient.invalidateQueries({queryKey: ['org']});
       void queryClient.invalidateQueries({queryKey: ['teams']});
     },
+  });
+
+  const removeAvatarMutation = useMutation({
+    mutationFn: removeMemberAvatar,
+    onError: (cause: Error) => toast.error(cause.message),
+    onSuccess: () => queryClient.invalidateQueries({queryKey: ['org']}),
   });
 
   if (user && !user.isOrgAdmin) {
@@ -480,7 +497,7 @@ export const AdminPage = () => {
 
         {/* The list scrolls on its own: the search above stays in reach in a large organisation.
             It reaches into the padding, so a row's hover lines its text up with the heading. */}
-        <Stack spacing={0.25} sx={{maxHeight: 480, mx: -1.25, overflowY: 'auto'}}>
+        <Stack spacing={0.25} sx={{maxHeight: {sm: 480}, mx: -1.25, overflowY: {sm: 'auto'}}}>
           {shownMembers.map((member) => (
             <MemberRow
               key={member.id}
@@ -528,7 +545,25 @@ export const AdminPage = () => {
               />
             </MenuItem>
           ) : null}
+          {memberMenu?.member.pictureUrl?.startsWith('/api/avatars/') ? (
+            <MenuItem
+              onClick={() => {
+                const {member} = memberMenu;
+                setIsMemberMenuOpen(false);
+                setConfirm({
+                  confirmLabel: 'Remove',
+                  message: `${member.name} will get their Google photo back, or their initials.`,
+                  onConfirm: () => removeAvatarMutation.mutate(member.id),
+                  title: 'Remove this photo?',
+                });
+              }}
+            >
+              <ListItemText primary="Remove photo" />
+            </MenuItem>
+          ) : null}
         </Menu>
+
+        <ConfirmDialog onClose={() => setConfirm(undefined)} request={confirm} />
       </Stack>
 
       <Invitations />

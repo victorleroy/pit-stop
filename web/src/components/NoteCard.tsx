@@ -2,24 +2,31 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import NorthEastRoundedIcon from '@mui/icons-material/NorthEastRounded';
-import {Box, IconButton, Stack, TextField, Tooltip, Typography} from '@/ui';
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import {Box, IconButton, Stack, Tooltip, Typography} from '@/ui';
 import {useState} from 'react';
 import type {Note} from '@/api/types';
-import {useAutoFocus} from '@/hooks/useAutoFocus';
+import {InlineEditor} from '@/components/InlineEditor';
+import {UserAvatar} from '@/components/UserAvatar';
 import {SLIPSTREAM} from '@/ui/theme';
-import {PAPER_SHADOW, PAPER_SHADOW_RAISED, noteColours} from '@/theme/texture';
+import {PAPER_SHADOW_RAISED, noteSurfaceSx, withheldLineSx} from '@/theme/texture';
+import {startNoteDrag} from '@/utils/noteDrag';
 
 export const NoteCard = ({
   canDrag,
   canEdit,
   canGroup,
   canRemove,
+  canReveal,
   columnIndex,
   isBusy,
   isClustered,
+  isDimmed = false,
   isFacilitator,
   note,
   onRemove,
+  onReveal,
   onUngroup,
   onUpdate,
 }: {
@@ -27,21 +34,23 @@ export const NoteCard = ({
   canEdit: boolean;
   canGroup: boolean;
   canRemove: boolean;
+  canReveal: boolean;
   columnIndex: number;
   isBusy: boolean;
   isClustered: boolean;
+  isDimmed?: boolean;
   isFacilitator: boolean;
   note: Note;
   onRemove: () => void;
+  onReveal: (revealed: boolean) => void;
   onUngroup: () => void;
   onUpdate: (text: string) => void;
 }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState(note.text);
-  const draftRef = useAutoFocus(isEditing);
 
-  const {ink, paper} = noteColours(columnIndex);
-  const canHandle = canDrag && (note.isMine || isFacilitator);
+  const canMove = note.isMine || isFacilitator;
+  // Anyone can carry a shared note onto another card to group them, without owning it.
+  const canHandle = canDrag && (canMove || (canGroup && note.revealed));
   // The service sends no text until its author shares it: there is nothing to read here yet.
   const isWithheld = !note.revealed && !note.isMine;
   // Yours, written but not yet handed to the room. The one thing you still owe the team.
@@ -49,89 +58,71 @@ export const NoteCard = ({
   // The facilitator moderates the board on top of their own notes.
   const mine = note.isMine || isFacilitator;
 
-  const save = () => {
-    const text = draft.trim();
-    setIsEditing(false);
-
-    if (text && text !== note.text) {
-      onUpdate(text);
-    }
-  };
-
   return (
     <Box
       draggable={canHandle && !isEditing}
-      onDragStart={(event) => event.dataTransfer.setData('text/note-id', note.id)}
+      onDragStart={(event) => startNoteDrag(event.dataTransfer, note.id, note.columnId, !canMove)}
       sx={{
         '&:hover': canHandle
           ? {boxShadow: PAPER_SHADOW_RAISED, transform: 'translateY(-2px)'}
           : undefined,
-        // A withheld note is face down: no paper colour, nothing to read, a closed padlock.
-        // Anonymity is the product's whole promise, so it has to be a state you can see
-        // across the room rather than a line of grey small print.
-        backgroundColor: isWithheld ? SLIPSTREAM.surface : paper,
-        backgroundImage: isWithheld
-          ? 'none'
-          : 'linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 38%)',
-        border: isWithheld ? '1px dashed #CFD7E3' : 0,
-        // Your own unshared note keeps its paper and gains an indigo edge.
-        borderLeft: isPending ? `3px solid ${SLIPSTREAM.indigo}` : undefined,
-        borderRadius: '10px',
-        boxShadow: isWithheld ? 'none' : PAPER_SHADOW,
-        color: isWithheld ? SLIPSTREAM.inkMuted : ink,
+        ...noteSurfaceSx(columnIndex, {isMine: note.isMine, isWithheld}),
         cursor: canHandle && !isEditing ? 'grab' : 'default',
-        p: 2,
-        transition: 'transform 140ms ease, box-shadow 140ms ease',
+        opacity: isDimmed ? 0.3 : 1,
+        p: 1.25,
+        transition: 'transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease',
       }}
     >
-      <Stack spacing={1}>
+      <Stack spacing={0.75}>
         {isEditing ? (
-          <TextField
-            fullWidth
-            inputRef={draftRef}
+          <InlineEditor
             multiline
-            onBlur={save}
-            onChange={(event) => setDraft(event.target.value)}
-            size="small"
+            onClose={() => setIsEditing(false)}
+            onSave={onUpdate}
             sx={{'& .MuiInputBase-root': {bgcolor: 'rgba(255, 255, 255, 0.7)'}}}
-            value={draft}
+            value={note.text}
           />
         ) : isWithheld ? (
           <Stack aria-label="Not shared yet" spacing={0.75} sx={{py: 0.5}}>
-            <Box
-              sx={{
-                background:
-                  'repeating-linear-gradient(45deg, #E9EEF5 0 6px, #F4F7FB 6px 12px)',
-                borderRadius: 999,
-                height: 8,
-                width: '88%',
-              }}
-            />
-            <Box
-              sx={{
-                background:
-                  'repeating-linear-gradient(45deg, #E9EEF5 0 6px, #F4F7FB 6px 12px)',
-                borderRadius: 999,
-                height: 8,
-                width: '60%',
-              }}
-            />
+            <Box sx={withheldLineSx('88%')} />
+            <Box sx={withheldLineSx('60%')} />
           </Stack>
         ) : (
-          <Typography sx={{color: 'inherit', whiteSpace: 'pre-wrap'}} variant="textM">
+          <Typography
+            sx={{
+              color: 'inherit',
+              fontSize: '0.875rem',
+              lineHeight: 1.4,
+              overflowWrap: 'anywhere',
+              whiteSpace: 'pre-wrap',
+            }}
+            variant="textM"
+          >
             {note.text}
           </Typography>
         )}
 
-        <Stack direction="row" spacing={1} sx={{alignItems: 'center', minHeight: 24}}>
+        <Stack direction="row" spacing={1} sx={{alignItems: 'center', minHeight: 20}}>
+          <UserAvatar
+            {...note.author}
+            decorative
+            size="small"
+            sx={{flexShrink: 0, fontSize: 10, fontWeight: 700, height: 20, width: 20}}
+          />
           {/* In a narrow column the name gives way, never the state beside it. */}
           <Typography
             noWrap
-            sx={{color: 'inherit', flexGrow: 1, minWidth: 0, opacity: 0.65}}
+            sx={{
+              color: note.isMine ? SLIPSTREAM.indigo : 'inherit',
+              flexGrow: 1,
+              fontWeight: note.isMine ? 700 : undefined,
+              minWidth: 0,
+              opacity: note.isMine ? 1 : 0.65,
+            }}
             title={note.author.name}
             variant="textXs"
           >
-            {note.isMine ? `${note.author.name} (you)` : `${note.author.name} wrote this`}
+            {note.isMine ? `${note.author.name} (you)` : note.author.name}
           </Typography>
 
           {isWithheld ? (
@@ -157,7 +148,7 @@ export const NoteCard = ({
           ) : null}
 
           <Stack direction="row" spacing={0.5} sx={{flexShrink: 0}}>
-            {isClustered && canGroup ? (
+            {isClustered && canGroup && (mine || note.revealed) ? (
               // The arrow says little on its own: the tooltip names the move.
               <Tooltip title="Take out of the group">
                 <span>
@@ -169,6 +160,26 @@ export const NoteCard = ({
                     sx={{color: 'inherit', opacity: 0.6}}
                   >
                     <NorthEastRoundedIcon fontSize="inherit" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            ) : null}
+
+            {canReveal && note.isMine && !isEditing ? (
+              <Tooltip title={note.revealed ? 'Hide this note' : 'Share this note'}>
+                <span>
+                  <IconButton
+                    aria-label={note.revealed ? 'Hide this note' : 'Share this note'}
+                    disabled={isBusy}
+                    onClick={() => onReveal(!note.revealed)}
+                    size="small"
+                    sx={{color: 'inherit', opacity: 0.6}}
+                  >
+                    {note.revealed ? (
+                      <VisibilityOffOutlinedIcon fontSize="inherit" />
+                    ) : (
+                      <VisibilityOutlinedIcon fontSize="inherit" />
+                    )}
                   </IconButton>
                 </span>
               </Tooltip>
@@ -188,15 +199,19 @@ export const NoteCard = ({
             ) : null}
 
             {canRemove && mine && !isEditing ? (
-              <IconButton
-                aria-label="Delete the note"
-                disabled={isBusy}
-                onClick={onRemove}
-                size="small"
-                sx={{color: 'inherit', opacity: 0.6}}
-              >
-                <CloseRoundedIcon fontSize="inherit" />
-              </IconButton>
+              <Tooltip title="Permanently delete this note">
+                <span>
+                  <IconButton
+                    aria-label="Delete the note"
+                    disabled={isBusy}
+                    onClick={onRemove}
+                    size="small"
+                    sx={{color: 'inherit', opacity: 0.6}}
+                  >
+                    <CloseRoundedIcon fontSize="inherit" />
+                  </IconButton>
+                </span>
+              </Tooltip>
             ) : null}
           </Stack>
         </Stack>

@@ -27,6 +27,34 @@ export const PAPER_SHADOW_RAISED =
 
 export {SOFT_SHADOW, SOFT_SHADOW_RAISED};
 
+/** The paper of a post-it, or its face-down version when its text is withheld. */
+export const noteSurfaceSx = (
+  columnIndex: number,
+  {isMine, isWithheld}: {isMine: boolean; isWithheld: boolean},
+) => {
+  const {ink, paper} = noteColours(columnIndex);
+
+  return {
+    backgroundColor: isWithheld ? SLIPSTREAM.surface : paper,
+    backgroundImage: isWithheld
+      ? 'none'
+      : 'linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 38%)',
+    border: isWithheld ? '1px dashed #CFD7E3' : 0,
+    borderLeft: isMine ? `3px solid ${SLIPSTREAM.indigo}` : undefined,
+    borderRadius: '10px',
+    boxShadow: isWithheld ? 'none' : PAPER_SHADOW,
+    color: isWithheld ? SLIPSTREAM.inkMuted : ink,
+  };
+};
+
+/** Two grey lines standing for text nobody can read yet. */
+export const withheldLineSx = (width: string) => ({
+  background: 'repeating-linear-gradient(45deg, #E9EEF5 0 6px, #F4F7FB 6px 12px)',
+  borderRadius: 999,
+  height: 8,
+  width,
+});
+
 /**
  * The wash. Three very wide radial gradients rather than a grid: the room has light in it
  * instead of graph paper. It stays under 15% alpha because nothing readable may sit on it.
@@ -82,15 +110,3 @@ export const SURFACE = {
   borderColor: 'divider',
   borderRadius: '18px',
 };
-
-/**
- * Cursors have to read against paper and against the wash, so they get their own saturated
- * palette rather than the pastels of the notes.
- */
-const CURSOR_PALETTE = ['#635BFF', '#FF5C9D', '#0E9F6E', '#FF7A45', '#8B5CF6', '#0FA5B8'];
-
-export const cursorColour = (key: string) =>
-  CURSOR_PALETTE[
-    [...key].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 7) %
-      CURSOR_PALETTE.length
-  ];

@@ -2,20 +2,22 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import AddTaskOutlinedIcon from '@mui/icons-material/AddTaskOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
+import {alpha} from '@mui/material/styles';
 import {
   Box,
   Card as CardSurface,
   IconButton,
   Stack,
-  TextField,
   Tooltip,
   Typography,
 } from '@/ui';
 import {useState} from 'react';
 import type {Card} from '@/api/types';
 import {NoteCard} from '@/components/NoteCard';
-import {useAutoFocus} from '@/hooks/useAutoFocus';
+import {isFilteredOut} from '@/utils/authorFilter';
+import {InlineEditor} from '@/components/InlineEditor';
 import {SLIPSTREAM} from '@/ui/theme';
+import {isDraggedFromOtherColumn} from '@/utils/noteDrag';
 
 const COUNT_TONES = {
   muted: {
@@ -71,9 +73,11 @@ const VoteCount = ({
  * vote on, and the drop target when grouping.
  */
 export const CardStack = ({
+  authorFilter,
   canDecide = false,
   canGroup,
   canModerate,
+  canReveal,
   canVote,
   canWrite,
   card,
@@ -83,6 +87,7 @@ export const CardStack = ({
   onDropNote,
   onRemoveNote,
   onRenameCluster,
+  onRevealNote,
   onTurnIntoAction,
   onUngroupNote,
   onUpdateNote,
@@ -91,9 +96,12 @@ export const CardStack = ({
   showTotals,
   votesLeft,
 }: {
+  /** Author ids picked in the board's filter: the other notes fade, none means everybody. */
+  authorFilter: string[];
   canDecide?: boolean;
   canGroup: boolean;
   canModerate: boolean;
+  canReveal: boolean;
   canVote: boolean;
   canWrite: boolean;
   card: Card;
@@ -103,6 +111,7 @@ export const CardStack = ({
   onDropNote: (noteId: string) => void;
   onRemoveNote: (noteId: string) => void;
   onRenameCluster: (title: string) => void;
+  onRevealNote: (noteId: string, revealed: boolean) => void;
   onTurnIntoAction?: (text: string) => void;
   onUngroupNote: (noteId: string) => void;
   onUpdateNote: (noteId: string, text: string) => void;
@@ -113,9 +122,8 @@ export const CardStack = ({
   votesLeft: number;
 }) => {
   const [isOver, setIsOver] = useState(false);
+  const [isRefused, setIsRefused] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(card.title ?? '');
-  const titleRef = useAutoFocus(isRenaming);
 
   const isCluster = card.type === 'cluster';
   // A note still face down has no text to hand over: only a card everyone can read becomes
@@ -126,26 +134,30 @@ export const CardStack = ({
     ? card.title?.trim() || card.notes.map(({text}) => text.trim()).join(' / ')
     : (card.notes[0]?.text.trim() ?? '');
 
-  const saveTitle = () => {
-    const title = titleDraft.trim();
-    setIsRenaming(false);
-
-    if (title && title !== card.title) {
-      onRenameCluster(title);
-    }
-  };
-
   return (
     <CardSurface
       elevation={0}
-      onDragLeave={() => setIsOver(false)}
+      onDragLeave={() => {
+        setIsOver(false);
+        setIsRefused(false);
+      }}
       onDragOver={(event) => {
         if (!canGroup) return;
+        const columnId = card.notes[0]?.columnId;
+        if (columnId && isDraggedFromOtherColumn(event.dataTransfer, columnId)) {
+          // A cluster lives in one column: refuse the drop here rather than let the column
+          // underneath accept it.
+          event.stopPropagation();
+          event.dataTransfer.dropEffect = 'none';
+          setIsRefused(true);
+          return;
+        }
         event.preventDefault();
         setIsOver(true);
       }}
       onDrop={(event) => {
         setIsOver(false);
+        setIsRefused(false);
         if (!canGroup) return;
         const noteId = event.dataTransfer.getData('text/note-id');
         if (noteId && noteId !== card.id) {
@@ -155,17 +167,30 @@ export const CardStack = ({
         }
       }}
       sx={{
-        bgcolor: isCluster ? 'rgba(15, 23, 42, 0.03)' : 'transparent',
-        borderColor: isOver ? 'primary.main' : isCluster ? 'divider' : 'transparent',
-        // Square, like the notes it holds.
-        borderRadius: 0,
-        borderStyle: isCluster ? 'solid' : 'dashed',
-        borderWidth: isOver ? 2 : 1,
+        bgcolor: isCluster ? alpha(SLIPSTREAM.ink, 0.03) : 'transparent',
+        // Painted above the notes so an indigo edge on a note cannot swallow the left side.
+        '&::after': {
+          border: 2,
+          borderColor: isRefused ? 'error.main' : 'primary.main',
+          borderRadius: 'inherit',
+          content: '""',
+          inset: -1,
+          opacity: isOver || isRefused ? 1 : 0,
+          pointerEvents: 'none',
+          position: 'absolute',
+          transition: 'opacity 120ms ease',
+          zIndex: 1,
+        },
+        borderColor: isCluster ? 'divider' : 'transparent',
+        // The Card theme's shadow would paint a second, square layer behind a lone note.
+        borderRadius: isCluster ? '14px' : '10px',
+        borderStyle: 'solid',
+        borderWidth: 1,
         // The vote badge straddles the corner, and Paper clips its overflow by default.
+        boxShadow: 'none',
         overflow: 'visible',
         p: isCluster ? 1.5 : 0,
         position: 'relative',
-        transition: 'border-color 120ms ease',
       }}
     >
       {showTotals ? (
@@ -187,14 +212,11 @@ export const CardStack = ({
         {isCluster ? (
           <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
             {isRenaming ? (
-              <TextField
-                fullWidth
-                inputRef={titleRef}
-                onBlur={saveTitle}
-                onChange={(event) => setTitleDraft(event.target.value)}
+              <InlineEditor
+                onClose={() => setIsRenaming(false)}
+                onSave={onRenameCluster}
                 placeholder="Name the group"
-                size="small"
-                value={titleDraft}
+                value={card.title ?? ''}
               />
             ) : (
               <Typography sx={{flexGrow: 1}} variant="textM">
@@ -220,13 +242,16 @@ export const CardStack = ({
             canEdit={canWrite}
             canGroup={canGroup}
             canRemove={canModerate}
+            canReveal={canReveal}
             columnIndex={columnIndex}
             isBusy={isBusy}
             isClustered={isCluster}
+            isDimmed={isFilteredOut(note.author.id, authorFilter)}
             isFacilitator={isFacilitator}
             key={note.id}
             note={note}
             onRemove={() => onRemoveNote(note.id)}
+            onReveal={(revealed) => onRevealNote(note.id, revealed)}
             onUngroup={() => onUngroupNote(note.id)}
             onUpdate={(text) => onUpdateNote(note.id, text)}
           />

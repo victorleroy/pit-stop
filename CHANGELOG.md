@@ -2,6 +2,61 @@
 
 All notable changes are recorded here. Versions follow [semantic versioning](https://semver.org).
 
+## Unreleased
+
+### Added
+
+- Waiting room: every retro opens in a dialog where people appear as they join, with Wheel
+  Gun, a shared pit-stop game, while the team gathers. The facilitator starts the retro or
+  closes the dialog for themselves.
+- Icebreaker: an optional opening question (60 in the bank, never twice for a team) where
+  everyone writes one post-it, hidden until its author shares it.
+- Action review: an optional step before the brainstorm to walk through the team's open
+  actions and record Done, Drop or Keep. The team page shows the follow-through.
+- Team templates: teams save and edit their own boards, next to 13 built-in classics, picked
+  from a searchable list. A template also decides whether its retros open with an
+  icebreaker and an action review.
+- Profile: edit your display name and avatar from the header. Upload a photo (cropped in the
+  browser), use your Google photo, or initials. Choices survive the next Google sign-in, and
+  open retros show them at once.
+- Organisation administrators can remove an uploaded avatar.
+- Speaking order: in the discussion everyone rolls their own die; avatars line up in
+  speaking order as the dice land.
+- Vote progress per participant, shown in the avatars' tooltips during the vote.
+- Share or hide one note at a time; notes added during the share arrive already shared.
+- Group someone else's shared note; reorder columns; filter cards by person.
+- Timer: pick its duration, add or remove a minute, and a chime when it ends.
+- Edit an action's text after adding it.
+- Zoom the board from 50% to 150%.
+
+### Changed
+
+- The retro opens on one band: the way back, the title, the people and the zoom. Phase
+  descriptions, "x online" and the name in the navigation bar are gone: avatars carry
+  tooltips instead.
+- Actions live in a side panel instead of below the board.
+- Your own notes stand out, show their author's avatar, and are more compact. Inline edits
+  validate with Enter or a check button.
+- Avatar and cursor colours come from the design system; each person keeps one colour.
+- Other people's cursors are hidden while writing and voting.
+- A live board is sent to whoever joins rather than to the whole room, and at most every
+  250 ms during bursts: about five times less traffic with 30+ people.
+
+### Fixed
+
+- Google photos now appear, and follow Google, for accounts created by invitation or
+  registration and for accounts created before this version.
+- An unconfirmed account taken over through Google sign-in takes the Google name.
+- Action changes reach every open retro of the team.
+- Dropping a card on another column shows a red outline instead of an error.
+- Phone layouts: presence with many people, the phase track, the review step, long words in
+  notes and actions, team and administration pages, 44 px touch targets.
+
+### Upgrading
+
+- Migrations 005 to 012 run at start. 009 rebuilds the `retros` table and first writes a
+  backup next to the database (`.bak-009_retro_phases`); there is no downgrade.
+
 ## 0.2.0 — 2026-10-29
 
 ### Added

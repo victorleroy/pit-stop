@@ -1,6 +1,7 @@
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -23,9 +24,25 @@ export class CreateRetroDto {
   @MaxLength(40, {each: true})
   public columns?: string[];
 
+  // builtin:<slug> or a template of the team; never together with `columns`.
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  public templateId?: string;
+
   @IsOptional()
   @IsInt()
   @Min(1)
   @Max(10)
   public maxVotes?: number;
+
+  // Left out, the template decides, else no icebreaker; the web always sends the box it shows.
+  @IsOptional()
+  @IsBoolean()
+  public icebreaker?: boolean;
+
+  // Left out, the template decides, else the retro reviews the team's open actions.
+  @IsOptional()
+  @IsBoolean()
+  public actionReview?: boolean;
 }

@@ -1,10 +1,14 @@
 import {request} from '@/api/client';
 import type {
   Action,
+  ActionStats,
   ActionStatus,
   Board,
+  DieRoll,
   RetroPhase,
   RetroSummary,
+  ReviewItem,
+  ReviewOutcome,
   TeamRetroSummary,
   TimerAction,
 } from '@/api/types';
@@ -20,20 +24,38 @@ export const DEFAULT_MAX_VOTES = 3;
 
 export const VOTE_OPTIONS = Array.from({length: 10}, (_, index) => index + 1);
 
-// An empty `columns` asks for a blank board; leaving it out keeps the default template.
+// A template, or an explicit list of columns (an empty one is a blank board), never both.
+// Leaving both out starts from the team's default template.
 export const createRetro = (
   teamId: string,
   title: string,
-  columns?: string[],
-  maxVotes?: number,
-) =>
-  request<Board>(`/teams/${teamId}/retros`, {body: {columns, maxVotes, title}, method: 'POST'});
+  options: {
+    actionReview?: boolean;
+    columns?: string[];
+    icebreaker?: boolean;
+    maxVotes?: number;
+    templateId?: string;
+  } = {},
+) => request<Board>(`/teams/${teamId}/retros`, {body: {...options, title}, method: 'POST'});
+
+export const answerIcebreaker = (retroId: string, text: string) =>
+  request<Board>(`/retros/${retroId}/icebreaker/answer`, {body: {text}, method: 'PUT'});
+
+export const removeIcebreakerAnswer = (retroId: string) =>
+  request<Board>(`/retros/${retroId}/icebreaker/answer`, {method: 'DELETE'});
+
+export const revealIcebreakerAnswer = (retroId: string) =>
+  request<Board>(`/retros/${retroId}/icebreaker/answer/reveal`, {method: 'POST'});
+
+export const hideIcebreakerAnswer = (retroId: string) =>
+  request<Board>(`/retros/${retroId}/icebreaker/answer/reveal`, {method: 'DELETE'});
 
 export const fetchBoard = (retroId: string) => request<Board>(`/retros/${retroId}`);
 
 export const updateRetro = (
   retroId: string,
   changes: {
+    actionReview?: boolean;
     maxVotes?: number;
     phase?: RetroPhase;
     timer?: {action: TimerAction; seconds?: number};
@@ -41,11 +63,20 @@ export const updateRetro = (
   },
 ) => request<Board>(`/retros/${retroId}`, {body: changes, method: 'PATCH'});
 
-export const addColumn = (retroId: string, title: string) =>
-  request<Board>(`/retros/${retroId}/columns`, {body: {title}, method: 'POST'});
+export const addColumn = (retroId: string, title: string, prompt?: string | null) =>
+  request<Board>(`/retros/${retroId}/columns`, {body: {prompt, title}, method: 'POST'});
+
+export const updateColumn = (
+  retroId: string,
+  columnId: string,
+  changes: {prompt?: string | null; title?: string},
+) => request<Board>(`/retros/${retroId}/columns/${columnId}`, {body: changes, method: 'PATCH'});
 
 export const renameColumn = (retroId: string, columnId: string, title: string) =>
-  request<Board>(`/retros/${retroId}/columns/${columnId}`, {body: {title}, method: 'PATCH'});
+  updateColumn(retroId, columnId, {title});
+
+export const reorderColumns = (retroId: string, columnIds: string[]) =>
+  request<Board>(`/retros/${retroId}/columns/order`, {body: {columnIds}, method: 'PUT'});
 
 export const removeColumn = (retroId: string, columnId: string) =>
   request<Board>(`/retros/${retroId}/columns/${columnId}`, {method: 'DELETE'});
@@ -67,6 +98,11 @@ export const revealMyNotes = (retroId: string) =>
 
 export const hideMyNotes = (retroId: string) =>
   request<Board>(`/retros/${retroId}/notes/reveal`, {method: 'DELETE'});
+
+export const setNoteRevealed = (retroId: string, noteId: string, revealed: boolean) =>
+  request<Board>(`/retros/${retroId}/notes/${noteId}/reveal`, {
+    method: revealed ? 'POST' : 'DELETE',
+  });
 
 export const groupNote = (retroId: string, noteId: string, targetId: string) =>
   request<Board>(`/retros/${retroId}/notes/${noteId}/group`, {
@@ -94,11 +130,39 @@ export const updateAction = (
   changes: {assigneeId?: string | null; status?: ActionStatus; text?: string},
 ) => request<Action>(`/teams/${teamId}/actions/${actionId}`, {body: changes, method: 'PATCH'});
 
+export const recordReviewOutcome = (
+  retroId: string,
+  actionId: string,
+  outcome: ReviewOutcome,
+  comment?: string | null,
+) =>
+  request<ReviewItem>(`/retros/${retroId}/review/actions/${actionId}`, {
+    body: {comment, outcome},
+    method: 'PUT',
+  });
+
+export const clearReviewOutcome = (retroId: string, actionId: string) =>
+  request<void>(`/retros/${retroId}/review/actions/${actionId}`, {method: 'DELETE'});
+
+export const setReviewFocus = (retroId: string, actionId: string | null) =>
+  request<void>(`/retros/${retroId}/review/focus`, {body: {actionId}, method: 'PUT'});
+
+export const fetchActionStats = (teamId: string, retroId?: string) =>
+  request<ActionStats>(
+    `/teams/${teamId}/actions/stats${retroId ? `?retroId=${encodeURIComponent(retroId)}` : ''}`,
+  );
+
 export const removeRetro = (retroId: string) =>
   request<void>(`/retros/${retroId}`, {method: 'DELETE'});
 
 export const takeFacilitation = (retroId: string) =>
   request<void>(`/retros/${retroId}/facilitator`, {method: 'POST'});
+
+export const rollDie = (retroId: string) =>
+  request<{rolls: DieRoll[]}>(`/retros/${retroId}/dice`, {method: 'POST'});
+
+export const resetDice = (retroId: string) =>
+  request<void>(`/retros/${retroId}/dice`, {method: 'DELETE'});
 
 export const handOverFacilitation = (retroId: string, userId: string) =>
   request<void>(`/retros/${retroId}/facilitator`, {body: {userId}, method: 'PUT'});

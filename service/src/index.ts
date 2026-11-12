@@ -19,6 +19,7 @@ import {orgRoutes} from '~/Http/routes/org';
 import {platformRoutes} from '~/Http/routes/platform';
 import {retroRoutes} from '~/Http/routes/retros';
 import {teamRoutes} from '~/Http/routes/teams';
+import {templateRoutes} from '~/Http/routes/templates';
 import {createSocketAttacher, SOCKET_PROTOCOL, tokenFromProtocols} from '~/Realtime/attachSocket';
 import {logger} from '~/logger';
 
@@ -47,6 +48,7 @@ guarded.use('*', requireAuth(container.authManager));
 guarded.route('/', orgRoutes(container));
 guarded.route('/', teamRoutes(container));
 guarded.route('/', retroRoutes(container));
+guarded.route('/', templateRoutes(container));
 guarded.route('/', platformRoutes(container));
 api.route('/', guarded);
 app.route('/api', api);

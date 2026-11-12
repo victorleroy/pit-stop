@@ -24,11 +24,12 @@ import type {OrgStatus, OrgSummary} from '@/api/types';
 import {useAuth} from '@/contexts/AuthContext';
 import {useToast} from '@/contexts/ToastContext';
 import {SURFACE} from '@/theme/texture';
+import {SLIPSTREAM} from '@/ui/theme';
 
 const STATUS_COLOUR: Record<OrgStatus, string> = {
-  active: '#0F9D58',
-  demo: '#C98A21',
-  suspended: '#D64545',
+  active: SLIPSTREAM.success,
+  demo: SLIPSTREAM.warning,
+  suspended: SLIPSTREAM.danger,
 };
 
 const relative = (iso?: string) => (iso ? new Date(iso).toLocaleDateString() : 'never');

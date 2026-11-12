@@ -26,11 +26,12 @@ export class NoteRepository {
     columnId: string;
     id: string;
     retroId: string;
+    revealed: boolean;
     text: string;
   }): Promise<void> {
     await this.db
       .insertInto('notes')
-      .values({...input, createdAt: new Date().toISOString(), revealed: 0})
+      .values({...input, createdAt: new Date().toISOString(), revealed: input.revealed ? 1 : 0})
       .execute();
   }
 
@@ -70,6 +71,15 @@ export class NoteRepository {
       .set({revealed: revealed ? 1 : 0})
       .where('retroId', '=', retroId)
       .where('authorId', '=', authorId)
+      .execute();
+  }
+
+  public async setRevealed(retroId: string, noteId: string, revealed: boolean): Promise<void> {
+    await this.db
+      .updateTable('notes')
+      .set({revealed: revealed ? 1 : 0})
+      .where('retroId', '=', retroId)
+      .where('id', '=', noteId)
       .execute();
   }
 

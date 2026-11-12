@@ -72,7 +72,37 @@ const SCALE = {
   textXs: {fontSize: '0.75rem', fontWeight: 400, lineHeight: 1.45},
 } as const;
 
+export interface TrackPalette {
+  free: string;
+  lane: string;
+  liveries: readonly string[];
+  rim: string;
+  stripe: string;
+  surface: string;
+  text: string;
+  tyre: string;
+}
+
+const TRACK: TrackPalette = {
+  free: SLIPSTREAM.surface,
+  lane: SLIPSTREAM.line,
+  liveries: SLIPSTREAM.wash.slice(0, 4),
+  rim: SLIPSTREAM.inkMuted,
+  stripe: SLIPSTREAM.surface,
+  surface: SLIPSTREAM.ground,
+  text: SLIPSTREAM.inkSecondary,
+  tyre: SLIPSTREAM.ink,
+};
+
 declare module '@mui/material/styles' {
+  interface Palette {
+    track: TrackPalette;
+  }
+
+  interface PaletteOptions {
+    track?: TrackPalette;
+  }
+
   interface TypographyVariants {
     displayS: React.CSSProperties;
     headingL: React.CSSProperties;
@@ -109,13 +139,36 @@ declare module '@mui/material/Typography' {
   }
 }
 
+const TOUCH_TARGET = {
+  '@media (pointer: coarse)': {
+    '&::after': {
+      content: '""',
+      height: '100%',
+      left: '50%',
+      minHeight: 44,
+      minWidth: 44,
+      position: 'absolute',
+      top: '50%',
+      transform: 'translate(-50%, -50%)',
+      width: '100%',
+    },
+  },
+} as const;
+
 export const theme = createTheme({
   components: {
     MuiButton: {
       defaultProps: {disableElevation: true},
       styleOverrides: {
-        // Pills, and a touch target that clears 44px whatever the size prop says.
-        root: {borderRadius: 999, fontWeight: 600, minHeight: 40, paddingInline: 20, textTransform: 'none'},
+        // Pills, and a hit area that clears 44px on a touch screen whatever the size prop says.
+        root: {
+          borderRadius: 999,
+          fontWeight: 600,
+          minHeight: 40,
+          paddingInline: 20,
+          textTransform: 'none',
+          ...TOUCH_TARGET,
+        },
         contained: {
           boxShadow: '0 1px 2px rgba(10, 37, 64, 0.08), 0 8px 18px -8px rgba(99, 91, 255, 0.55)',
           '&:hover': {
@@ -127,6 +180,9 @@ export const theme = createTheme({
           ownerState.color === 'error' ? {} : {borderColor: SLIPSTREAM.line, color: SLIPSTREAM.ink},
         sizeSmall: {minHeight: 34, paddingInline: 14},
       },
+    },
+    MuiIconButton: {
+      styleOverrides: {root: TOUCH_TARGET},
     },
     MuiCard: {
       styleOverrides: {
@@ -178,6 +234,7 @@ export const theme = createTheme({
     secondary: {main: SLIPSTREAM.ink},
     success: {main: SLIPSTREAM.success},
     text: {primary: SLIPSTREAM.ink, secondary: SLIPSTREAM.inkSecondary},
+    track: TRACK,
     warning: {main: SLIPSTREAM.warning},
   },
   shape: {borderRadius: 12},

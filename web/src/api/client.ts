@@ -21,16 +21,16 @@ export class ApiError extends Error {
   }
 }
 
-export const request = async <T>(
+const send = async <T>(
   path: string,
-  options: {body?: unknown; method?: string} = {},
+  options: {body?: BodyInit; contentType?: string; method?: string},
 ): Promise<T> => {
   const token = tokenStorage.get();
 
   const response = await fetch(`${API_URL}${path}`, {
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body: options.body,
     headers: {
-      ...(options.body === undefined ? {} : {'Content-Type': 'application/json'}),
+      ...(options.contentType ? {'Content-Type': options.contentType} : {}),
       ...(token ? {Authorization: `Bearer ${token}`} : {}),
     },
     method: options.method ?? 'GET',
@@ -52,3 +52,17 @@ export const request = async <T>(
 
   return (await response.json()) as T;
 };
+
+export const request = <T>(
+  path: string,
+  options: {body?: unknown; method?: string} = {},
+): Promise<T> =>
+  send<T>(path, {
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    contentType: options.body === undefined ? undefined : 'application/json',
+    method: options.method,
+  });
+
+/** A file goes up as it is, typed by the blob itself rather than wrapped in JSON. */
+export const requestBlob = <T>(path: string, body: Blob, method = 'PUT'): Promise<T> =>
+  send<T>(path, {body, contentType: body.type, method});

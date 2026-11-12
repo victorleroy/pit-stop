@@ -2,14 +2,24 @@ import PauseRoundedIcon from '@mui/icons-material/PauseRounded';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import StopRoundedIcon from '@mui/icons-material/StopRounded';
 import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
-import {Box, Button, IconButton, Stack, Tooltip, Typography} from '@/ui';
+import {Box, Button, IconButton, Popover, Stack, TextField, Tooltip, Typography} from '@/ui';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import type {Timer, TimerAction} from '@/api/types';
 import {SLIPSTREAM} from '@/ui/theme';
+import {playTimerChime, readTimerMuted, unlockTimerSound} from '@/utils/timerSound';
 
 const DEFAULT_DURATION_SECONDS = 300;
 
+const PRESET_MINUTES = [1, 3, 5, 10];
+
+const MIN_SECONDS = 5;
+
+const MAX_SECONDS = 3600;
+
 const EXTEND_SECONDS = 60;
+
+const clampSeconds = (seconds: number) =>
+  Math.min(MAX_SECONDS, Math.max(MIN_SECONDS, Math.round(seconds)));
 
 const format = (ms: number) => {
   const total = Math.max(0, Math.ceil(ms / 1000));
@@ -103,12 +113,15 @@ const useRemainingMs = (timer: Timer, receivedAt: number) => {
  * and nothing at all when it is idle. Never a red countdown — this is not an alarm.
  */
 export const TimerControls = ({
+  defaultSeconds,
   isBusy,
   isFacilitator,
   onTimer,
   receivedAt,
   timer,
 }: {
+  /** The duration the template suggests, offered until the facilitator picks another. */
+  defaultSeconds?: number | null;
   isBusy: boolean;
   isFacilitator: boolean;
   onTimer: (action: TimerAction, seconds?: number) => void;
@@ -117,36 +130,114 @@ export const TimerControls = ({
   timer: Timer;
 }) => {
   const {isSteady, remainingMs} = useRemainingMs(timer, receivedAt);
+  const [duration, setDuration] = useState(defaultSeconds ?? DEFAULT_DURATION_SECONDS);
+  const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null);
+  const [customMinutes, setCustomMinutes] = useState('');
   const isOver = timer.state !== 'IDLE' && remainingMs === 0;
+  const previousMsRef = useRef<number | undefined>(undefined);
+  const isRunning = timer.state === 'RUNNING';
+
+  useEffect(() => {
+    window.addEventListener('pointerdown', unlockTimerSound, {once: true});
+    window.addEventListener('keydown', unlockTimerSound, {once: true});
+
+    return () => {
+      window.removeEventListener('pointerdown', unlockTimerSound);
+      window.removeEventListener('keydown', unlockTimerSound);
+    };
+  }, []);
+
+  // Rings on the way down to zero only: a board opened on an overdue timer stays silent.
+  useEffect(() => {
+    const previous = previousMsRef.current;
+    previousMsRef.current = isRunning ? remainingMs : undefined;
+
+    if (isRunning && previous !== undefined && previous > 0 && remainingMs === 0 && !readTimerMuted()) {
+      playTimerChime();
+    }
+  }, [isRunning, remainingMs]);
+
   const totalMs = timer.totalMs ?? 0;
   const left = totalMs > 0 ? Math.min(1, Math.max(0, remainingMs / totalMs)) : 0;
 
   if (timer.state === 'IDLE') {
-    return isFacilitator ? (
-      <Tooltip describeChild title="Start a 5 minute timer">
-        {/* A disabled button fires no events: the span keeps the tooltip working. */}
-        <span>
-          {/* The spoken name holds the visible digits, so "click 5:00" finds the button. */}
-          <Button
-            aria-label={`Start a ${format(DEFAULT_DURATION_SECONDS * 1000)} timer`}
-            disabled={isBusy}
-            onClick={() => onTimer('start', DEFAULT_DURATION_SECONDS)}
-            size="small"
-            startIcon={<TimerOutlinedIcon />}
-            variant="outlined"
-          >
-            {format(DEFAULT_DURATION_SECONDS * 1000)}
-          </Button>
-        </span>
-      </Tooltip>
-    ) : null;
+    if (!isFacilitator) return null;
+
+    const startWith = (seconds: number) => {
+      setDuration(seconds);
+      setPickerAnchor(null);
+      onTimer('start', seconds);
+    };
+    const minutes = Number(customMinutes);
+    const canStartCustom = customMinutes.trim() !== '' && minutes > 0;
+
+    return (
+      <>
+        <Tooltip describeChild title="Choose the timer duration">
+          {/* A disabled button fires no events: the span keeps the tooltip working. */}
+          <span>
+            {/* The spoken name is the action, so the picker opens whatever the digits say. */}
+            <Button
+              aria-label="Choose the timer duration"
+              disabled={isBusy}
+              onClick={(event) => setPickerAnchor(event.currentTarget)}
+              size="small"
+              startIcon={<TimerOutlinedIcon />}
+              variant="outlined"
+            >
+              {format(duration * 1000)}
+            </Button>
+          </span>
+        </Tooltip>
+
+        <Popover
+          anchorEl={pickerAnchor}
+          anchorOrigin={{horizontal: 'left', vertical: 'bottom'}}
+          onClose={() => setPickerAnchor(null)}
+          open={pickerAnchor !== null}
+          slotProps={{paper: {sx: {p: 1.5}}}}
+        >
+          <Stack spacing={1.5}>
+            <Stack direction="row" spacing={1}>
+              {PRESET_MINUTES.map((preset) => (
+                <Button
+                  key={preset}
+                  onClick={() => startWith(preset * 60)}
+                  size="small"
+                  variant="outlined"
+                >
+                  {`${preset} min`}
+                </Button>
+              ))}
+            </Stack>
+
+            <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
+              <TextField
+                inputProps={{min: 0, step: 'any'}}
+                label="Minutes"
+                onChange={(event) => setCustomMinutes(event.target.value)}
+                size="small"
+                sx={{width: 120}}
+                type="number"
+                value={customMinutes}
+              />
+              <Button
+                disabled={!canStartCustom}
+                onClick={() => startWith(clampSeconds(minutes * 60))}
+                size="small"
+                variant="contained"
+              >
+                Start
+              </Button>
+            </Stack>
+          </Stack>
+        </Popover>
+      </>
+    );
   }
 
   return (
-    <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
-      <TimerOutlinedIcon sx={{color: 'text.secondary', fontSize: 20}} />
-
-      {/* A fixed box: neither the digits nor the label beside them may nudge the buttons. */}
+    <Stack spacing={0.5}>
       <Stack spacing={0.75} sx={{flexShrink: 0, width: 150}}>
         <Stack direction="row" spacing={1} sx={{alignItems: 'baseline'}}>
           <Typography
@@ -170,11 +261,11 @@ export const TimerControls = ({
           </Typography>
         </Stack>
 
-        <Box sx={{bgcolor: '#EEF2F7', borderRadius: 999, height: 5, overflow: 'hidden'}}>
+        <Box sx={{bgcolor: SLIPSTREAM.line, borderRadius: 999, height: 5, overflow: 'hidden'}}>
           <Box
             sx={{
               // The bar drains rather than fills: what you read is the time you have left.
-              backgroundImage: `linear-gradient(90deg, ${SLIPSTREAM.indigo}, #FF5C9D)`,
+              backgroundImage: `linear-gradient(90deg, ${SLIPSTREAM.indigo}, ${SLIPSTREAM.wash[2]})`,
               borderRadius: 999,
               height: '100%',
               opacity: timer.state === 'PAUSED' ? 0.45 : 1,
@@ -190,7 +281,7 @@ export const TimerControls = ({
       {isFacilitator ? (
         // Icons rather than words: the clock already says what this is, and the toolbar
         // needs the room. The span keeps each tooltip alive while its button is disabled.
-        <Stack direction="row" spacing={0.25} sx={{alignItems: 'center'}}>
+        <Stack direction="row" spacing={0.25} sx={{alignItems: 'center', ml: -0.5}}>
           <Tooltip title={timer.state === 'PAUSED' ? 'Resume' : 'Pause'}>
             <span>
               <IconButton
@@ -205,6 +296,20 @@ export const TimerControls = ({
                   <PauseRoundedIcon fontSize="small" />
                 )}
               </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title="Remove a minute">
+            <span>
+              <Button
+                aria-label="Remove a minute from the timer"
+                disabled={isBusy || isOver}
+                onClick={() => onTimer('extend', -EXTEND_SECONDS)}
+                size="small"
+                sx={{minWidth: 0, px: 1}}
+                variant="text"
+              >
+                -1
+              </Button>
             </span>
           </Tooltip>
           <Tooltip title="Add a minute">

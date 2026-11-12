@@ -1,3 +1,5 @@
+import BookmarkAddOutlinedIcon from '@mui/icons-material/BookmarkAddOutlined';
+import ChecklistOutlinedIcon from '@mui/icons-material/ChecklistOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import DialogActions from '@mui/material/DialogActions';
@@ -5,6 +7,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import MenuItem from '@mui/material/MenuItem';
+import {alpha} from '@mui/material/styles';
 import {
   Box,
   Button,
@@ -17,54 +20,68 @@ import {
   Tooltip,
   Typography,
 } from '@/ui';
+import {useQuery} from '@tanstack/react-query';
 import {Fragment, useState} from 'react';
+import type {ReactNode} from 'react';
+import {fetchTeams} from '@/api/teams';
 import {VOTE_OPTIONS} from '@/api/retros';
 import type {Board, RetroPhase, TimerAction} from '@/api/types';
+import {SaveAsTemplateDialog} from '@/components/SaveAsTemplateDialog';
 import {TimerControls} from '@/components/TimerBar';
 import {useAutoFocus} from '@/hooks/useAutoFocus';
+import {COLUMN_EDIT_PHASES, hasReviewStep, nextOpeningPhase} from '@/utils/phases';
+import {boardAuthors} from '@/utils/authorFilter';
 import {WASH_EDGE} from '@/theme/texture';
+import {SLIPSTREAM} from '@/ui/theme';
 
-const PHASE_LABELS: Record<RetroPhase, string> = {
+export const PHASE_LABELS: Record<RetroPhase, string> = {
   ARCHIVED: 'Archived',
   BRAINSTORM: 'Brainstorm',
   DISCUSS: 'Discuss',
+  ICEBREAKER: 'Icebreaker',
+  LOBBY: 'Waiting room',
+  REVIEW: 'Review',
   SHARE: 'Share',
   VOTE: 'Vote',
 };
 
-const PHASE_HINTS: Record<RetroPhase, string> = {
-  ARCHIVED: 'This retro is archived and read-only.',
-  BRAINSTORM: 'Others see that you are writing, not what. Write freely.',
-  DISCUSS: 'Going through the topics in vote order.',
-  SHARE: 'Share your notes to make them readable. You can hide them again.',
-  VOTE: 'Everyone spends their votes on the topics to discuss.',
-};
-
 const WORKING_PHASES: RetroPhase[] = ['BRAINSTORM', 'SHARE', 'VOTE', 'DISCUSS'];
 
+// A quick question answers in a couple of minutes, not the five of a brainstorm.
+const ICEBREAKER_TIMER_SECONDS = 120;
+
 // The budget is settled before anybody spends it: once voting starts it stays put.
-const VOTE_SETTING_PHASES: RetroPhase[] = ['BRAINSTORM', 'SHARE'];
+const VOTE_SETTING_PHASES: RetroPhase[] = ['LOBBY', 'BRAINSTORM', 'SHARE'];
 
 /**
  * One strip to drive the retro: where we are, how long is left, what happens next.
  * Everything the facilitator needs mid-session, on a single line whenever it fits.
  */
 export const BoardToolbar = ({
+  authorFilter,
   board,
+  dice,
   isAddingColumn,
   isBusy,
   isTimerBusy,
   onAddColumn,
   onAddingColumnChange,
+  onAuthorFilterChange,
   onHide,
   onMaxVotesChange,
+  onOpenActions,
+  onOpenWaitingRoom,
   onPhaseChange,
   onReveal,
   onTakeFacilitation,
   onTimer,
+  openActionCount,
   receivedAt,
 }: {
+  authorFilter: string[];
   board: Board;
+  /** In DISCUSS, the speaking-order die, right after the step it belongs to. */
+  dice?: ReactNode;
   /** Owned by the page, so an empty board can open the same dialog from its own button. */
   isAddingColumn: boolean;
   isBusy: boolean;
@@ -72,8 +89,12 @@ export const BoardToolbar = ({
   isTimerBusy: boolean;
   onAddColumn: (title: string) => void;
   onAddingColumnChange: (isAdding: boolean) => void;
+  onAuthorFilterChange: (authorIds: string[]) => void;
   onHide: () => void;
   onMaxVotesChange: (maxVotes: number) => void;
+  onOpenActions: () => void;
+  onOpenWaitingRoom?: () => void;
+  openActionCount: number;
   onPhaseChange: (phase: RetroPhase) => void;
   onReveal: () => void;
   onTakeFacilitation: () => void;
@@ -82,6 +103,12 @@ export const BoardToolbar = ({
   receivedAt: number;
 }) => {
   const [newColumn, setNewColumn] = useState('');
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  // The board exposes no admin flag: the teams the user sees say it. An org admin who is
+  // not a member of the team is admin without being a member, and cannot save its templates.
+  const {data: teams} = useQuery({queryFn: fetchTeams, queryKey: ['teams']});
+  const myTeam = teams?.find(({id}) => id === board.teamId);
+  const canSaveAsTemplate = board.phase === 'DISCUSS' && Boolean(myTeam?.isAdmin && myTeam.isMember);
   const columnInputRef = useAutoFocus(isAddingColumn);
 
   const closeColumnDialog = () => {
@@ -96,8 +123,16 @@ export const BoardToolbar = ({
     closeColumnDialog();
   };
 
-  const currentIndex = WORKING_PHASES.indexOf(board.phase);
-  const nextPhase = WORKING_PHASES[currentIndex + 1];
+  const isIcebreaker = board.phase === 'ICEBREAKER';
+  const isReview = board.phase === 'REVIEW';
+  const steps: RetroPhase[] = [
+    ...(hasReviewStep(board) || isReview ? (['REVIEW'] as const) : []),
+    ...WORKING_PHASES,
+  ];
+  const currentIndex = steps.indexOf(board.phase);
+  const isLobby = board.phase === 'LOBBY';
+  const openingPhase = nextOpeningPhase(board);
+  const nextPhase = isLobby ? undefined : steps[currentIndex + 1];
   const isArchived = board.phase === 'ARCHIVED';
   const canReveal = ['SHARE', 'VOTE', 'DISCUSS'].includes(board.phase);
   const myNotes = board.columns.flatMap((column) =>
@@ -105,8 +140,10 @@ export const BoardToolbar = ({
   );
   const hasHiddenNotes = myNotes.some(({revealed}) => !revealed);
   // The board's structure is settled while people write, and by the facilitator alone.
-  const canAddColumn = board.isFacilitator && board.phase === 'BRAINSTORM';
+  const canAddColumn = board.isFacilitator && COLUMN_EDIT_PHASES.includes(board.phase);
   const hasColumns = board.columns.length > 0;
+  // The opening steps need no column, and neither does the brainstorm they lead to.
+  const canMoveOn = hasColumns || isIcebreaker || isReview;
   const isSettingVotes = VOTE_SETTING_PHASES.includes(board.phase);
   const votesLeftLabel = `${board.myVotesLeft} vote${board.myVotesLeft === 1 ? '' : 's'} left`;
 
@@ -118,8 +155,10 @@ export const BoardToolbar = ({
   const timerBlock =
     !isArchived && (board.isFacilitator || board.timer.state !== 'IDLE') ? (
       <TimerControls
+        defaultSeconds={isIcebreaker ? ICEBREAKER_TIMER_SECONDS : board.defaultTimerSeconds}
         isBusy={isTimerBusy}
         isFacilitator={board.isFacilitator}
+        key={isIcebreaker ? 'icebreaker' : 'retro'}
         onTimer={onTimer}
         receivedAt={receivedAt}
         timer={board.timer}
@@ -165,13 +204,54 @@ export const BoardToolbar = ({
       </>
     ) : null;
 
+  // Only names every card already shows: filtering never tells more than the board does.
+  const authors = boardAuthors(board);
+  const authorNames = new Map(authors.map(({id, name}) => [id, name]));
+  const selectedAuthors = authorFilter.filter((id) => authorNames.has(id));
+
+  const filterBlock =
+    authors.length > 1 ? (
+      <Select
+        inputProps={{'aria-label': 'Filter by person'}}
+        displayEmpty
+        multiple
+        onChange={(event) => {
+          const value = event.target.value as string[];
+          onAuthorFilterChange(value.includes('') ? [] : value);
+        }}
+        renderValue={(ids: string[]) =>
+          ids.length ? ids.map((id) => authorNames.get(id)).join(', ') : 'Everyone'
+        }
+        size="small"
+        sx={{'& .MuiSelect-select': {py: 0.5}, maxWidth: 220, minWidth: 120}}
+        value={selectedAuthors}
+      >
+        <MenuItem value="">Everyone</MenuItem>
+        {authors.map(({id, name}) => (
+          <MenuItem key={id} value={id}>
+            {name}
+          </MenuItem>
+        ))}
+      </Select>
+    ) : null;
+
   const moveOnButton = (
     <Button
-      disabled={isBusy || !hasColumns}
+      disabled={isBusy || !canMoveOn}
       onClick={() => nextPhase && onPhaseChange(nextPhase)}
       variant="contained"
     >
-      Move on to {nextPhase ? PHASE_LABELS[nextPhase] : ''}
+      {isReview ? 'Start brainstorming' : `Move on to ${nextPhase ? PHASE_LABELS[nextPhase] : ''}`}
+    </Button>
+  );
+
+  const startButton = (
+    <Button
+      disabled={isBusy}
+      onClick={() => onPhaseChange(openingPhase)}
+      variant="contained"
+    >
+      Start
     </Button>
   );
 
@@ -216,8 +296,16 @@ export const BoardToolbar = ({
         </Stack>
       ) : null}
 
+      {isLobby && onOpenWaitingRoom ? (
+        <Button onClick={onOpenWaitingRoom} size="small" variant="outlined">
+          Waiting room
+        </Button>
+      ) : null}
+
+      {isLobby ? startButton : null}
+
       {nextPhase ? (
-        hasColumns ? (
+        canMoveOn ? (
           moveOnButton
         ) : (
           // A disabled button swallows the hover, so the tooltip listens on a wrapper.
@@ -247,7 +335,37 @@ export const BoardToolbar = ({
     </>
   );
 
-  const blocks = [timerBlock, myBlock, facilitatorBlock].filter(Boolean);
+  const actionsBlock = (
+    <Button
+      onClick={onOpenActions}
+      size="small"
+      startIcon={<ChecklistOutlinedIcon />}
+      sx={{fontVariantNumeric: 'tabular-nums'}}
+      variant="outlined"
+    >
+      Actions · {openActionCount}
+    </Button>
+  );
+
+  const templateBlock = canSaveAsTemplate ? (
+    <Button
+      onClick={() => setIsSavingTemplate(true)}
+      size="small"
+      startIcon={<BookmarkAddOutlinedIcon />}
+      variant="text"
+    >
+      Save as template
+    </Button>
+  ) : null;
+
+  const blocks = [
+    timerBlock,
+    myBlock,
+    filterBlock,
+    actionsBlock,
+    templateBlock,
+    facilitatorBlock,
+  ].filter(Boolean);
 
   return (
     <Card elevation={0} sx={{overflow: 'hidden'}}>
@@ -272,13 +390,17 @@ export const BoardToolbar = ({
             direction="row"
             sx={{alignItems: 'flex-start', flexGrow: 1, maxWidth: 640, minWidth: {xs: 0, sm: 420}}}
           >
-            {WORKING_PHASES.map((phase, index) => {
+            {steps.map((phase, index) => {
               const isDone = index < currentIndex;
               const isCurrent = phase === board.phase;
               const canJump = board.isFacilitator && !isArchived && !isCurrent;
 
               return (
-                <Stack direction="row" key={phase} sx={{alignItems: 'flex-start', flexGrow: index ? 1 : 0}}>
+                <Stack
+                  direction="row"
+                  key={phase}
+                  sx={{alignItems: 'flex-start', flexGrow: index ? 1 : 0, minWidth: 0}}
+                >
                   {index ? (
                     <Box
                       sx={{
@@ -304,7 +426,8 @@ export const BoardToolbar = ({
                       cursor: canJump ? 'pointer' : 'default',
                       font: 'inherit',
                       p: 0,
-                      width: {xs: 64, sm: 92},
+                      // As wide as its word on a phone, and narrower than 92px whenever the board is.
+                      width: {xs: 'auto', sm: 92},
                     }}
                   >
                     {/*
@@ -324,14 +447,14 @@ export const BoardToolbar = ({
                       <Box
                         sx={{
                           bgcolor: isCurrent
-                            ? '#FF5C9D'
+                            ? SLIPSTREAM.wash[2]
                             : isDone
                               ? 'primary.main'
                               : 'background.paper',
                           border: isCurrent || isDone ? 0 : '2px solid',
                           borderColor: 'divider',
                           borderRadius: 999,
-                          boxShadow: isCurrent ? '0 0 0 5px rgba(255, 92, 157, 0.18)' : 'none',
+                          boxShadow: isCurrent ? `0 0 0 5px ${alpha(SLIPSTREAM.wash[2], 0.18)}` : 'none',
                           boxSizing: 'border-box',
                           height: isCurrent ? 18 : 12,
                           transition: 'height 140ms ease, width 140ms ease, background-color 140ms ease',
@@ -356,6 +479,12 @@ export const BoardToolbar = ({
                 </Stack>
               );
             })}
+
+            {dice ? (
+              <Box sx={{alignSelf: {xs: 'flex-start', sm: 'center'}, flexShrink: 0, ml: {xs: 0.5, sm: 1}}}>
+                {dice}
+              </Box>
+            ) : null}
 
             {isArchived ? (
               <Chip color="primary" label={PHASE_LABELS.ARCHIVED} size="small" sx={{ml: 1}} />
@@ -416,7 +545,7 @@ export const BoardToolbar = ({
                 value={newColumn}
               />
               <Typography color="textSecondary" variant="textXs">
-                Columns can only be added or removed while people write.
+                Columns can only be added or removed before the retro starts or while people write.
               </Typography>
             </Stack>
           </DialogContent>
@@ -434,10 +563,14 @@ export const BoardToolbar = ({
           </DialogActions>
         </Dialog>
 
-        <Typography color="textSecondary" variant="textXs">
-          {PHASE_HINTS[board.phase]}
-          {board.isFacilitator && !isArchived ? ' Click a step to go back to it.' : ''}
-        </Typography>
+        {canSaveAsTemplate ? (
+          <SaveAsTemplateDialog
+            board={board}
+            key={isSavingTemplate ? 'open' : 'closed'}
+            onClose={() => setIsSavingTemplate(false)}
+            open={isSavingTemplate}
+          />
+        ) : null}
       </Stack>
     </Card>
   );

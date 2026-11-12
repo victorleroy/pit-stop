@@ -1,17 +1,21 @@
 import {Hono} from 'hono';
 import type {Container} from '~/container';
-import type {RetroPhase} from '~/Db/schema';
+import type {ActionReviewOutcome, RetroPhase} from '~/Db/schema';
 import {RenameClusterDto, GroupNoteDto} from '~/Dto/Retro/ClusterDto';
-import {CreateColumnDto, RenameColumnDto} from '~/Dto/Retro/ColumnDto';
+import {CreateColumnDto, ReorderColumnsDto, UpdateColumnDto} from '~/Dto/Retro/ColumnDto';
 import {CreateRetroDto} from '~/Dto/Retro/CreateRetroDto';
+import {IcebreakerAnswerDto} from '~/Dto/Retro/IcebreakerDto';
 import {CreateNoteDto, UpdateNoteDto} from '~/Dto/Retro/NoteDto';
 import {UpdateRetroDto} from '~/Dto/Retro/UpdateRetroDto';
+import {ReviewFocusDto, ReviewOutcomeDto} from '~/Dto/Retro/ReviewDto';
 import {CastVoteDto} from '~/Dto/Retro/VoteDto';
 import {CreateActionDto} from '~/Dto/Action/ActionDto';
 import {HandOverDto} from '~/Dto/Admin/AdminDto';
 import type {Variables} from '~/Http/middleware/auth';
 import {validateBody} from '~/Http/middleware/validate';
 import type {TimerAction} from '~/Model/TimerModel';
+import type {AuthContext} from '~/Security/AuthContext';
+import {logger} from '~/logger';
 
 /**
  * Every board mutation goes through the hub: the command is handled in that retro's queue,
@@ -37,8 +41,13 @@ export const retroRoutes = (c: Container) => {
       context.get('auth'),
       context.req.param('teamId'),
       body.title,
-      body.columns,
-      body.maxVotes,
+      {
+        ...(body.actionReview === undefined ? {} : {actionReview: body.actionReview}),
+        ...(body.columns === undefined ? {} : {columns: body.columns}),
+        ...(body.icebreaker === undefined ? {} : {icebreaker: body.icebreaker}),
+        ...(body.maxVotes === undefined ? {} : {maxVotes: body.maxVotes}),
+        ...(body.templateId === undefined ? {} : {templateId: body.templateId}),
+      },
     );
 
     return context.json(board, 201);
@@ -54,6 +63,7 @@ export const retroRoutes = (c: Container) => {
 
     const board = await c.hub.run(retroId, () =>
       c.retroManager.updateRetro(context.get('auth'), retroId, {
+        ...(body.actionReview === undefined ? {} : {actionReview: body.actionReview}),
         ...(body.maxVotes === undefined ? {} : {maxVotes: body.maxVotes}),
         ...(body.phase ? {phase: body.phase as RetroPhase} : {}),
         ...(body.title ? {title: body.title} : {}),
@@ -85,22 +95,30 @@ export const retroRoutes = (c: Container) => {
     const retroId = context.req.param('retroId');
     const body = await validateBody(context, CreateColumnDto);
     const board = await c.hub.run(retroId, () =>
-      c.retroManager.addColumn(context.get('auth'), retroId, body.title),
+      c.retroManager.addColumn(context.get('auth'), retroId, body.title, body.prompt ?? null),
     );
 
     return context.json(board, 201);
   });
 
+  app.put('/retros/:retroId/columns/order', async (context) => {
+    const retroId = context.req.param('retroId');
+    const body = await validateBody(context, ReorderColumnsDto);
+    const board = await c.hub.run(retroId, () =>
+      c.retroManager.reorderColumns(context.get('auth'), retroId, body.columnIds),
+    );
+
+    return context.json(board);
+  });
+
   app.patch('/retros/:retroId/columns/:columnId', async (context) => {
     const retroId = context.req.param('retroId');
-    const body = await validateBody(context, RenameColumnDto);
+    const body = await validateBody(context, UpdateColumnDto);
     const board = await c.hub.run(retroId, () =>
-      c.retroManager.renameColumn(
-        context.get('auth'),
-        retroId,
-        context.req.param('columnId'),
-        body.title,
-      ),
+      c.retroManager.updateColumn(context.get('auth'), retroId, context.req.param('columnId'), {
+        ...(body.title === undefined ? {} : {title: body.title}),
+        ...(body.prompt === undefined ? {} : {prompt: body.prompt}),
+      }),
     );
 
     return context.json(board);
@@ -153,6 +171,24 @@ export const retroRoutes = (c: Container) => {
     const retroId = context.req.param('retroId');
     const board = await c.hub.run(retroId, () =>
       c.noteManager.setMineRevealed(context.get('auth'), retroId, false),
+    );
+
+    return context.json(board);
+  });
+
+  app.post('/retros/:retroId/notes/:noteId/reveal', async (context) => {
+    const retroId = context.req.param('retroId');
+    const board = await c.hub.run(retroId, () =>
+      c.noteManager.setRevealed(context.get('auth'), retroId, context.req.param('noteId'), true),
+    );
+
+    return context.json(board);
+  });
+
+  app.delete('/retros/:retroId/notes/:noteId/reveal', async (context) => {
+    const retroId = context.req.param('retroId');
+    const board = await c.hub.run(retroId, () =>
+      c.noteManager.setRevealed(context.get('auth'), retroId, context.req.param('noteId'), false),
     );
 
     return context.json(board);
@@ -243,6 +279,63 @@ export const retroRoutes = (c: Container) => {
     return context.body(null, 204);
   });
 
+  app.post('/retros/:retroId/dice', async (context) => {
+    const retroId = context.req.param('retroId');
+    const auth = context.get('auth');
+
+    await c.retroManager.checkDice(auth, retroId, false);
+
+    return context.json({rolls: c.hub.rollDie(retroId, auth.userId)});
+  });
+
+  app.delete('/retros/:retroId/dice', async (context) => {
+    const retroId = context.req.param('retroId');
+
+    await c.retroManager.checkDice(context.get('auth'), retroId, true);
+    c.hub.resetDice(retroId);
+
+    return context.body(null, 204);
+  });
+
+  // --------------------------------------------------------------- icebreaker
+
+  app.put('/retros/:retroId/icebreaker/answer', async (context) => {
+    const retroId = context.req.param('retroId');
+    const body = await validateBody(context, IcebreakerAnswerDto);
+    const board = await c.hub.run(retroId, () =>
+      c.icebreakerManager.answer(context.get('auth'), retroId, body.text),
+    );
+
+    return context.json(board);
+  });
+
+  app.delete('/retros/:retroId/icebreaker/answer', async (context) => {
+    const retroId = context.req.param('retroId');
+    const board = await c.hub.run(retroId, () =>
+      c.icebreakerManager.removeAnswer(context.get('auth'), retroId),
+    );
+
+    return context.json(board);
+  });
+
+  app.post('/retros/:retroId/icebreaker/answer/reveal', async (context) => {
+    const retroId = context.req.param('retroId');
+    const board = await c.hub.run(retroId, () =>
+      c.icebreakerManager.setRevealed(context.get('auth'), retroId, true),
+    );
+
+    return context.json(board);
+  });
+
+  app.delete('/retros/:retroId/icebreaker/answer/reveal', async (context) => {
+    const retroId = context.req.param('retroId');
+    const board = await c.hub.run(retroId, () =>
+      c.icebreakerManager.setRevealed(context.get('auth'), retroId, false),
+    );
+
+    return context.json(board);
+  });
+
   // ------------------------------------------------------------------ actions
 
   app.post('/retros/:retroId/actions', async (context) => {
@@ -253,6 +346,64 @@ export const retroRoutes = (c: Container) => {
     );
 
     return context.json(action, 201);
+  });
+
+  // ------------------------------------------------------------------ review
+
+  /**
+   * A review outcome can change the action's status, which the other live boards of the team
+   * carry over. The write has committed: a failed refresh is logged, never returned.
+   */
+  const refreshTeamBoards = async (auth: AuthContext, retroId: string): Promise<void> => {
+    try {
+      await c.hub.refreshRetros(
+        await c.retroManager.findSiblingRetroIds(auth, retroId, c.hub.liveRetroIds()),
+      );
+    } catch (error: unknown) {
+      logger.error({err: error, retroId}, 'Team boards refresh failed');
+    }
+  };
+
+  app.put('/retros/:retroId/review/actions/:actionId', async (context) => {
+    const auth = context.get('auth');
+    const retroId = context.req.param('retroId');
+    const body = await validateBody(context, ReviewOutcomeDto);
+    const item = await c.hub.run(retroId, () =>
+      c.reviewManager.recordOutcome(
+        auth,
+        retroId,
+        context.req.param('actionId'),
+        body.outcome as ActionReviewOutcome,
+        body.comment,
+      ),
+    );
+
+    await refreshTeamBoards(auth, retroId);
+
+    return context.json(item);
+  });
+
+  app.delete('/retros/:retroId/review/actions/:actionId', async (context) => {
+    const auth = context.get('auth');
+    const retroId = context.req.param('retroId');
+
+    await c.hub.run(retroId, () =>
+      c.reviewManager.clearOutcome(auth, retroId, context.req.param('actionId')),
+    );
+    await refreshTeamBoards(auth, retroId);
+
+    return context.body(null, 204);
+  });
+
+  app.put('/retros/:retroId/review/focus', async (context) => {
+    const retroId = context.req.param('retroId');
+    const body = await validateBody(context, ReviewFocusDto);
+
+    await c.hub.run(retroId, () =>
+      c.reviewManager.setFocus(context.get('auth'), retroId, body.actionId),
+    );
+
+    return context.body(null, 204);
   });
 
   return app;

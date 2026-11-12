@@ -86,16 +86,28 @@ export const createSocketAttacher =
       const session = container.hub.acquire(retroId);
 
       session.add(connection);
-      await session.broadcastBoard();
+      await session.broadcastBoard(connection);
       session.broadcastPresence();
+      session.sendDice(connection);
     };
 
     socket.on('message', (raw) => {
-      let payload: {action?: unknown; retroId?: unknown; x?: unknown; y?: unknown};
+      let payload: {
+        action?: unknown;
+        carId?: unknown;
+        retroId?: unknown;
+        wheel?: unknown;
+        x?: unknown;
+        y?: unknown;
+      };
 
       try {
         payload = JSON.parse(String(raw));
       } catch {
+        return;
+      }
+
+      if (!payload || typeof payload !== 'object') {
         return;
       }
 
@@ -104,6 +116,28 @@ export const createSocketAttacher =
           logger.error({err: error}, 'Websocket subscription failed'),
         );
         return;
+      }
+
+      const session = retroId && connection ? container.hub.get(retroId) : undefined;
+
+      if (session && connection) {
+        switch (payload.action) {
+          case 'game.join':
+            session.joinGame(connection).catch((error: unknown) =>
+              logger.error({err: error, retroId}, 'Joining the game failed'),
+            );
+            return;
+          case 'game.leave':
+            session.leaveGame(connection);
+            return;
+          case 'game.hit':
+            if (Number.isSafeInteger(payload.carId) && (payload.carId as number) > 0) {
+              session.hitWheel(connection, payload.carId, payload.wheel);
+            }
+            return;
+          default:
+            break;
+        }
       }
 
       if (payload.action === 'cursor' && retroId && connection) {

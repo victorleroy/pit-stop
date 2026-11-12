@@ -8,25 +8,32 @@ import {ActionManager} from '~/Manager/ActionManager';
 import {AdminManager} from '~/Manager/AdminManager';
 import {AuthManager} from '~/Manager/AuthManager';
 import {ClusterManager} from '~/Manager/ClusterManager';
+import {IcebreakerManager} from '~/Manager/IcebreakerManager';
 import {InvitationManager} from '~/Manager/InvitationManager';
 import {NoteManager} from '~/Manager/NoteManager';
 import {PasswordResetManager} from '~/Manager/PasswordResetManager';
 import {PlatformManager} from '~/Manager/PlatformManager';
+import {ProfileManager} from '~/Manager/ProfileManager';
 import {RetroManager} from '~/Manager/RetroManager';
+import {ReviewManager} from '~/Manager/ReviewManager';
+import {RetroTemplateManager} from '~/Manager/RetroTemplateManager';
 import {SetupManager} from '~/Manager/SetupManager';
 import {TeamManager} from '~/Manager/TeamManager';
 import {VoteManager} from '~/Manager/VoteManager';
 import {SessionHub} from '~/Realtime/SessionHub';
 import {ActionRepository} from '~/Repository/ActionRepository';
+import {ActionReviewRepository} from '~/Repository/ActionReviewRepository';
 import {BoardRepository} from '~/Repository/BoardRepository';
 import {ClusterRepository} from '~/Repository/ClusterRepository';
 import {ColumnRepository} from '~/Repository/ColumnRepository';
+import {IcebreakerAnswerRepository} from '~/Repository/IcebreakerAnswerRepository';
 import {InvitationRepository} from '~/Repository/InvitationRepository';
 import {MembershipRepository} from '~/Repository/MembershipRepository';
 import {NoteRepository} from '~/Repository/NoteRepository';
 import {OrgRepository} from '~/Repository/OrgRepository';
 import {OrgStatsRepository} from '~/Repository/OrgStatsRepository';
 import {RetroRepository} from '~/Repository/RetroRepository';
+import {RetroTemplateRepository} from '~/Repository/RetroTemplateRepository';
 import {SessionRepository} from '~/Repository/SessionRepository';
 import {TeamRepository} from '~/Repository/TeamRepository';
 import {UserRepository} from '~/Repository/UserRepository';
@@ -41,12 +48,16 @@ export interface Container {
   clusterManager: ClusterManager;
   db: Db;
   hub: SessionHub;
+  icebreakerManager: IcebreakerManager;
   invitationManager: InvitationManager;
   mailer: Mailer;
   noteManager: NoteManager;
   passwordResetManager: PasswordResetManager;
   platformManager: PlatformManager;
+  profileManager: ProfileManager;
   retroManager: RetroManager;
+  reviewManager: ReviewManager;
+  retroTemplateManager: RetroTemplateManager;
   setupManager: SetupManager;
   teamManager: TeamManager;
   voteManager: VoteManager;
@@ -56,6 +67,7 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
   const db = createDb(databaseFile);
 
   const actionRepository = new ActionRepository(db);
+  const actionReviewRepository = new ActionReviewRepository(db);
   const boardRepository = new BoardRepository(db);
   const clusterRepository = new ClusterRepository(db);
   const columnRepository = new ColumnRepository(db);
@@ -74,6 +86,20 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
   const hub = new SessionHub(db, boardRepository);
   const mailer = createMailer();
 
+  const retroTemplateManager = new RetroTemplateManager(
+    new RetroTemplateRepository(),
+    columnRepository,
+    accessChecker,
+    roleChecker,
+  );
+
+  const icebreakerManager = new IcebreakerManager(
+    retroRepository,
+    new IcebreakerAnswerRepository(db),
+    boardRepository,
+    accessChecker,
+  );
+
   const retroManager = new RetroManager(
     retroRepository,
     columnRepository,
@@ -82,6 +108,8 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
     accessChecker,
     roleChecker,
     voteRepository,
+    retroTemplateManager,
+    icebreakerManager,
   );
 
   const invitationManager = new InvitationManager(
@@ -93,6 +121,8 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
     sessionRepository,
   );
 
+  const profileManager = new ProfileManager(db, userRepository, orgRepository, roleChecker, hub);
+
   const authManager = new AuthManager(
     db,
     new GoogleClient(config.googleClientId),
@@ -101,20 +131,21 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
     sessionRepository,
     invitationRepository,
     mailer,
+    profileManager,
   );
 
   hub.setAuthorizer(async (token, retroId) => {
     const auth = await authManager.resolveSession(token);
 
     if (!auth) {
-      return false;
+      return undefined;
     }
 
     try {
       await accessChecker.checkRetroAccess(auth, retroId);
-      return true;
+      return {name: auth.name, ...(auth.pictureUrl ? {pictureUrl: auth.pictureUrl} : {})};
     } catch {
-      return false;
+      return undefined;
     }
   });
 
@@ -145,6 +176,7 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
     ),
     db,
     hub,
+    icebreakerManager,
     invitationManager,
     mailer,
     noteManager: new NoteManager(
@@ -156,7 +188,16 @@ export const createContainer = (databaseFile = config.databaseFile): Container =
     ),
     passwordResetManager: new PasswordResetManager(db, userRepository, sessionRepository, mailer),
     platformManager: new PlatformManager(db, orgRepository, sessionRepository, invitationManager),
+    profileManager,
     retroManager,
+    reviewManager: new ReviewManager(
+      actionRepository,
+      actionReviewRepository,
+      boardRepository,
+      retroRepository,
+      accessChecker,
+    ),
+    retroTemplateManager,
     setupManager: new SetupManager(db, orgRepository, userRepository, authManager),
     teamManager: new TeamManager(teamRepository, membershipRepository, roleChecker),
     voteManager: new VoteManager(voteRepository, boardRepository, accessChecker, retroManager),
