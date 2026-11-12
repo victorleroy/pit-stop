@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import {cleanup, render, screen, within} from '@testing-library/react';
-import {afterEach, describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 import type {Board} from '@/api/types';
 import {PresenceBar} from '@/components/PresenceBar';
 
@@ -53,5 +53,25 @@ describe('PresenceBar', () => {
     expect(screen.queryByRole('list', {name: 'Speaking order'})).toBeNull();
     expect(screen.queryByRole('listitem')).toBeNull();
     expect(screen.queryByRole('img', {name: /rolled|rolling/})).toBeNull();
+  });
+
+  it('fits the avatars to the room it has and counts the rest', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(private readonly callback: ResizeObserverCallback) {}
+        observe() {
+          this.callback([{contentRect: {width: 100}} as ResizeObserverEntry], this as unknown as ResizeObserver);
+        }
+        disconnect() {}
+      },
+    );
+    const crowd = Array.from({length: 10}, (_, index) => ({name: `Person ${index}`, userId: `p${index}`}));
+
+    const {container} = render(<PresenceBar board={board} isConnected participants={crowd} />);
+
+    expect(container.querySelectorAll('[data-user-id]')).toHaveLength(2);
+    expect(screen.getByRole('img', {name: '8 more'}).textContent).toBe('+8');
+    vi.unstubAllGlobals();
   });
 });

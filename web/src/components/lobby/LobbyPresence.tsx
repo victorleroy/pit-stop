@@ -102,10 +102,10 @@ export const LobbyPresence = ({
 
   if (!members) return null;
 
-  const {absent, present} = lobbyPresence(members, participants);
+  const {absent, here, present} = lobbyPresence(members, participants);
   const shownPresent = present.slice(0, MAX_AVATARS);
   const shownAbsent = absent.slice(0, MAX_AVATARS - shownPresent.length);
-  const hidden = members.length - shownPresent.length - shownAbsent.length;
+  const hidden = [...present.slice(shownPresent.length), ...absent.slice(shownAbsent.length)];
   const isEveryoneHere = members.length > 0 && absent.length === 0;
 
   return (
@@ -133,10 +133,24 @@ export const LobbyPresence = ({
         </Stack>
       ) : null}
 
-      {hidden > 0 ? (
-        <Typography color="textSecondary" variant="textXs">
-          +{hidden}
-        </Typography>
+      {hidden.length > 0 ? (
+        <Tooltip
+          title={
+            <Box component="span" sx={{whiteSpace: 'pre-line'}}>
+              {hidden.map(({name, userId}) => (here.has(userId) ? name : `${name} · not here yet`)).join('\n')}
+            </Box>
+          }
+        >
+          <Typography
+            aria-label={`${hidden.length} more`}
+            color="textSecondary"
+            sx={{alignSelf: 'flex-start'}}
+            tabIndex={0}
+            variant="textXs"
+          >
+            +{hidden.length}
+          </Typography>
+        </Tooltip>
       ) : null}
     </Stack>
   );

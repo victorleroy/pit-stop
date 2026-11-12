@@ -57,7 +57,12 @@ export const RetroHeader = ({
     <Typography
       component="h1"
       noWrap
-      sx={{flex: '1 1 0', fontSize: {xs: '1.25rem', md: undefined}, minWidth: 0}}
+      sx={{
+        flex: {xs: '1 1 0', md: '0 1 auto'},
+        fontSize: {xs: '1.25rem', md: undefined},
+        maxWidth: {md: '50%'},
+        minWidth: 0,
+      }}
       title={title}
       variant="headingL"
     >
@@ -65,21 +70,9 @@ export const RetroHeader = ({
     </Typography>
 
     {/* Beside the title when there is room; on a phone it takes the line under the band. */}
-    <Stack
-      direction="row"
-      sx={{
-        alignItems: 'center',
-        columnGap: 1.5,
-        flexBasis: {xs: '100%', md: 'auto'},
-        flexShrink: {xs: 0, md: 1},
-        flexWrap: 'wrap',
-        minWidth: 0,
-        order: {xs: 1, md: 0},
-        rowGap: 1,
-      }}
-    >
-      <Box sx={{flexShrink: 0}}>{presence}</Box>
-    </Stack>
+    <Box sx={{display: 'flex', flex: {xs: '1 1 100%', md: '1 1 0'}, minWidth: 0, order: {xs: 1, md: 0}}}>
+      {presence}
+    </Box>
 
     {canZoom ? (
       <Stack

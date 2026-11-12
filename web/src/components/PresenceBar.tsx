@@ -1,6 +1,6 @@
 import {keyframes} from '@mui/material/styles';
-import {useLayoutEffect, useRef} from 'react';
-import {Box, Chip, Stack, Tooltip, Typography} from '@/ui';
+import {useLayoutEffect, useRef, useState} from 'react';
+import {Avatar, Box, Chip, Stack, Tooltip, Typography} from '@/ui';
 import type {Board, DieRoll, Participant} from '@/api/types';
 import {DieFace, RollingDie} from '@/components/DieFace';
 import {UserAvatar} from '@/components/UserAvatar';
@@ -57,6 +57,30 @@ const useReorderSlide = (order: string) => {
   return rowRef;
 };
 
+const AVATAR = 28;
+const GAP = 4;
+const RANKED_SLOT = 38;
+const MAX_TOOLTIP_LINES = 12;
+
+const useAvailableWidth = () => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState<number>();
+
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setWidth(entry.contentRect.width);
+    });
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, width] as const;
+};
+
 export const PresenceBar = ({
   board,
   dice,
@@ -71,100 +95,144 @@ export const PresenceBar = ({
 }) => {
   const progress = board.phase === 'VOTE' ? voteProgress(board, participants) : undefined;
   const slots: PresenceSlot[] = dice ? presenceOrder(participants, dice.rolls) : participants;
-  const rowRef = useReorderSlide(slots.map(({userId}) => userId).join());
+  const [availableRef, available] = useAvailableWidth();
+  const slotWidth = slots.some(({rank}) => rank) ? RANKED_SLOT : AVATAR;
+  const capacity =
+    available === undefined ? Infinity : Math.max(1, Math.floor((available + GAP) / (slotWidth + GAP)));
+  const shown = slots.length > capacity ? slots.slice(0, capacity - 1) : slots;
+  const hidden = slots.slice(shown.length);
+  const rowRef = useReorderSlide(shown.map(({userId}) => userId).join());
+
+  const describe = (slot: PresenceSlot) => {
+    const isRolling = dice?.spinningIds.includes(slot.userId);
+
+    return progress
+      ? `${slot.name} · ${progress.used(slot.userId)}/${board.maxVotes} votes`
+      : slot.rank && slot.value
+        ? `${slot.name} · rolled ${slot.value} · speaks ${ordinal(slot.rank)}`
+        : isRolling
+          ? `${slot.name} is rolling…`
+          : slot.name;
+  };
 
   return (
-    <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
+    <Stack direction="row" spacing={1} sx={{alignItems: 'center', minWidth: 0, width: '100%'}}>
       {isConnected ? null : (
         <Chip color="default" label="Reconnecting…" size="small" variant="outlined" />
       )}
 
-      <Stack
-        aria-label={dice ? 'Speaking order' : undefined}
-        component={dice ? 'ol' : 'div'}
-        direction="row"
-        ref={rowRef}
-        spacing={0.5}
-        sx={{alignItems: 'flex-start', listStyle: 'none', m: 0, p: 0, position: 'relative'}}
+      <Box
+        ref={availableRef}
+        sx={{
+          display: 'flex',
+          flex: '1 1 0',
+          justifyContent: {xs: 'flex-start', md: 'flex-end'},
+          minWidth: 0,
+          overflowClipMargin: '4px',
+          overflowX: 'clip',
+        }}
       >
-        {slots.map((slot) => {
-          const {rank, value} = slot;
-          const isRolling = dice?.spinningIds.includes(slot.userId);
+        <Stack
+          aria-label={dice ? 'Speaking order' : undefined}
+          component={dice ? 'ol' : 'div'}
+          direction="row"
+          ref={rowRef}
+          spacing={0.5}
+          sx={{alignItems: 'flex-start', listStyle: 'none', m: 0, p: 0, position: 'relative'}}
+        >
+          {shown.map((slot) => {
+            const {rank, value} = slot;
+            const isRolling = dice?.spinningIds.includes(slot.userId);
 
-          return (
+            return (
+              <Tooltip key={slot.userId} title={describe(slot)}>
+                {/* A wrapper to hang the tooltip on: the avatar itself takes no ref. */}
+                <Box
+                  component={dice ? 'li' : 'span'}
+                  data-user-id={slot.userId}
+                  sx={{alignItems: 'center', display: 'inline-flex', flexDirection: 'column'}}
+                >
+                  <UserAvatar
+                    {...slot}
+                    size="small"
+                    sx={{
+                      ...(progress?.used(slot.userId) === board.maxVotes && {
+                        outline: '2px solid',
+                        outlineColor: 'success.main',
+                        outlineOffset: '1px',
+                      }),
+                    }}
+                  />
+                  {rank && value ? (
+                    <Stack
+                      aria-label={`${ordinal(rank)}, rolled ${value}`}
+                      direction="row"
+                      key={value}
+                      role="img"
+                      sx={{
+                        alignItems: 'center',
+                        animation: `${land} 420ms cubic-bezier(0.2, 0.8, 0.3, 1)`,
+                        bgcolor: 'background.paper',
+                        border: '1px solid',
+                        borderColor: 'primary.main',
+                        borderRadius: 999,
+                        gap: '2px',
+                        height: 18,
+                        mt: '-6px',
+                        pl: '5px',
+                        pr: '2px',
+                        zIndex: 1,
+                        '@media (prefers-reduced-motion: reduce)': {animation: 'none'},
+                      }}
+                    >
+                      <Typography
+                        component="span"
+                        sx={{color: 'primary.main', fontSize: 11, fontWeight: 700, lineHeight: 1}}
+                      >
+                        {rank}
+                      </Typography>
+                      <DieFace highlight size={13} value={value} />
+                    </Stack>
+                  ) : isRolling ? (
+                    <Box
+                      aria-label={`${slot.name} is rolling`}
+                      role="img"
+                      sx={{display: 'inline-flex', mt: '-6px', zIndex: 1}}
+                    >
+                      <RollingDie size={16} />
+                    </Box>
+                  ) : null}
+                </Box>
+              </Tooltip>
+            );
+          })}
+
+          {hidden.length > 0 ? (
             <Tooltip
-              key={slot.userId}
               title={
-                progress
-                  ? `${slot.name} · ${progress.used(slot.userId)}/${board.maxVotes} votes`
-                  : rank && value
-                    ? `${slot.name} · rolled ${value} · speaks ${ordinal(rank)}`
-                    : isRolling
-                      ? `${slot.name} is rolling…`
-                      : slot.name
+                <Box component="span" sx={{whiteSpace: 'pre-line'}}>
+                  {[
+                    ...hidden.slice(0, MAX_TOOLTIP_LINES).map(describe),
+                    ...(hidden.length > MAX_TOOLTIP_LINES ? [`+${hidden.length - MAX_TOOLTIP_LINES} more`] : []),
+                  ].join('\n')}
+                </Box>
               }
             >
-              {/* A wrapper to hang the tooltip on: the avatar itself takes no ref. */}
               <Box
+                aria-label={`${hidden.length} more`}
                 component={dice ? 'li' : 'span'}
-                data-user-id={slot.userId}
-                sx={{alignItems: 'center', display: 'inline-flex', flexDirection: 'column'}}
+                role={dice ? undefined : 'img'}
+                sx={{display: 'inline-flex'}}
+                tabIndex={0}
               >
-                <UserAvatar
-                  {...slot}
-                  size="small"
-                  sx={{
-                    ...(progress?.used(slot.userId) === board.maxVotes && {
-                      outline: '2px solid',
-                      outlineColor: 'success.main',
-                      outlineOffset: '1px',
-                    }),
-                  }}
-                />
-                {rank && value ? (
-                  <Stack
-                    aria-label={`${ordinal(rank)}, rolled ${value}`}
-                    direction="row"
-                    key={value}
-                    role="img"
-                    sx={{
-                      alignItems: 'center',
-                      animation: `${land} 420ms cubic-bezier(0.2, 0.8, 0.3, 1)`,
-                      bgcolor: 'background.paper',
-                      border: '1px solid',
-                      borderColor: 'primary.main',
-                      borderRadius: 999,
-                      gap: '2px',
-                      height: 18,
-                      mt: '-6px',
-                      pl: '5px',
-                      pr: '2px',
-                      zIndex: 1,
-                      '@media (prefers-reduced-motion: reduce)': {animation: 'none'},
-                    }}
-                  >
-                    <Typography
-                      component="span"
-                      sx={{color: 'primary.main', fontSize: 11, fontWeight: 700, lineHeight: 1}}
-                    >
-                      {rank}
-                    </Typography>
-                    <DieFace highlight size={13} value={value} />
-                  </Stack>
-                ) : isRolling ? (
-                  <Box
-                    aria-label={`${slot.name} is rolling`}
-                    role="img"
-                    sx={{display: 'inline-flex', mt: '-6px', zIndex: 1}}
-                  >
-                    <RollingDie size={16} />
-                  </Box>
-                ) : null}
+                <Avatar size="small" sx={{bgcolor: 'divider', color: 'text.primary', fontWeight: 700}}>
+                  +{hidden.length}
+                </Avatar>
               </Box>
             </Tooltip>
-          );
-        })}
-      </Stack>
+          ) : null}
+        </Stack>
+      </Box>
     </Stack>
   );
 };
