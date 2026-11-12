@@ -204,10 +204,11 @@ export class RetroSession {
 
   /**
    * One board read, then one projection per recipient: the anonymity rules of
-   * RetroManager.projectBoard are the only ones that ever reach a client.
+   * RetroManager.projectBoard are the only ones that ever reach a client. Somebody joining
+   * changes nobody else's board: they alone get it, or thirty arrivals cost nine hundred boards.
    */
-  public async broadcastBoard(): Promise<void> {
-    if (!this.connections.size) {
+  public async broadcastBoard(only?: Connection): Promise<void> {
+    if (!this.connections.size || (only && !this.connections.has(only))) {
       return;
     }
 
@@ -230,7 +231,7 @@ export class RetroSession {
     }
 
     const data = await this.boardRepository.loadBoard(retro);
-    const recipients = [...this.connections];
+    const recipients = only ? [only] : [...this.connections];
     const allowed = await Promise.all(
       recipients.map((connection) => this.authorize(connection.token, this.retroId)),
     );

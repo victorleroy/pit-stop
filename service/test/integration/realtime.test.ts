@@ -97,6 +97,32 @@ describe('live retros', () => {
     expect(session.size).toBe(0);
   });
 
+  it('sends the board to whoever subscribes, not again to those already there', async () => {
+    const connect = async (auth: AuthContext) => {
+      const sent: string[] = [];
+      const socket = Object.assign(new EventEmitter(), {
+        close: jest.fn(),
+        OPEN: 1,
+        readyState: 1,
+        send: (payload: string) => sent.push(payload),
+      });
+
+      await createSocketAttacher(harness.container)(socket as never, await sessionToken(auth));
+      socket.emit('message', JSON.stringify({action: 'subscribe', retroId}));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      return sent;
+    };
+    const boards = (sent: string[]) => sent.filter((raw) => raw.includes('board.updated')).length;
+
+    const first = await connect(owner);
+    const second = await connect(member);
+
+    expect(boards(first)).toBe(1);
+    expect(boards(second)).toBe(1);
+    expect(first.filter((raw) => raw.includes('presence.updated')).length).toBe(2);
+  });
+
   /** Regression: a slower access check let an older subscribe win over the latest one. */
   it('keeps a socket on the retro it asked for last when two subscribes overlap', async () => {
     const otherRetroId = (await harness.createStartedRetro(owner, teamId, 'Sprint 43'))

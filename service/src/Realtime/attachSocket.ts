@@ -86,7 +86,7 @@ export const createSocketAttacher =
       const session = container.hub.acquire(retroId);
 
       session.add(connection);
-      await session.broadcastBoard();
+      await session.broadcastBoard(connection);
       session.broadcastPresence();
       session.sendDice(connection);
     };
