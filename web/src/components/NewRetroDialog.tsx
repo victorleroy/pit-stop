@@ -10,7 +10,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import {useTheme} from '@mui/material/styles';
 import {Button, Chip, Dialog, Select, Stack, TextField, Typography} from '@/ui';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {useMemo, useState} from 'react';
+import {useState} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
 import {ApiError} from '@/api/client';
 import {createRetro, DEFAULT_MAX_VOTES, VOTE_OPTIONS} from '@/api/retros';
@@ -60,10 +60,7 @@ export const NewRetroDialog = ({
     refetch,
   } = useQuery({queryFn: () => fetchTeamTemplates(teamId), queryKey: teamTemplatesKey(teamId)});
 
-  const all = useMemo(
-    () => (templates ? [...templates.team, ...templates.builtin] : []),
-    [templates],
-  );
+  const all = templates ? [...templates.team, ...templates.builtin] : [];
   const selected =
     all.find(({id}) => id === pickedId) ?? all.find(({id}) => id === templates?.defaultTemplateId);
   const maxVotes = votesPicked ?? selected?.maxVotes ?? DEFAULT_MAX_VOTES;
@@ -197,18 +194,29 @@ export const NewRetroDialog = ({
                 </Button>
               </Stack>
             ) : null}
-            {templates && selected ? (
+            {templates ? (
               <Autocomplete
-                aria-describedby="template-preview"
-                disableClearable
+                disableClearable={Boolean(selected)}
                 filterOptions={filterTemplates}
+                getOptionKey={(template) => template.id}
                 getOptionLabel={(template) => template.name}
-                groupBy={(template) => (template.scope === 'TEAM' ? 'Your team' : 'Classics')}
+                groupBy={(template) =>
+                  templates.team.includes(template) ? 'Your team' : 'Classics'
+                }
                 isOptionEqualToValue={(option, value) => option.id === value.id}
                 noOptionsText="No template matches"
-                onChange={(_event, template) => pick(template.id)}
+                onChange={(_event, template) => {
+                  if (template) pick(template.id);
+                }}
                 options={all}
-                renderInput={(params) => <TextField {...params} label="Template" size="small" />}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    inputProps={{...params.inputProps, 'aria-describedby': 'template-preview'}}
+                    label="Template"
+                    size="small"
+                  />
+                )}
                 renderOption={({key, ...props}, template) => (
                   <Stack
                     component="li"
@@ -225,7 +233,7 @@ export const NewRetroDialog = ({
                   </Stack>
                 )}
                 size="small"
-                value={selected}
+                value={selected ?? null}
               />
             ) : null}
             {isMobile && preview ? (
