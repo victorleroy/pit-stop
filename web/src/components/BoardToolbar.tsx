@@ -91,7 +91,6 @@ export const BoardToolbar = ({
   onHide: () => void;
   onMaxVotesChange: (maxVotes: number) => void;
   onOpenActions: () => void;
-  /** While the facilitator has closed the waiting room: opens it again. */
   onOpenWaitingRoom?: () => void;
   openActionCount: number;
   onPhaseChange: (phase: RetroPhase) => void;
@@ -124,7 +123,6 @@ export const BoardToolbar = ({
 
   const isIcebreaker = board.phase === 'ICEBREAKER';
   const isReview = board.phase === 'REVIEW';
-  // The icebreaker lives in the waiting room dialog, so the track starts after it.
   const steps: RetroPhase[] = [
     ...(hasReviewStep(board) || isReview ? (['REVIEW'] as const) : []),
     ...WORKING_PHASES,

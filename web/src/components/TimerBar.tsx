@@ -238,7 +238,6 @@ export const TimerControls = ({
 
   return (
     <Stack spacing={0.5}>
-      {/* A fixed box: neither the digits nor the label beside them may nudge the buttons. */}
       <Stack spacing={0.75} sx={{flexShrink: 0, width: 150}}>
         <Stack direction="row" spacing={1} sx={{alignItems: 'baseline'}}>
           <Typography

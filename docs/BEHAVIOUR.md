@@ -906,7 +906,7 @@ epoch milliseconds; `points` in `game.hit` is the player's total, not a delta.
   those on screen; touch targets are at least 44 px. Reduced motion: no particles or outline.
   Every colour of the track comes from the theme (`palette.track`): a pale lane with subtle
   separators, liveries from the wash. The impact sound obeys the global mute
-  (`pit-stop.timer-muted`, set with the timer) and only plays for one's own taps. The team's
+  (`pit-stop.timer-muted`, set from the game's mute toggle) and only plays for one's own taps. The team's
   `Pit stops: n` sits above the track. The scoreboard appears with the first point: top 5,
   then one's own row, then `+n others`. On `game.ended` with points, a 6 s toast gives the
   record and the winner.

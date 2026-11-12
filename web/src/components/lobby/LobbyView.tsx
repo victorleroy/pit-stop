@@ -38,7 +38,6 @@ export const LobbyView = ({
   isStarting?: boolean;
   isTakingOver?: boolean;
   members: TeamMember[] | undefined;
-  /** The facilitator's way out of the waiting room: it stays open for everybody else. */
   onClose?: () => void;
   onStart: () => void;
   onTakeOver?: () => void;
