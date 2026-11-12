@@ -371,7 +371,7 @@ export const TeamPage = () => {
               />
             ) : (
               <>
-                <Typography sx={{overflowWrap: 'anywhere'}} variant="displayS">
+                <Typography sx={{fontSize: {xs: '1.75rem', sm: undefined}, overflowWrap: 'anywhere'}} variant="displayS">
                   {team?.name ?? 'Team'}
                 </Typography>
                 {isAdmin ? (

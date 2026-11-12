@@ -497,7 +497,7 @@ export const AdminPage = () => {
 
         {/* The list scrolls on its own: the search above stays in reach in a large organisation.
             It reaches into the padding, so a row's hover lines its text up with the heading. */}
-        <Stack spacing={0.25} sx={{maxHeight: 480, mx: -1.25, overflowY: 'auto'}}>
+        <Stack spacing={0.25} sx={{maxHeight: {sm: 480}, mx: -1.25, overflowY: {sm: 'auto'}}}>
           {shownMembers.map((member) => (
             <MemberRow
               key={member.id}
