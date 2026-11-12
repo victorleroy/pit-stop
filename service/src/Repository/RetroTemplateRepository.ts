@@ -6,8 +6,10 @@ export interface TemplateColumnRow {
 }
 
 export interface TemplateRow {
+  actionReview: boolean | null;
   columns: TemplateColumnRow[];
   description: string | null;
+  icebreaker: boolean | null;
   id: string;
   maxVotes: number | null;
   name: string;
@@ -20,12 +22,20 @@ export interface TemplateRow {
 }
 
 export interface TemplateContent {
+  /** Whether its retros review the open actions; null leaves it to the new retro dialog. */
+  actionReview: boolean | null;
   columns: TemplateColumnRow[];
   description: string | null;
+  /** Whether its retros open with an icebreaker; null leaves it to the new retro dialog. */
+  icebreaker: boolean | null;
   maxVotes: number | null;
   name: string;
   timerSeconds: number | null;
 }
+
+const toFlag = (value: number | null): boolean | null => (value === null ? null : Boolean(value));
+
+const fromFlag = (value: boolean | null): number | null => (value === null ? null : Number(value));
 
 /** What the unique index compares: one name per team, whatever the case. */
 export const templateNameKey = (name: string): string => name.trim().toLowerCase();
@@ -47,6 +57,8 @@ export class RetroTemplateRepository {
         'retroTemplates.description',
         'retroTemplates.maxVotes',
         'retroTemplates.timerSeconds',
+        'retroTemplates.icebreaker',
+        'retroTemplates.actionReview',
         'retroTemplates.updatedAt',
         'retroTemplates.updatedBy',
         'users.name as updatedByName',
@@ -55,7 +67,10 @@ export class RetroTemplateRepository {
 
   private static async withColumns(
     scoped: ScopedDb,
-    rows: Omit<TemplateRow, 'columns'>[],
+    rows: (Omit<TemplateRow, 'actionReview' | 'columns' | 'icebreaker'> & {
+      actionReview: number | null;
+      icebreaker: number | null;
+    })[],
   ): Promise<TemplateRow[]> {
     if (!rows.length) {
       return [];
@@ -74,6 +89,8 @@ export class RetroTemplateRepository {
 
     return rows.map((row) => ({
       ...row,
+      actionReview: toFlag(row.actionReview),
+      icebreaker: toFlag(row.icebreaker),
       columns: columns
         .filter(({templateId}) => templateId === row.id)
         .map(({prompt, title}) => ({prompt, title})),
@@ -157,9 +174,11 @@ export class RetroTemplateRepository {
     await scoped.unscoped
       .insertInto('retroTemplates')
       .values({
+        actionReview: fromFlag(input.actionReview),
         createdAt: now,
         createdBy: input.userId,
         description: input.description,
+        icebreaker: fromFlag(input.icebreaker),
         id: input.id,
         maxVotes: input.maxVotes,
         name: input.name,
@@ -184,7 +203,9 @@ export class RetroTemplateRepository {
     await scoped.unscoped
       .updateTable('retroTemplates')
       .set({
+        actionReview: fromFlag(input.actionReview),
         description: input.description,
+        icebreaker: fromFlag(input.icebreaker),
         maxVotes: input.maxVotes,
         name: input.name,
         nameKey: templateNameKey(input.name),

@@ -36,12 +36,12 @@ export class CreateRetroDto {
   @Max(10)
   public maxVotes?: number;
 
-  // Left out, the retro has no icebreaker; the web always sends the box it shows.
+  // Left out, the template decides, else no icebreaker; the web always sends the box it shows.
   @IsOptional()
   @IsBoolean()
   public icebreaker?: boolean;
 
-  // Left out, the retro reviews the team's open actions.
+  // Left out, the template decides, else the retro reviews the team's open actions.
   @IsOptional()
   @IsBoolean()
   public actionReview?: boolean;

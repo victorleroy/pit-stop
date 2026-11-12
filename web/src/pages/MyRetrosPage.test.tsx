@@ -22,12 +22,14 @@ vi.mock('@/api/retros', async (importOriginal) => ({
 }));
 
 const startStopContinue = {
+  actionReview: null,
   columns: [
     {prompt: null, title: 'Start'},
     {prompt: null, title: 'Stop'},
     {prompt: null, title: 'Continue'},
   ],
   description: null,
+  icebreaker: null,
   id: 'builtin:start-stop-continue',
   maxVotes: null,
   name: 'Start / Stop / Continue',
@@ -103,6 +105,7 @@ describe('MyRetrosPage new retro', () => {
 
     await waitFor(() =>
       expect(createRetro).toHaveBeenCalledWith('t2', 'Sprint 12', {
+        actionReview: true,
         icebreaker: true,
         maxVotes: 3,
         templateId: 'builtin:start-stop-continue',

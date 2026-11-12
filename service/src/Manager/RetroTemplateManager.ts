@@ -164,8 +164,11 @@ export class RetroTemplateManager {
     }
 
     return this.insert(auth, retro.teamId, {
+      actionReview: Boolean(retro.actionReview),
       columns: columns.map(({prompt, title}) => ({prompt, title})),
       description: input.description,
+      // A question drawn, asked or not: the retro opens with an icebreaker.
+      icebreaker: retro.icebreakerQuestionId !== null,
       maxVotes: retro.maxVotes,
       name: input.name,
       // The timer total reflects the last gesture on the clock (extended, stopped), not a
@@ -317,8 +320,10 @@ export class RetroTemplateManager {
 
   private static contentOf(source: BuiltinTemplate | TemplateContent): TemplateContent {
     return {
+      actionReview: source.actionReview,
       columns: source.columns.map(({prompt, title}) => ({prompt, title})),
       description: source.description,
+      icebreaker: source.icebreaker,
       maxVotes: source.maxVotes,
       name: source.name,
       timerSeconds: source.timerSeconds,

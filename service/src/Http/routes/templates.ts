@@ -11,8 +11,10 @@ import {validateBody} from '~/Http/middleware/validate';
 import type {TemplateContent} from '~/Repository/RetroTemplateRepository';
 
 const contentOf = (body: TemplateDto): TemplateContent => ({
+  actionReview: body.actionReview ?? null,
   columns: body.columns.map(({prompt, title}) => ({prompt: prompt ?? null, title})),
   description: body.description ?? null,
+  icebreaker: body.icebreaker ?? null,
   maxVotes: body.maxVotes ?? null,
   name: body.name,
   timerSeconds: body.timerSeconds ?? null,

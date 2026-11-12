@@ -2,6 +2,7 @@ import {Transform, Type} from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -66,6 +67,15 @@ export class TemplateDto {
   @Min(5)
   @Max(3600)
   public timerSeconds?: number | null;
+
+  // Opening steps: true or false sets them, null (or left out) leaves them to the dialog.
+  @IsOptional()
+  @IsBoolean()
+  public icebreaker?: boolean | null;
+
+  @IsOptional()
+  @IsBoolean()
+  public actionReview?: boolean | null;
 }
 
 export class DuplicateTemplateDto {

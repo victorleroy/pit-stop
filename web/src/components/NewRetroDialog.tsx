@@ -53,7 +53,8 @@ export const NewRetroDialog = ({
   const [pickedId, setPickedId] = useState<string>();
   const [votesPicked, setVotesPicked] = useState<number>();
   const [isPreviewOpen, setIsPreviewOpen] = useState(true);
-  const [hasIcebreaker, setHasIcebreaker] = useState(true);
+  const [icebreakerPicked, setIcebreakerPicked] = useState<boolean>();
+  const [actionReviewPicked, setActionReviewPicked] = useState<boolean>();
   const titleInputRef = useAutoFocus(true);
   const hasSeveralTeams = teamIds.length > 1;
 
@@ -74,10 +75,13 @@ export const NewRetroDialog = ({
   const selected =
     all.find(({id}) => id === pickedId) ?? all.find(({id}) => id === templates?.defaultTemplateId);
   const maxVotes = votesPicked ?? selected?.maxVotes ?? DEFAULT_MAX_VOTES;
+  const hasIcebreaker = icebreakerPicked ?? selected?.icebreaker ?? true;
+  const hasActionReview = actionReviewPicked ?? selected?.actionReview ?? true;
 
   const createMutation = useMutation({
     mutationFn: () =>
       createRetro(teamId, title.trim(), {
+        actionReview: hasActionReview,
         icebreaker: hasIcebreaker,
         maxVotes,
         templateId: (selected as Template).id,
@@ -87,7 +91,7 @@ export const NewRetroDialog = ({
 
       if (cause instanceof ApiError && cause.status === 404) {
         setPickedId(undefined);
-        setVotesPicked(undefined);
+        resetPicks();
         void refetch();
       }
     },
@@ -99,6 +103,12 @@ export const NewRetroDialog = ({
     },
   });
 
+  const resetPicks = () => {
+    setVotesPicked(undefined);
+    setIcebreakerPicked(undefined);
+    setActionReviewPicked(undefined);
+  };
+
   const start = () => {
     if (!title.trim() || !selected) return;
 
@@ -107,13 +117,13 @@ export const NewRetroDialog = ({
 
   const pick = (templateId: string) => {
     setPickedId(templateId);
-    setVotesPicked(undefined);
+    resetPicks();
   };
 
   const changeTeam = (nextTeamId: string) => {
     setTeamId(nextTeamId);
     setPickedId(undefined);
-    setVotesPicked(undefined);
+    resetPicks();
   };
 
   const group = (label: string, items: Template[]) =>
@@ -132,11 +142,18 @@ export const NewRetroDialog = ({
       </Stack>
     );
 
+  const steps = [hasIcebreaker && 'Icebreaker', hasActionReview && 'Action review'].filter(Boolean);
+
   const preview = selected ? (
     <Stack aria-live="polite" id="template-preview" spacing={0.75}>
       {selected.description ? (
         <Typography color="textSecondary" variant="textS">
           {selected.description}
+        </Typography>
+      ) : null}
+      {steps.length > 0 ? (
+        <Typography color="textSecondary" variant="textXs">
+          {steps.join(' · ')}
         </Typography>
       ) : null}
       {selected.columns.length === 0 ? (
@@ -263,17 +280,30 @@ export const NewRetroDialog = ({
               ))}
             </Select>
           </Stack>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={hasIcebreaker}
-                onChange={(event) => setHasIcebreaker(event.target.checked)}
-                size="small"
-              />
-            }
-            label="Start with an icebreaker"
-            sx={{mx: 0}}
-          />
+          <Stack>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={hasIcebreaker}
+                  onChange={(event) => setIcebreakerPicked(event.target.checked)}
+                  size="small"
+                />
+              }
+              label="Start with an icebreaker"
+              sx={{mx: 0}}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={hasActionReview}
+                  onChange={(event) => setActionReviewPicked(event.target.checked)}
+                  size="small"
+                />
+              }
+              label="Review open actions"
+              sx={{mx: 0}}
+            />
+          </Stack>
         </Stack>
       </DialogContent>
       <DialogActions>

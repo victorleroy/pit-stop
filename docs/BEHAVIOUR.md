@@ -25,7 +25,7 @@ this page is the bug.
 | **Facilitator** | The person driving a retro's phases. Exactly one at a time. |
 | **Review** | Going over, in a retro, the actions it carries over: did we do what we decided? |
 | **Outcome** | What a review decided for one action: **Done**, **Drop** or **Keep** (still relevant, carried over again). |
-| **Template** | A retro format: columns with their prompts, a vote budget and a suggested timer. `BUILTIN` (shipped in code, read-only, `builtin:<slug>`) or `TEAM` (owned by one team, a UUID). A retro **copies** its template at creation. |
+| **Template** | A retro format: columns with their prompts, a vote budget, a suggested timer and its opening steps (icebreaker, action review). `BUILTIN` (shipped in code, read-only, `builtin:<slug>`) or `TEAM` (owned by one team, a UUID). A retro **copies** its template at creation. |
 | **Prompt** | One line under a column title telling people what goes in it. |
 
 ---
@@ -67,7 +67,8 @@ actions        (id, team_id, org_id, retro_id, text, status,
 action_reviews (id, org_id, team_id, action_id, retro_id, outcome, comment NULL,
                 reviewed_by NULL, reviewed_at)   UNIQUE (action_id, retro_id)
 retro_templates        (id, org_id, team_id, name, name_key, description NULL,
-                        max_votes NULL, timer_seconds NULL, created_by, updated_by,
+                        max_votes NULL, timer_seconds NULL, icebreaker NULL,
+                        action_review NULL, created_by, updated_by,
                         created_at, updated_at)
 retro_template_columns (template_id, position, title, prompt NULL)
 ```
@@ -294,6 +295,10 @@ member.
   - Neither: the team's default template (see Templates).
 - The template is **copied** in one transaction with the retro: columns with their prompts,
   `template {id, name}`, `defaultTimerSeconds`. The board never reads the template again.
+- The opening steps follow the same priority: `icebreaker` is
+  `body.icebreaker ?? template.icebreaker ?? false`, `actionReview` is
+  `body.actionReview ?? template.actionReview ?? true`. The new retro dialog always sends both,
+  prefilled with `template.icebreaker ?? true` and `template.actionReview ?? true`.
 - `maxVotes` is `body.maxVotes ?? template.maxVotes ?? 5` (1 to 10), and changed by the facilitator
   **only in `LOBBY`, `BRAINSTORM` or `SHARE`** (`409` once voting has started).
 - Deletion: team admins only. Removes columns, notes, clusters and votes.
@@ -382,7 +387,8 @@ member.
   reviewed, whatever their status now (a Done would otherwise vanish on the next broadcast).
   Oldest first, then by id. An action of this retro, a later one, or one closed elsewhere and
   never reviewed here is not part of it (`409`); an action of another team is `404`.
-- A retro reviews when `action_review` is on: `body.actionReview ?? true` at creation, then the
+- A retro reviews when `action_review` is on: `body.actionReview ?? template.actionReview ?? true`
+  at creation, then the
   facilitator's switch in `LOBBY`; exposed as `review.enabled`. The review step is skipped
   when it is off or `review.items` is empty (`nextOpeningPhase`), and shown in the stepper only
   then or while in `REVIEW`. The service does not enforce that order.
@@ -449,7 +455,7 @@ disabled.
 
 ### Icebreaker
 
-- `icebreaker` at creation is `body.icebreaker ?? false`: without it the retro has none. With
+- `icebreaker` at creation is `body.icebreaker ?? template.icebreaker ?? false`: without it the retro has none. With
   it, a question is drawn at creation and asked on entering `ICEBREAKER`.
 - The bank (`service/src/Icebreaker/questions.ts`, CC0-1.0) holds 60 questions in English,
   all light and playful: the icebreaker sets a good mood, it does not check on the team or the
@@ -595,8 +601,10 @@ A team is the confidentiality boundary around a board. It is private to its memb
   otherwise). A user outside the team, org admins included, gets `403`.
 - A template has a name (unique in the team whatever the case, `409`; a team may reuse a
   built-in name), an optional description, 0 to 8 columns with distinct titles (case
-  insensitive, `400`), an optional prompt per column, an optional `maxVotes` and an optional
-  suggested `timerSeconds`. Strings are trimmed.
+  insensitive, `400`), an optional prompt per column, an optional `maxVotes`, an optional
+  suggested `timerSeconds`, and its opening steps `icebreaker` and `actionReview`, each
+  `true`, `false` or `null` (not set: the new retro dialog decides). Strings are trimmed.
+  Every built-in leaves both steps unset; a team wanting another setting duplicates it.
 - **At most 50 templates per team** (`409 "Template limit reached"`).
 - **Edit** replaces the whole template. Last write wins; `updatedAt` and `updatedBy` say whose
   version it is.
@@ -607,8 +615,9 @@ A team is the confidentiality boundary around a board. It is private to its memb
   other source answers `404`, so a team's templates are not disclosed to outsiders. Without a
   name, the copy is called `"<source> (copy)"`, then `"(copy 2)"` and so on.
 - **Save as template** (`POST /retros/{retroId}/template`, `{name, description?}`): a team
-  admin, in any phase including `ARCHIVED`, copies the board's columns, prompts and
-  `maxVotes`, never its notes, and no timer. A board with more than 8 columns or two columns
+  admin, in any phase including `ARCHIVED`, copies the board's columns, prompts,
+  `maxVotes` and opening steps (an icebreaker question drawn, the review on or off),
+  never its notes, and no timer. A board with more than 8 columns or two columns
   of the same title is refused (`409`): rename or remove first. The board's dialog prefills
   the name with the retro's template name, or its title, suffixed `(copy)`, `(copy 2)`... when
   the team already has a template of that name. The board shows the button only in `DISCUSS`,
@@ -766,7 +775,8 @@ Icebreaker      { state: 'WAITING'|'ASKED', answeredCount,
                   answers: [{author: {id, name, pictureUrl?}, text, mine, revealed}] }
 Template        { id, scope: 'BUILTIN'|'TEAM', name, description: string | null,
                   columns: [{title, prompt: string | null}], maxVotes: number | null,
-                  timerSeconds: number | null, updatedAt?, updatedBy?: {id, name} }
+                  timerSeconds: number | null, icebreaker: boolean | null,
+                  actionReview: boolean | null, updatedAt?, updatedBy?: {id, name} }
 ```
 
 ### Ordering, to preserve
@@ -974,6 +984,7 @@ to the login screen.
 | Template columns | 0 to 8, distinct titles (case insensitive) |
 | Template `maxVotes` | integer, 1 to 10, or null |
 | Template `timerSeconds` | integer, 5 to 3600, or null |
+| Template `icebreaker`, `actionReview` | boolean or null |
 | Note text | required, <= 500 |
 | Icebreaker answer | 1 to 140 after trimming |
 | `icebreaker` at creation | boolean |

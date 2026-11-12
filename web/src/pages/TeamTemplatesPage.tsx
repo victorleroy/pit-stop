@@ -5,6 +5,8 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import MenuItem from '@mui/material/MenuItem';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import {useTheme} from '@mui/material/styles';
 import {Alert, Button, Chip, Dialog, IconButton, Loader, Select, Stack, TextField, Typography} from '@/ui';
@@ -44,6 +46,52 @@ interface DraftColumn {
   title: string;
 }
 
+type StepChoice = 'off' | 'on' | typeof NOT_SET;
+
+const toChoice = (value?: boolean | null): StepChoice =>
+  value === true ? 'on' : value === false ? 'off' : NOT_SET;
+
+const fromChoice = (choice: StepChoice) => (choice === NOT_SET ? null : choice === 'on');
+
+const STEP_CHOICES: {label: string; value: StepChoice}[] = [
+  {label: 'Not set', value: NOT_SET},
+  {label: 'On', value: 'on'},
+  {label: 'Off', value: 'off'},
+];
+
+const StepControl = ({
+  label,
+  onChange,
+  value,
+}: {
+  label: string;
+  onChange: (choice: StepChoice) => void;
+  value: StepChoice;
+}) => (
+  <Stack direction="row" sx={{alignItems: 'center', justifyContent: 'space-between'}}>
+    <Typography variant="textS">{label}</Typography>
+    <ToggleButtonGroup
+      aria-label={label}
+      exclusive
+      onChange={(_event, next: StepChoice | null) => {
+        if (next !== null) onChange(next);
+      }}
+      size="small"
+      value={value}
+    >
+      {STEP_CHOICES.map((choice) => (
+        <ToggleButton
+          key={choice.label}
+          sx={{px: 1.5, py: 0.25, textTransform: 'none'}}
+          value={choice.value}
+        >
+          {choice.label}
+        </ToggleButton>
+      ))}
+    </ToggleButtonGroup>
+  </Stack>
+);
+
 const TemplateEditor = ({
   onClose,
   teamId,
@@ -71,6 +119,8 @@ const TemplateEditor = ({
   const [timerSeconds, setTimerSeconds] = useState<number | typeof NOT_SET>(
     template?.timerSeconds ?? NOT_SET,
   );
+  const [icebreaker, setIcebreaker] = useState<StepChoice>(toChoice(template?.icebreaker));
+  const [actionReview, setActionReview] = useState<StepChoice>(toChoice(template?.actionReview));
   const [error, setError] = useState<string>();
 
   const timerOptions = [
@@ -80,11 +130,13 @@ const TemplateEditor = ({
   const saveMutation = useMutation({
     mutationFn: () => {
       const input: TemplateInput = {
+        actionReview: fromChoice(actionReview),
         columns: columns.map(({prompt, title}) => ({
           prompt: prompt.trim() || null,
           title: title.trim(),
         })),
         description: description.trim() || null,
+        icebreaker: fromChoice(icebreaker),
         maxVotes: maxVotes === NOT_SET ? null : maxVotes,
         name: name.trim(),
         timerSeconds: timerSeconds === NOT_SET ? null : timerSeconds,
@@ -272,6 +324,11 @@ const TemplateEditor = ({
                 </MenuItem>
               ))}
             </Select>
+          </Stack>
+
+          <Stack spacing={0.75}>
+            <StepControl label="Icebreaker" onChange={setIcebreaker} value={icebreaker} />
+            <StepControl label="Action review" onChange={setActionReview} value={actionReview} />
           </Stack>
         </Stack>
       </DialogContent>

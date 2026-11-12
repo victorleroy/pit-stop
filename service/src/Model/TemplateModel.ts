@@ -6,8 +6,12 @@ export interface TemplateColumnModel {
 }
 
 export interface TemplateModel {
+  /** null: not set, the new retro dialog decides. */
+  actionReview: boolean | null;
   columns: TemplateColumnModel[];
   description: string | null;
+  /** null: not set, the new retro dialog decides. */
+  icebreaker: boolean | null;
   /** `builtin:<slug>` for the catalogue, a UUID for a team template. */
   id: string;
   maxVotes: number | null;

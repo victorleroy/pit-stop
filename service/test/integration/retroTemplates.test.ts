@@ -52,11 +52,13 @@ describe('retro templates', () => {
   };
 
   const content = (name: string, overrides: Partial<TemplateContent> = {}): TemplateContent => ({
+    actionReview: null,
     columns: [
       {prompt: 'What went well', title: 'Good'},
       {prompt: null, title: 'Bad'},
     ],
     description: null,
+    icebreaker: null,
     maxVotes: null,
     name,
     timerSeconds: null,
@@ -168,6 +170,45 @@ describe('retro templates', () => {
         expect(edited).toEqual({body: {message: 'Template not found'}, status: 404});
         expect(deleted).toEqual({body: {message: 'Template not found'}, status: 404});
       }
+    });
+  });
+
+  describe('opening steps', () => {
+    it('stores on, off or not set, and replaces them', async () => {
+      const created = await request(admin, `/teams/${teamId}/templates`, 'POST', {
+        ...content('Warm'),
+        actionReview: false,
+        icebreaker: true,
+      });
+
+      expect(created.body).toMatchObject({actionReview: false, icebreaker: true});
+
+      const replaced = await request(admin, `/teams/${teamId}/templates/${created.body.id}`, 'PUT', {
+        ...content('Warm'),
+        actionReview: null,
+      });
+
+      expect(replaced.body).toMatchObject({actionReview: null, icebreaker: null});
+    });
+
+    it('refuses anything but a boolean or null', async () => {
+      const response = await request(admin, `/teams/${teamId}/templates`, 'POST', {
+        ...content('Warm'),
+        icebreaker: 'yes',
+      });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('leaves them unset on every classic, and a copy keeps them', async () => {
+      const {builtin} = await list();
+
+      expect(builtin.every(({actionReview, icebreaker}) => actionReview === null && icebreaker === null)).toBe(true);
+
+      const source = await createTemplate('Warm', {actionReview: false, icebreaker: true});
+      const copy = await harness.container.retroTemplateManager.duplicate(admin, teamId, source.id);
+
+      expect(copy).toMatchObject({actionReview: false, icebreaker: true});
     });
   });
 
@@ -447,7 +488,9 @@ describe('retro templates', () => {
           {prompt: 'Something we should try next sprint', title: 'Start'},
           {prompt: 'Something that costs us more than it gives', title: 'Stop'},
         ],
+        actionReview: true,
         description: 'From sprint 42',
+        icebreaker: false,
         maxVotes: 7,
         name: 'Ours',
         scope: 'TEAM',
@@ -455,6 +498,16 @@ describe('retro templates', () => {
       });
       expect(JSON.stringify(response.body)).not.toContain('the secret');
       expect(run).toHaveBeenCalledWith(retroId, expect.any(Function));
+    });
+
+    it('copies the opening steps of the retro', async () => {
+      const lobby = await harness.container.retroManager.create(admin, teamId, 'Sprint 43', {
+        actionReview: false,
+        icebreaker: true,
+      });
+      const response = await request(admin, `/retros/${lobby.id}/template`, 'POST', {name: 'Warm'});
+
+      expect(response.body).toMatchObject({actionReview: false, icebreaker: true});
     });
 
     it('works on an archived retro', async () => {
@@ -585,7 +638,15 @@ describe('retro templates', () => {
   });
 
   describe('retro creation', () => {
-    const create = (options: {columns?: string[]; maxVotes?: number; templateId?: string} = {}) =>
+    const create = (
+      options: {
+        actionReview?: boolean;
+        columns?: string[];
+        icebreaker?: boolean;
+        maxVotes?: number;
+        templateId?: string;
+      } = {},
+    ) =>
       harness.container.retroManager.create(admin, teamId, 'Sprint 42', options);
 
     const shape = (board: Awaited<ReturnType<typeof create>>) =>
@@ -637,6 +698,25 @@ describe('retro templates', () => {
       expect((await create({maxVotes: 8, templateId: 'builtin:pit-stop'})).maxVotes).toBe(8);
       expect((await create({templateId: 'builtin:pit-stop'})).maxVotes).toBe(3);
       expect((await create({templateId: 'builtin:plus-delta'})).maxVotes).toBe(5);
+    });
+
+    it('takes the opening steps from the body, then the template, then the defaults', async () => {
+      const quiet = await createTemplate('Quiet', {actionReview: false, icebreaker: true});
+      const unset = await createTemplate('Unset');
+      const steps = (board: Awaited<ReturnType<typeof create>>) => ({
+        hasIcebreaker: board.icebreaker !== null,
+        review: board.review.enabled,
+      });
+
+      expect(steps(await create({templateId: quiet.id}))).toEqual({hasIcebreaker: true, review: false});
+      expect(
+        steps(await create({actionReview: true, icebreaker: false, templateId: quiet.id})),
+      ).toEqual({hasIcebreaker: false, review: true});
+      expect(steps(await create({templateId: unset.id}))).toEqual({hasIcebreaker: false, review: true});
+      expect(steps(await create({templateId: 'builtin:pit-stop'}))).toEqual({
+        hasIcebreaker: false,
+        review: true,
+      });
     });
 
     it('starts from the effective default when given neither', async () => {
@@ -744,8 +824,10 @@ describe('retro templates', () => {
     const created: TemplateModel = await createTemplate('Weekly');
 
     expect(Object.keys(created).sort()).toEqual([
+      'actionReview',
       'columns',
       'description',
+      'icebreaker',
       'id',
       'maxVotes',
       'name',

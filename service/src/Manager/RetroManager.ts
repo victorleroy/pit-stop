@@ -165,7 +165,7 @@ export class RetroManager {
     const maxVotes = options.maxVotes ?? template?.maxVotes ?? undefined;
 
     const id = uuid();
-    const icebreakerQuestionId = (options.icebreaker ?? false)
+    const icebreakerQuestionId = (options.icebreaker ?? template?.icebreaker ?? false)
       ? await this.icebreakerManager.drawFor(auth, {id, teamId})
       : null;
 
@@ -173,7 +173,7 @@ export class RetroManager {
     await auth.db.unscoped.transaction().execute(async (trx) => {
       await this.retroRepository.create(
         {
-          actionReview: (options.actionReview ?? true) ? 1 : 0,
+          actionReview: (options.actionReview ?? template?.actionReview ?? true) ? 1 : 0,
           createdBy: auth.userId,
           defaultTimerSeconds: template?.timerSeconds ?? null,
           icebreakerQuestionId,

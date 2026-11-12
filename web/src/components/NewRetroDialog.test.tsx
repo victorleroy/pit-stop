@@ -22,8 +22,10 @@ vi.mock('@/api/retros', async (importOriginal) => ({
 }));
 
 const template = (id: string, name: string, extra: Partial<Template> = {}): Template => ({
+  actionReview: null,
   columns: [{prompt: 'What should we begin?', title: 'Start'}],
   description: `About ${name}`,
+  icebreaker: null,
   id,
   maxVotes: null,
   name,
@@ -33,8 +35,14 @@ const template = (id: string, name: string, extra: Partial<Template> = {}): Temp
 });
 
 const ssc = template('builtin:start-stop-continue', 'Start / Stop / Continue');
-const blank = template('builtin:blank', 'Blank', {columns: [], description: null});
-const retroNight = template('u1', 'Retro night', {maxVotes: 7, scope: 'TEAM'});
+const blank = template('builtin:blank', 'Blank', {
+  columns: [],
+  description: null,
+});
+const retroNight = template('u1', 'Retro night', {
+  maxVotes: 7,
+  scope: 'TEAM',
+});
 
 const catalogue = (overrides: Partial<TeamTemplates> = {}): TeamTemplates => ({
   builtin: [ssc, blank],
@@ -55,7 +63,9 @@ const renderDialog = (teamIds = ['t1']) =>
   );
 
 const start = async (title = 'Sprint 12') => {
-  fireEvent.change(screen.getByLabelText('Title'), {target: {value: title}});
+  fireEvent.change(screen.getByLabelText('Title'), {
+    target: {value: title},
+  });
   fireEvent.click(screen.getByRole('button', {name: 'Start'}));
 };
 
@@ -69,7 +79,9 @@ describe('NewRetroDialog', () => {
     vi.mocked(fetchTeamTemplates).mockResolvedValue(catalogue());
     renderDialog();
 
-    const radio = await screen.findByRole('radio', {name: /Start \/ Stop \/ Continue/});
+    const radio = await screen.findByRole('radio', {
+      name: /Start \/ Stop \/ Continue/,
+    });
 
     expect((radio as HTMLInputElement).checked).toBe(true);
     expect(screen.getByText('Default')).toBeTruthy();
@@ -115,6 +127,7 @@ describe('NewRetroDialog', () => {
 
     await waitFor(() =>
       expect(createRetro).toHaveBeenCalledWith('t1', 'Sprint 12', {
+        actionReview: true,
         icebreaker: true,
         maxVotes: 7,
         templateId: 'u1',
@@ -128,7 +141,9 @@ describe('NewRetroDialog', () => {
     renderDialog();
 
     await screen.findByRole('radio', {name: /Start \/ Stop \/ Continue/});
-    const checkbox = screen.getByRole('checkbox', {name: 'Start with an icebreaker'}) as HTMLInputElement;
+    const checkbox = screen.getByRole('checkbox', {
+      name: 'Start with an icebreaker',
+    }) as HTMLInputElement;
 
     expect(checkbox.checked).toBe(true);
 
@@ -137,11 +152,68 @@ describe('NewRetroDialog', () => {
 
     await waitFor(() =>
       expect(createRetro).toHaveBeenCalledWith('t1', 'Sprint 12', {
+        actionReview: true,
         icebreaker: false,
         maxVotes: 3,
         templateId: 'builtin:start-stop-continue',
       }),
     );
+  });
+
+  it('prefills both opening steps from the template and resets them when switching', async () => {
+    const quiet = template('u2', 'Quiet', {
+      actionReview: false,
+      icebreaker: false,
+      scope: 'TEAM',
+    });
+    vi.mocked(fetchTeamTemplates).mockResolvedValue(catalogue({team: [quiet, retroNight]}));
+    vi.mocked(createRetro).mockResolvedValue({id: 'b1'} as Awaited<ReturnType<typeof createRetro>>);
+    renderDialog();
+
+    const isChecked = (name: string) =>
+      (screen.getByRole('checkbox', {name}) as HTMLInputElement).checked;
+
+    await screen.findByRole('radio', {name: /Start \/ Stop \/ Continue/});
+    expect(isChecked('Start with an icebreaker')).toBe(true);
+    expect(isChecked('Review open actions')).toBe(true);
+
+    fireEvent.click(screen.getByRole('radio', {name: /Quiet/}));
+    expect(isChecked('Start with an icebreaker')).toBe(false);
+    expect(isChecked('Review open actions')).toBe(false);
+
+    fireEvent.click(screen.getByRole('checkbox', {name: 'Review open actions'}));
+    expect(isChecked('Review open actions')).toBe(true);
+
+    fireEvent.click(screen.getByRole('radio', {name: /Retro night/}));
+    expect(isChecked('Start with an icebreaker')).toBe(true);
+    expect(isChecked('Review open actions')).toBe(true);
+
+    fireEvent.click(screen.getByRole('radio', {name: /Quiet/}));
+    expect(isChecked('Review open actions')).toBe(false);
+
+    await start();
+
+    await waitFor(() =>
+      expect(createRetro).toHaveBeenCalledWith('t1', 'Sprint 12', {
+        actionReview: false,
+        icebreaker: false,
+        maxVotes: 3,
+        templateId: 'u2',
+      }),
+    );
+  });
+
+  it('lists the steps that are on in the preview', async () => {
+    vi.mocked(fetchTeamTemplates).mockResolvedValue(catalogue());
+    renderDialog();
+
+    await screen.findByText('Icebreaker · Action review');
+
+    fireEvent.click(screen.getByRole('checkbox', {name: 'Start with an icebreaker'}));
+    expect(screen.getByText('Action review')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('checkbox', {name: 'Review open actions'}));
+    expect(screen.queryByText('Action review')).toBeNull();
   });
 
   it('reloads and falls back to the default when the template vanished', async () => {
@@ -158,16 +230,33 @@ describe('NewRetroDialog', () => {
     await waitFor(() => expect(fetchTeamTemplates).toHaveBeenCalledTimes(2));
     await waitFor(() =>
       expect(
-        (screen.getByRole('radio', {name: /Start \/ Stop \/ Continue/}) as HTMLInputElement)
-          .checked,
+        (
+          screen.getByRole('radio', {
+            name: /Start \/ Stop \/ Continue/,
+          }) as HTMLInputElement
+        ).checked,
       ).toBe(true),
     );
   });
 
   it('shows the team select from two teams on, and reloads the templates on change', async () => {
     vi.mocked(fetchTeams).mockResolvedValue([
-      {createdBy: 'x', id: 't1', isAdmin: true, isMember: true, memberCount: 1, name: 'Core'},
-      {createdBy: 'x', id: 't2', isAdmin: true, isMember: true, memberCount: 1, name: 'Ops'},
+      {
+        createdBy: 'x',
+        id: 't1',
+        isAdmin: true,
+        isMember: true,
+        memberCount: 1,
+        name: 'Core',
+      },
+      {
+        createdBy: 'x',
+        id: 't2',
+        isAdmin: true,
+        isMember: true,
+        memberCount: 1,
+        name: 'Ops',
+      },
     ]);
     vi.mocked(fetchTeamTemplates).mockResolvedValue(catalogue());
     renderDialog(['t1', 't2']);

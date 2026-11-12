@@ -5,7 +5,7 @@ import {MemoryRouter, Route, Routes} from 'react-router-dom';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {ApiError} from '@/api/client';
 import {fetchTeams} from '@/api/teams';
-import {deleteTemplate, fetchTeamTemplates, updateTemplate} from '@/api/templates';
+import {createTemplate, deleteTemplate, fetchTeamTemplates, updateTemplate} from '@/api/templates';
 import type {Team, Template, TeamTemplates} from '@/api/types';
 import {ToastProvider} from '@/contexts/ToastContext';
 import {TeamTemplatesPage} from '@/pages/TeamTemplatesPage';
@@ -22,8 +22,10 @@ vi.mock('@/api/templates', async (importOriginal) => ({
 }));
 
 const classic: Template = {
+  actionReview: null,
   columns: [{prompt: null, title: 'Start'}],
   description: 'The classic.',
+  icebreaker: null,
   id: 'builtin:start-stop-continue',
   maxVotes: null,
   name: 'Start / Stop / Continue',
@@ -32,11 +34,13 @@ const classic: Template = {
 };
 
 const mine: Template = {
+  actionReview: false,
   columns: [
     {prompt: 'Good things', title: 'Glad'},
     {prompt: null, title: 'Sad'},
   ],
   description: null,
+  icebreaker: true,
   id: 'u1',
   maxVotes: 4,
   name: 'Our format',
@@ -126,7 +130,11 @@ describe('TeamTemplatesPage', () => {
   });
 
   it('disables New template at the 50 template cap', async () => {
-    const full = Array.from({length: 50}, (_, index) => ({...mine, id: `u${index}`, name: `T${index}`}));
+    const full = Array.from({length: 50}, (_, index) => ({
+      ...mine,
+      id: `u${index}`,
+      name: `T${index}`,
+    }));
     renderPage(team(true), catalogue(full));
 
     const button = await screen.findByRole('button', {name: 'New template'});
@@ -154,7 +162,9 @@ describe('TeamTemplatesPage', () => {
     fireEvent.click(screen.getByRole('button', {name: 'Move column 2 up'}));
     expect(titles()).toEqual(['Glad', 'Sad']);
 
-    const add = screen.getByRole('button', {name: 'Add column'}) as HTMLButtonElement;
+    const add = screen.getByRole('button', {
+      name: 'Add column',
+    }) as HTMLButtonElement;
     for (let index = 0; index < 6; index += 1) fireEvent.click(add);
 
     expect(add.disabled).toBe(true);
@@ -168,20 +178,79 @@ describe('TeamTemplatesPage', () => {
     renderPage(team(true));
 
     fireEvent.click(await screen.findByRole('button', {name: 'Edit'}));
-    fireEvent.change(await screen.findByLabelText('Name'), {target: {value: 'Renamed'}});
+    fireEvent.change(await screen.findByLabelText('Name'), {
+      target: {value: 'Renamed'},
+    });
     fireEvent.click(screen.getByRole('button', {name: 'Save'}));
 
     expect(await screen.findByText('A template with this name already exists')).toBeTruthy();
     expect(updateTemplate).toHaveBeenCalledWith('t1', 'u1', {
+      actionReview: false,
       columns: [
         {prompt: 'Good things', title: 'Glad'},
         {prompt: null, title: 'Sad'},
       ],
       description: null,
+      icebreaker: true,
       maxVotes: 4,
       name: 'Renamed',
       timerSeconds: 300,
     });
+  });
+
+  it('shows the opening steps of the template and sends a changed one as null', async () => {
+    vi.mocked(updateTemplate).mockResolvedValue(mine);
+    renderPage(team(true));
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Edit'}));
+
+    const pressed = (group: string, label: string) =>
+      within(screen.getByRole('group', {name: group}))
+        .getByRole('button', {name: label})
+        .getAttribute('aria-pressed');
+
+    expect(pressed('Icebreaker', 'On')).toBe('true');
+    expect(pressed('Action review', 'Off')).toBe('true');
+
+    fireEvent.click(
+      within(screen.getByRole('group', {name: 'Icebreaker'})).getByRole('button', {
+        name: 'Not set',
+      }),
+    );
+    fireEvent.click(
+      within(screen.getByRole('group', {name: 'Action review'})).getByRole('button', {name: 'On'}),
+    );
+    fireEvent.click(screen.getByRole('button', {name: 'Save'}));
+
+    await waitFor(() =>
+      expect(updateTemplate).toHaveBeenCalledWith(
+        't1',
+        'u1',
+        expect.objectContaining({actionReview: true, icebreaker: null}),
+      ),
+    );
+  });
+
+  it('starts a new template with both opening steps not set', async () => {
+    vi.mocked(createTemplate).mockResolvedValue(mine);
+    renderPage(team(true), catalogue([]));
+
+    fireEvent.click((await screen.findAllByRole('button', {name: 'New template'}))[0]);
+    fireEvent.change(await screen.findByLabelText('Name'), {
+      target: {value: 'Fresh'},
+    });
+    fireEvent.click(screen.getByRole('button', {name: 'Add column'}));
+    fireEvent.change(screen.getByLabelText(/^Title of column/), {
+      target: {value: 'Glad'},
+    });
+    fireEvent.click(screen.getByRole('button', {name: 'Save'}));
+
+    await waitFor(() =>
+      expect(createTemplate).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({actionReview: null, icebreaker: null}),
+      ),
+    );
   });
 
   it('deletes only after the confirmation', async () => {

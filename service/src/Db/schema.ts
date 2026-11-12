@@ -193,6 +193,8 @@ interface RetroTemplatesTable {
   description: string | null;
   maxVotes: number | null;
   timerSeconds: number | null;
+  icebreaker: number | null;
+  actionReview: number | null;
   createdBy: string;
   updatedBy: string;
   createdAt: string;

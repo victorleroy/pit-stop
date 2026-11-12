@@ -4,8 +4,11 @@
  * are our own words.
  */
 export interface BuiltinTemplate {
+  /** Always null for a classic: the new retro dialog's defaults apply. */
+  actionReview: null;
   columns: readonly {prompt: string; title: string}[];
   description: string;
+  icebreaker: null;
   id: `builtin:${string}`;
   maxVotes: number | null;
   name: string;
@@ -25,6 +28,8 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
     ],
     description: 'Three simple moves for the next sprint.',
     id: 'builtin:start-stop-continue',
+    actionReview: null,
+    icebreaker: null,
     maxVotes: null,
     name: 'Start / Stop / Continue',
     timerSeconds: null,
@@ -37,6 +42,8 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
     ],
     description: 'Start from how the sprint felt, then find out why.',
     id: 'builtin:mad-sad-glad',
+    actionReview: null,
+    icebreaker: null,
     maxVotes: null,
     name: 'Mad / Sad / Glad',
     timerSeconds: null,
@@ -50,6 +57,8 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
     ],
     description: 'Look back on the experience as a whole, not just the problems.',
     id: 'builtin:four-ls',
+    actionReview: null,
+    icebreaker: null,
     maxVotes: null,
     name: '4L',
     timerSeconds: null,
@@ -63,6 +72,8 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
     ],
     description: 'One picture: the boat, the wind, the anchors and the rocks ahead.',
     id: 'builtin:sailboat',
+    actionReview: null,
+    icebreaker: null,
     maxVotes: null,
     name: 'Sailboat',
     timerSeconds: null,
@@ -77,6 +88,8 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
     ],
     description: 'Five arms to adjust each habit finely rather than all or nothing.',
     id: 'builtin:starfish',
+    actionReview: null,
+    icebreaker: null,
     maxVotes: null,
     name: 'Starfish',
     timerSeconds: null,
@@ -90,6 +103,8 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
     ],
     description: 'Keep, Add, Less, More: fine-tune what is already there.',
     id: 'builtin:kalm',
+    actionReview: null,
+    icebreaker: null,
     maxVotes: null,
     name: 'KALM',
     timerSeconds: null,
@@ -103,6 +118,8 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
     ],
     description: 'Drop, Add, Keep, Improve: tidy up how the team works.',
     id: 'builtin:daki',
+    actionReview: null,
+    icebreaker: null,
     maxVotes: null,
     name: 'DAKI',
     timerSeconds: null,
@@ -116,6 +133,8 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
     ],
     description: 'What lifts us, what weighs us down, and the weather ahead.',
     id: 'builtin:hot-air-balloon',
+    actionReview: null,
+    icebreaker: null,
     maxVotes: null,
     name: 'Hot-air balloon',
     timerSeconds: null,
@@ -127,6 +146,8 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
     ],
     description: 'The shortest format, for a quick retro.',
     id: 'builtin:plus-delta',
+    actionReview: null,
+    icebreaker: null,
     maxVotes: null,
     name: 'Plus / Delta',
     timerSeconds: 600,
@@ -139,6 +160,8 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
     ],
     description: 'A success, a promise and a pain point each.',
     id: 'builtin:rose-bud-thorn',
+    actionReview: null,
+    icebreaker: null,
     maxVotes: null,
     name: 'Rose / Bud / Thorn',
     timerSeconds: null,
@@ -152,6 +175,8 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
     ],
     description: 'End of project: results and thanks.',
     id: 'builtin:wrap-up-kudos',
+    actionReview: null,
+    icebreaker: null,
     maxVotes: null,
     name: 'Wrap-up + kudos',
     timerSeconds: null,
@@ -163,8 +188,10 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
       {prompt: 'Must be fixed at this stop before the next stint', title: 'Box, box'},
       {prompt: 'A performance or a person to celebrate', title: 'Fastest lap'},
     ],
+    actionReview: null,
     description:
       'Our own motorsport format: read the flags, call the box, celebrate the fastest lap.',
+    icebreaker: null,
     id: 'builtin:pit-stop',
     maxVotes: 3,
     name: 'Pit Stop',
@@ -174,6 +201,8 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
     columns: [],
     description: 'No column: lay out your own format on the board.',
     id: 'builtin:blank',
+    actionReview: null,
+    icebreaker: null,
     maxVotes: null,
     name: 'Blank',
     timerSeconds: null,

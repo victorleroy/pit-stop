@@ -345,8 +345,10 @@ export interface TemplateColumn {
 }
 
 export interface Template {
+  actionReview: boolean | null;
   columns: TemplateColumn[];
   description: string | null;
+  icebreaker: boolean | null;
   /** `builtin:<slug>` for the catalogue, a UUID for a team template. */
   id: string;
   maxVotes: number | null;
@@ -359,8 +361,10 @@ export interface Template {
 }
 
 export interface TemplateInput {
+  actionReview?: boolean | null;
   columns: TemplateColumn[];
   description?: string | null;
+  icebreaker?: boolean | null;
   maxVotes?: number | null;
   name: string;
   timerSeconds?: number | null;

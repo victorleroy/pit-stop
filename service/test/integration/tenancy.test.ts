@@ -129,8 +129,10 @@ describe('multi-tenant isolation', () => {
 
   it('never returns a template of another organisation', async () => {
     const acmeTemplate = await harness.container.retroTemplateManager.create(acme, acmeTeamId, {
+      actionReview: null,
       columns: [{prompt: 'acme secret', title: 'Ideas'}],
       description: null,
+      icebreaker: null,
       maxVotes: null,
       name: 'Acme format',
       timerSeconds: null,
