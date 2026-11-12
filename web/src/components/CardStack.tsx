@@ -2,6 +2,7 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import AddTaskOutlinedIcon from '@mui/icons-material/AddTaskOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
+import {alpha} from '@mui/material/styles';
 import {
   Box,
   Card as CardSurface,
@@ -166,7 +167,7 @@ export const CardStack = ({
         }
       }}
       sx={{
-        bgcolor: isCluster ? 'rgba(15, 23, 42, 0.03)' : 'transparent',
+        bgcolor: isCluster ? alpha(SLIPSTREAM.ink, 0.03) : 'transparent',
         // Painted above the notes so an indigo edge on a note cannot swallow the left side.
         '&::after': {
           border: 2,

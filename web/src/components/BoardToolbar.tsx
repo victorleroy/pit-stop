@@ -7,6 +7,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import MenuItem from '@mui/material/MenuItem';
+import {alpha} from '@mui/material/styles';
 import {
   Box,
   Button,
@@ -31,6 +32,7 @@ import {useAutoFocus} from '@/hooks/useAutoFocus';
 import {COLUMN_EDIT_PHASES, hasReviewStep, nextOpeningPhase} from '@/utils/phases';
 import {boardAuthors} from '@/utils/authorFilter';
 import {WASH_EDGE} from '@/theme/texture';
+import {SLIPSTREAM} from '@/ui/theme';
 
 export const PHASE_LABELS: Record<RetroPhase, string> = {
   ARCHIVED: 'Archived',
@@ -445,14 +447,14 @@ export const BoardToolbar = ({
                       <Box
                         sx={{
                           bgcolor: isCurrent
-                            ? '#FF5C9D'
+                            ? SLIPSTREAM.wash[2]
                             : isDone
                               ? 'primary.main'
                               : 'background.paper',
                           border: isCurrent || isDone ? 0 : '2px solid',
                           borderColor: 'divider',
                           borderRadius: 999,
-                          boxShadow: isCurrent ? '0 0 0 5px rgba(255, 92, 157, 0.18)' : 'none',
+                          boxShadow: isCurrent ? `0 0 0 5px ${alpha(SLIPSTREAM.wash[2], 0.18)}` : 'none',
                           boxSizing: 'border-box',
                           height: isCurrent ? 18 : 12,
                           transition: 'height 140ms ease, width 140ms ease, background-color 140ms ease',

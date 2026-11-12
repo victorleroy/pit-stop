@@ -261,11 +261,11 @@ export const TimerControls = ({
           </Typography>
         </Stack>
 
-        <Box sx={{bgcolor: '#EEF2F7', borderRadius: 999, height: 5, overflow: 'hidden'}}>
+        <Box sx={{bgcolor: SLIPSTREAM.line, borderRadius: 999, height: 5, overflow: 'hidden'}}>
           <Box
             sx={{
               // The bar drains rather than fills: what you read is the time you have left.
-              backgroundImage: `linear-gradient(90deg, ${SLIPSTREAM.indigo}, #FF5C9D)`,
+              backgroundImage: `linear-gradient(90deg, ${SLIPSTREAM.indigo}, ${SLIPSTREAM.wash[2]})`,
               borderRadius: 999,
               height: '100%',
               opacity: timer.state === 'PAUSED' ? 0.45 : 1,

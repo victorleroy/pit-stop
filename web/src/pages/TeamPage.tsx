@@ -6,6 +6,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
+import {alpha} from '@mui/material/styles';
 import {
   Button,
   Card,
@@ -54,6 +55,7 @@ const LIST_POLL_INTERVAL_MS = 10_000;
 import {UserAvatar} from '@/components/UserAvatar';
 import type {ConfirmRequest} from '@/components/ConfirmDialog';
 import {ConfirmDialog} from '@/components/ConfirmDialog';
+import {SLIPSTREAM} from '@/ui/theme';
 
 // The search matches the e-mail too: two people can share a name, never an address.
 const filterCandidates = createFilterOptions<OrgMember>({
@@ -752,7 +754,7 @@ export const TeamPage = () => {
           sx={{
             ...SURFACE,
             alignItems: 'center',
-            borderColor: 'rgba(223, 27, 65, 0.35)',
+            borderColor: alpha(SLIPSTREAM.danger, 0.35),
             flexWrap: 'wrap',
             px: 3,
             py: 2.5,

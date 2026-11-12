@@ -20,6 +20,7 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import {alpha} from '@mui/material/styles';
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import type {ReactNode} from 'react';
 import {useState} from 'react';
@@ -41,6 +42,7 @@ import {ConfirmDialog} from '@/components/ConfirmDialog';
 import {TeamDot} from '@/components/TeamDot';
 import {noteColours, SURFACE, teamColour} from '@/theme/texture';
 import {UserAvatar} from '@/components/UserAvatar';
+import {SLIPSTREAM} from '@/ui/theme';
 
 const MemberRow = ({
   member,
@@ -226,7 +228,7 @@ const Stats = () => {
                 sx={{
                   bgcolor: note.paper,
                   border: '1px solid',
-                  borderColor: 'rgba(10, 37, 64, 0.12)',
+                  borderColor: alpha(SLIPSTREAM.ink, 0.12),
                   height: 10,
                   transform: 'rotate(-6deg)',
                   width: 10,
@@ -261,10 +263,10 @@ const Stats = () => {
 };
 
 const STATUS_COLOURS: Record<Invitation['status'], string> = {
-  accepted: '#0E9F6E',
-  expired: '#8792A2',
-  pending: '#D97706',
-  revoked: '#8792A2',
+  accepted: SLIPSTREAM.success,
+  expired: SLIPSTREAM.inkMuted,
+  pending: SLIPSTREAM.warning,
+  revoked: SLIPSTREAM.inkMuted,
 };
 
 const Invitations = () => {
