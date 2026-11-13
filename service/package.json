@@ -20,7 +20,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "google-auth-library": "^10.9.1",
-    "hono": "^4.13.13",
+    "hono": "^4.13.18",
     "kysely": "^0.28.18",
     "nodemailer": "^10.1.7",
     "pino": "^9.5.0",
